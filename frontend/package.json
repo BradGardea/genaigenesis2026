@@ -6,6 +6,7 @@
   "scripts": {
     "start": "expo start",
     "web": "expo start --web",
+    "web:preview": "expo start --web --port 8082",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "lint": "eslint . --ext .ts,.tsx"

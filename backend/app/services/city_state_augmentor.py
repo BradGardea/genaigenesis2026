@@ -13,6 +13,7 @@ ROUTE_ORIGIN = (-1.661392, 29.174324)  # (lat, lon)
 ROUTE_DESTINATION = (-1.632659, 29.248804)  # (lat, lon)
 CITY_CENTER = (-1.679, 29.222)
 BASE_SEED = 20260314
+STORM_WEAKEN_RANGE_M = 160_934  # ~100 miles
 
 # Low-frequency route hazard injection controls.
 ROUTE_HAZARD_PROBABILITY = 0.05
@@ -35,6 +36,13 @@ def _distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     dy = (lat2 - lat1) * 111_320.0
     dx = (lon2 - lon1) * 111_320.0 * math.cos(math.radians((lat1 + lat2) / 2))
     return math.hypot(dx, dy)
+
+
+def _origin_decay_factor(lat: float, lon: float) -> float:
+    distance = _distance_m(ROUTE_ORIGIN[0], ROUTE_ORIGIN[1], lat, lon)
+    progress = _clamp(distance / STORM_WEAKEN_RANGE_M, 0.0, 1.0)
+    # 1.0 near origin, trending toward 0.45 at ~100 miles.
+    return 1.0 - 0.55 * progress
 
 
 def _storm_intensity(progress: float) -> float:
@@ -123,7 +131,7 @@ def _cluster_dense_overlaps(
     events: list[dict[str, Any]],
     *,
     impact_type: str,
-    min_cluster_size: int = 10,
+    min_cluster_size: int = 6,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     candidates = [e for e in events if e.get("impact_type") == impact_type and _is_low_danger(e)]
     if len(candidates) < min_cluster_size:
@@ -135,7 +143,7 @@ def _cluster_dense_overlaps(
         for j in range(i + 1, len(candidates)):
             b = candidates[j]
             d = _distance_m(float(a["lat"]), float(a["lon"]), float(b["lat"]), float(b["lon"]))
-            overlap_threshold = 0.62 * (float(a["radius_m"]) + float(b["radius_m"]))
+            overlap_threshold = 0.85 * (float(a["radius_m"]) + float(b["radius_m"]))
             if d <= overlap_threshold:
                 adjacency[i].add(j)
                 adjacency[j].add(i)
@@ -171,13 +179,14 @@ def _cluster_dense_overlaps(
         max_radius = max(float(g["radius_m"]) for g in group)
         max_severity = max(int(g["severity"]) for g in group)
 
+        radius_cap = 1200 if impact_type in {"flooding", "high_wind", "rain"} else 1700
         merged_events.append(
             _event(
                 lat=center_lat,
                 lon=center_lon,
                 impact_type=impact_type,
-                severity=int(_clamp(max_severity + 8, 45, 88)),
-                radius_m=int(_clamp(max_radius + math.sqrt(len(group)) * 120, 260, 1700)),
+                severity=int(_clamp(max_severity + 6, 42, 86)),
+                radius_m=int(_clamp(max_radius + math.sqrt(len(group)) * 95, 220, radius_cap)),
                 status="merged_cluster",
             )
         )
@@ -223,6 +232,22 @@ def _place_southeast_point(rnd: random.Random, intensity: float) -> tuple[float,
     )
 
 
+def _place_east_point(rnd: random.Random, intensity: float) -> tuple[float, float]:
+    # Strong east / northeast spread so the storm does not over-centralize near start.
+    base_lat, base_lon = _offset_lat_lon(
+        ROUTE_ORIGIN[0],
+        ROUTE_ORIGIN[1],
+        rnd.uniform(2500, 7600),
+        rnd.uniform(-1200, 2200),
+    )
+    return _offset_lat_lon(
+        base_lat,
+        base_lon,
+        rnd.uniform(-850, 850) * (0.65 + 0.35 * intensity),
+        rnd.uniform(-850, 850) * (0.65 + 0.35 * intensity),
+    )
+
+
 def _compress_into_high_danger(events: list[dict[str, Any]], impact_type: str) -> list[dict[str, Any]]:
     highs = [
         e
@@ -257,6 +282,60 @@ def _compress_into_high_danger(events: list[dict[str, Any]], impact_type: str) -
             high["status"] = "merged_cluster"
 
     return [e for e in events if id(e) not in absorbed_ids]
+
+
+def _collapse_nearby_nodes(events: list[dict[str, Any]], merge_distance_m: float = 220) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for event in events:
+        danger = str(event.get("danger_to_remain", "low")).lower()
+        bucket = "high" if danger in {"high", "extreme"} else "low"
+        key = (str(event.get("impact_type", "other")), bucket)
+        grouped.setdefault(key, []).append(event)
+
+    collapsed: list[dict[str, Any]] = []
+    for (impact_type, _bucket), group in grouped.items():
+        remaining = group[:]
+        while remaining:
+            seed = remaining.pop()
+            cluster = [seed]
+            changed = True
+            while changed:
+                changed = False
+                keep: list[dict[str, Any]] = []
+                for item in remaining:
+                    if any(
+                        _distance_m(float(item["lat"]), float(item["lon"]), float(c["lat"]), float(c["lon"]))
+                        <= merge_distance_m
+                        for c in cluster
+                    ):
+                        cluster.append(item)
+                        changed = True
+                    else:
+                        keep.append(item)
+                remaining = keep
+
+            if len(cluster) == 1:
+                collapsed.append(cluster[0])
+                continue
+
+            total_weight = sum(max(float(c["radius_m"]), 1.0) for c in cluster)
+            center_lat = sum(float(c["lat"]) * max(float(c["radius_m"]), 1.0) for c in cluster) / total_weight
+            center_lon = sum(float(c["lon"]) * max(float(c["radius_m"]), 1.0) for c in cluster) / total_weight
+            max_radius = max(float(c["radius_m"]) for c in cluster)
+            max_severity = max(int(c["severity"]) for c in cluster)
+            radius_cap = 1200 if impact_type in {"flooding", "high_wind", "rain"} else 1800
+            collapsed.append(
+                _event(
+                    lat=center_lat,
+                    lon=center_lon,
+                    impact_type=impact_type,
+                    severity=int(_clamp(max_severity + min(6, len(cluster)), 12, 100)),
+                    radius_m=int(_clamp(max_radius + math.sqrt(len(cluster)) * 85, 90, radius_cap)),
+                    status="merged_cluster",
+                )
+            )
+
+    return collapsed
 
 
 def _ensure_spatial_separation(
@@ -296,6 +375,7 @@ def _recompute_metadata(
         areas = []
 
     counts = {
+        "rain": 0,
         "high_wind": 0,
         "flooding": 0,
         "road_closure": 0,
@@ -330,6 +410,7 @@ def _recompute_metadata(
     city_state["dominant_impacts"] = [name for name, value in ordered if value > 0][:3]
     city_state["impact_summary"] = {
         "affected_points": len(areas),
+        "rain_points": counts["rain"],
         "flooding_points": counts["flooding"],
         "road_closure_points": counts["road_closure"],
         "powerline_failure_points": counts["powerline_failure"],
@@ -395,57 +476,108 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
     events: list[dict[str, Any]] = []
 
     # 1) Base layer: high wind pockets.
-    wind_count = 2 + int(2 * intensity)
+    wind_count = 3 + int(2 * intensity)
     for _ in range(wind_count):
-        if rnd.random() < 0.28:
+        selector = rnd.random()
+        if selector < 0.22:
             lat, lon = _place_southeast_point(rnd, intensity)
-        elif anchors and rnd.random() < 0.45:
+        elif selector < 0.52:
+            lat, lon = _place_east_point(rnd, intensity)
+        elif anchors and rnd.random() < 0.42:
             base_lat, base_lon = rnd.choice(anchors)
             lat, lon = _offset_lat_lon(base_lat, base_lon, rnd.uniform(-700, 700), rnd.uniform(-700, 700))
         else:
             lat, lon = _place_corridor_point(progress, intensity, forward, lateral, rnd, ahead_bias=0.03)
+        decay = _origin_decay_factor(lat, lon)
         events.append(
             _event(
                 lat=lat,
                 lon=lon,
                 impact_type="high_wind",
-                severity=int(50 + 24 * intensity + rnd.randint(-8, 8)),
-                radius_m=int(190 + 220 * intensity + rnd.randint(-35, 85)),
+                severity=int((50 + 22 * intensity + rnd.randint(-8, 8)) * decay),
+                radius_m=int((180 + 210 * intensity + rnd.randint(-35, 85)) * (0.9 + 0.2 * decay)),
                 status=_status_label(progress, rnd),
             )
         )
 
-    # 2) Base layer: flooding from sustained rainfall + runoff.
-    flood_count = 2 + int(2 * intensity)
-    for _ in range(flood_count):
-        if rnd.random() < 0.3:
+    # 2) Base layer: rain pockets (precursor to flooding).
+    rain_count = 3 + int(3 * intensity)
+    for _ in range(rain_count):
+        selector = rnd.random()
+        if selector < 0.2:
             lat, lon = _place_southeast_point(rnd, intensity)
+        elif selector < 0.5:
+            lat, lon = _place_east_point(rnd, intensity)
         else:
             lat, lon = _place_corridor_point(progress, intensity, forward, lateral, rnd)
-        near_wind = min(
-            (
-                _distance_m(lat, lon, float(w["lat"]), float(w["lon"]))
-                for w in events
-                if w["impact_type"] == "high_wind"
-            ),
-            default=2_000,
+        decay = _origin_decay_factor(lat, lon)
+        events.append(
+            _event(
+                lat=lat,
+                lon=lon,
+                impact_type="rain",
+                severity=int((52 + 20 * intensity + rnd.randint(-9, 10)) * decay),
+                radius_m=int((170 + 230 * intensity + rnd.randint(-25, 90)) * (0.9 + 0.2 * decay)),
+                status=_status_label(progress, rnd),
+            )
         )
-        flood_boost = 8 if near_wind < 500 else 0
+
+    # Natural progression: strong rain/wind nodes can spawn nearby child cells
+    # regardless of user position, reducing path-centric bias.
+    propagation_sources = [
+        e for e in events if e["impact_type"] in {"rain", "high_wind"} and int(e["severity"]) >= 58
+    ]
+    for src in propagation_sources:
+        if rnd.random() > (0.18 + 0.32 * intensity):
+            continue
+        angle = rnd.uniform(0, 2 * math.pi)
+        dist = rnd.uniform(180, 820)
+        lat, lon = _offset_lat_lon(float(src["lat"]), float(src["lon"]), dist * math.cos(angle), dist * math.sin(angle))
+        decay = _origin_decay_factor(lat, lon)
+        events.append(
+            _event(
+                lat=lat,
+                lon=lon,
+                impact_type=str(src["impact_type"]),
+                severity=int(int(src["severity"]) * rnd.uniform(0.76, 0.92) * decay),
+                radius_m=int(int(src["radius_m"]) * rnd.uniform(0.72, 0.95)),
+                status="worsening",
+            )
+        )
+
+    rains = [e for e in events if e["impact_type"] == "rain" and int(e["severity"]) >= 56]
+    winds = [e for e in events if e["impact_type"] == "high_wind" and int(e["severity"]) >= 64]
+
+    # 3) Flooding emerges from co-located rain + wind.
+    for rain in rains:
+        nearby_wind = [
+            w
+            for w in winds
+            if _distance_m(float(rain["lat"]), float(rain["lon"]), float(w["lat"]), float(w["lon"])) <= 900
+        ]
+        if not nearby_wind:
+            continue
+        if rnd.random() > 0.68:
+            continue
+        mean_wind_sev = sum(int(w["severity"]) for w in nearby_wind) / len(nearby_wind)
+        lat = float(rain["lat"])
+        lon = float(rain["lon"])
+        decay = _origin_decay_factor(lat, lon)
+        flood_sev = int((0.6 * int(rain["severity"]) + 0.45 * mean_wind_sev + rnd.randint(-6, 8)) * decay)
         events.append(
             _event(
                 lat=lat,
                 lon=lon,
                 impact_type="flooding",
-                severity=int(46 + 21 * intensity + flood_boost + rnd.randint(-8, 10)),
-                radius_m=int(180 + 250 * intensity + rnd.randint(-25, 110)),
-                status=_status_label(progress, rnd),
+                severity=flood_sev,
+                radius_m=int(int(rain["radius_m"]) * rnd.uniform(0.85, 1.25)),
+                status="new" if rnd.random() < 0.5 else "worsening",
             )
         )
 
     floods = [e for e in events if e["impact_type"] == "flooding" and int(e["severity"]) >= 66]
-    winds = [e for e in events if e["impact_type"] == "high_wind" and int(e["severity"]) >= 72]
 
-    # 3) Debris/structure damage only when BOTH flood and high wind are severe.
+    # 4) Debris/structure damage only when BOTH flood and high wind are severe.
     for flood in floods:
         close_wind = [
             w
@@ -474,7 +606,7 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
 
     secondary = [e for e in events if e["impact_type"] in {"debris", "structure_damage"}]
 
-    # 4) Powerline failure requires structural/debris damage.
+    # 5) Powerline failure requires structural/debris damage.
     for src in secondary:
         if rnd.random() > 0.82:
             continue
@@ -492,7 +624,7 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
             )
         )
 
-    # 5) Road closures from high flooding (and optionally debris/structure spillover).
+    # 6) Road closures from high flooding (and optionally debris/structure spillover).
     # These are always high danger and should be rendered with a clear red impact area.
     closure_sources = [e for e in events if e["impact_type"] == "flooding" and int(e["severity"]) >= 76]
     closure_sources.extend([e for e in events if e["impact_type"] in {"debris", "structure_damage"}])
@@ -516,13 +648,15 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
 
     events = _compress_into_high_danger(events, "flooding")
     events = _compress_into_high_danger(events, "high_wind")
+    events = _compress_into_high_danger(events, "rain")
     events = _compress_into_high_danger(events, "road_closure")
 
-    # 6) Merge dense, overlapping low-danger flood/wind pockets into larger cohesive hazards.
-    events, merged_floods = _cluster_dense_overlaps(events, impact_type="flooding", min_cluster_size=10)
-    events, merged_winds = _cluster_dense_overlaps(events, impact_type="high_wind", min_cluster_size=10)
+    # 7) Merge dense, overlapping low-danger flood/wind pockets into larger cohesive hazards.
+    events, merged_floods = _cluster_dense_overlaps(events, impact_type="flooding", min_cluster_size=6)
+    events, merged_winds = _cluster_dense_overlaps(events, impact_type="high_wind", min_cluster_size=6)
 
     # Keep the simulation difficult but solvable.
+    events = _collapse_nearby_nodes(events, merge_distance_m=240)
     events = _ensure_spatial_separation(events, rnd, min_distance_m=95)
     max_events = 12 + int(5 * intensity)
     city_state["affected_areas"] = events[:max_events]
@@ -535,7 +669,7 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
     )
 
     city_state["note"] = (
-        "Procedural causal chain enabled: high wind + flooding create downstream damage, "
+        "Procedural causal chain enabled: rain + high wind create flooding and downstream damage, "
         "with occasional route-pressure hazards to force realistic reroutes. "
         f"Cluster merge applied: floods={len(merged_floods)}, winds={len(merged_winds)}."
     )

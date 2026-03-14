@@ -86,6 +86,7 @@ function toHazardType(impactType: string, severity: number): string | null {
 }
 
 function toImpactIcon(impactType: string): string {
+  if (impactType === "rain") return "N";
   if (impactType === "high_wind") return "W";
   if (impactType === "flooding") return "F";
   if (impactType === "road_closure") return "R";
@@ -162,6 +163,67 @@ function compressIntoHighDangerZones(areas: CityStateArea[]): CityStateArea[] {
   }
 
   return cloned.filter((_, idx) => !absorbed.has(idx));
+}
+
+function collapseNearbyDisplayNodes(areas: CityStateArea[], mergeDistanceM = 230): CityStateArea[] {
+  const grouped = new Map<string, CityStateArea[]>();
+  for (const area of areas) {
+    const bucket = isHighDanger(area) ? "high" : "low";
+    const key = `${area.impact_type}:${bucket}`;
+    const list = grouped.get(key);
+    if (list) list.push({ ...area });
+    else grouped.set(key, [{ ...area }]);
+  }
+
+  const collapsed: CityStateArea[] = [];
+  for (const [, group] of grouped) {
+    const pending = [...group];
+    while (pending.length > 0) {
+      const seed = pending.pop()!;
+      const cluster = [seed];
+      let changed = true;
+      while (changed) {
+        changed = false;
+        const keep: CityStateArea[] = [];
+        for (const candidate of pending) {
+          const near = cluster.some((c) => approxDistanceMeters(c, candidate) <= mergeDistanceM);
+          if (near) {
+            cluster.push(candidate);
+            changed = true;
+          } else {
+            keep.push(candidate);
+          }
+        }
+        pending.splice(0, pending.length, ...keep);
+      }
+
+      if (cluster.length === 1) {
+        collapsed.push(cluster[0]);
+        continue;
+      }
+
+      const totalWeight = cluster.reduce((sum, c) => sum + Math.max(c.radius_m, 1), 0);
+      const lat = cluster.reduce((sum, c) => sum + c.lat * Math.max(c.radius_m, 1), 0) / totalWeight;
+      const lon = cluster.reduce((sum, c) => sum + c.lon * Math.max(c.radius_m, 1), 0) / totalWeight;
+      const severity = Math.min(100, Math.max(...cluster.map((c) => c.severity)) + Math.min(cluster.length, 6));
+      const type = cluster[0].impact_type;
+      const cap = type === "flooding" || type === "high_wind" || type === "rain" ? 1300 : 2200;
+      const radius_m = Math.min(
+        cap,
+        Math.round(Math.max(...cluster.map((c) => c.radius_m)) + Math.sqrt(cluster.length) * 80)
+      );
+      collapsed.push({
+        lat,
+        lon,
+        impact_type: cluster[0].impact_type,
+        severity,
+        danger_to_remain: severity >= 70 ? "high" : cluster[0].danger_to_remain,
+        status: "merged_cluster",
+        radius_m,
+      });
+    }
+  }
+  return collapsed;
 }
 
 const CAR_MARKER_CSS_ID = "crisisnet-car-marker-css";
@@ -384,6 +446,8 @@ export function MapScreen({ theme }: MapScreenProps) {
             "circle-color": [
               "match",
               ["get", "impact_type"],
+              "rain",
+              "#7dd3fc",
               "high_wind",
               "#94a3b8",
               "flooding",
@@ -762,8 +826,10 @@ export function MapScreen({ theme }: MapScreenProps) {
     const source = map.getSource(CITY_STATE_SOURCE) as mapboxgl.GeoJSONSource | undefined;
     if (!source) return;
 
-    const features = stepHistory.flatMap(({ stepIndex, step }) => {
-      const areas = extractCityStateAreas(step.cityStateRaw);
+    const recentHistory = stepHistory.slice(-10);
+    const features = recentHistory.flatMap(({ stepIndex, step }) => {
+      const rawAreas = extractCityStateAreas(step.cityStateRaw);
+      const areas = collapseNearbyDisplayNodes(compressIntoHighDangerZones(rawAreas), 260);
       return areas.map((area, index) => ({
         type: "Feature" as const,
         id: "city-impact-" + stepIndex + "-" + index,
@@ -787,7 +853,7 @@ export function MapScreen({ theme }: MapScreenProps) {
 
   const lastSyncedStepRef = useRef<number | null>(null);
   const syncedHazardsRef = useRef<
-    Map<string, { hazardId: string; lastSeenStep: number; persistent: boolean }>
+    Map<string, { hazardId: string; lastSeenStep: number; persistent: boolean; hazardType: string }>
   >(new Map());
   useEffect(() => {
     if (lastSyncedStepRef.current === currentStepIndex) {
@@ -798,10 +864,24 @@ export function MapScreen({ theme }: MapScreenProps) {
     let cancelled = false;
 
     async function syncCityStateHazards() {
-      const stepAreas = compressIntoHighDangerZones(extractCityStateAreas(currentStep.cityStateRaw));
-      const PERSIST_STEPS = 7;
+      const stepAreas = collapseNearbyDisplayNodes(
+        compressIntoHighDangerZones(extractCityStateAreas(currentStep.cityStateRaw)),
+        240
+      );
+      const persistStepsFor = (hazardType: string) => {
+        if (hazardType === "roadblock") return 9;
+        if (hazardType === "flood") return 3;
+        if (hazardType === "wind") return 2;
+        return 4;
+      };
       const keyFor = (hazardType: string, lat: number, lon: number) =>
         `${hazardType}:${Math.round(lat * 350) / 350}:${Math.round(lon * 350) / 350}`;
+      const radiusForHazard = (hazardType: string, radius: number) => {
+        if (hazardType === "roadblock") return Math.max(60, Math.min(1400, radius));
+        if (hazardType === "flood") return Math.max(60, Math.min(900, radius));
+        if (hazardType === "wind") return Math.max(60, Math.min(800, radius));
+        return Math.max(60, Math.min(1000, radius));
+      };
 
       try {
         const tracked = syncedHazardsRef.current;
@@ -816,7 +896,7 @@ export function MapScreen({ theme }: MapScreenProps) {
           }
           const key = keyFor(hazardType, area.lat, area.lon);
           desired.add(key);
-          const persistent = isHighDanger(area);
+          const persistent = area.impact_type === "road_closure" || area.severity >= 86;
           const existing = tracked.get(key);
           if (existing) {
             existing.lastSeenStep = currentStepIndex;
@@ -827,12 +907,13 @@ export function MapScreen({ theme }: MapScreenProps) {
             hazardType,
             { lat: area.lat, lng: area.lon },
             "step " + (currentStepIndex + 1) + ": " + area.impact_type,
-            Math.max(40, area.radius_m)
+            radiusForHazard(hazardType, area.radius_m)
           );
           tracked.set(key, {
             hazardId: created.hazard_id,
             lastSeenStep: currentStepIndex,
             persistent,
+            hazardType,
           });
           changed = true;
         }
@@ -840,7 +921,8 @@ export function MapScreen({ theme }: MapScreenProps) {
         for (const [key, entry] of Array.from(tracked.entries())) {
           if (cancelled) return;
           if (desired.has(key)) continue;
-          if (entry.persistent && (currentStepIndex - entry.lastSeenStep) <= PERSIST_STEPS) {
+          const ttl = persistStepsFor(entry.hazardType);
+          if (entry.persistent && (currentStepIndex - entry.lastSeenStep) <= ttl) {
             continue;
           }
           await deactivateHazard(entry.hazardId).catch(() => undefined);
