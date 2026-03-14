@@ -23,12 +23,14 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 export function reportHazard(
   hazardType: string,
   location: Coordinate,
-  description: string = ""
+  description: string = "",
+  radiusMeters?: number
 ): Promise<HazardZone> {
   const body: HazardReport = {
     hazard_type: hazardType,
     location,
     description,
+    ...(radiusMeters != null && { radius_meters: radiusMeters }),
   };
   return request<HazardZone>("/hazards/report", {
     method: "POST",

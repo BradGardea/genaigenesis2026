@@ -53,6 +53,10 @@ class RouteResponse(BaseModel):
     waypoints: list[Coordinate] = Field(default_factory=list)
     hazards_avoided: list[str] = Field(default_factory=list)
     instructions: list[str] = Field(default_factory=list)
+    segment_durations: list[float] = Field(
+        default_factory=list,
+        description="Per-coordinate-pair duration in seconds from Mapbox annotations",
+    )
     backup_route: dict | None = Field(
         default=None, description="GeoJSON LineString of backup route"
     )

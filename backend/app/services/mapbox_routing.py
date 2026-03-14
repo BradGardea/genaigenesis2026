@@ -98,6 +98,7 @@ async def fetch_route(
         "geometries": "geojson",
         "overview": "full",
         "steps": "true",
+        "annotations": "duration",
     }
 
     async with httpx.AsyncClient(timeout=30) as client:

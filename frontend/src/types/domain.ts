@@ -77,6 +77,7 @@ export interface RouteResponse {
   waypoints: Coordinate[];
   hazards_avoided: string[];
   instructions: string[];
+  segment_durations?: number[];
   backup_route: GeoJSONLineString | null;
 }
 

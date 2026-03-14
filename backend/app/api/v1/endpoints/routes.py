@@ -90,13 +90,16 @@ async def plan_route(body: RouteRequest) -> RouteResponse:
 
     route_id = f"route-{uuid.uuid4().hex[:8]}"
 
-    # Extract turn-by-turn instructions from Mapbox legs/steps
+    # Extract turn-by-turn instructions and per-segment durations from Mapbox legs
     instructions: list[str] = []
+    segment_durations: list[float] = []
     for leg in route.get("legs", []):
         for step in leg.get("steps", []):
             text = step.get("maneuver", {}).get("instruction")
             if text:
                 instructions.append(text)
+        ann = leg.get("annotation", {})
+        segment_durations.extend(ann.get("duration", []))
 
     # Register for live SSE updates
     hazard_store.register_route(
@@ -117,6 +120,7 @@ async def plan_route(body: RouteRequest) -> RouteResponse:
         ],
         hazards_avoided=[z.hazard_id for z in active_zones],
         instructions=instructions,
+        segment_durations=segment_durations,
     )
 
 

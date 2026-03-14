@@ -11,21 +11,35 @@ interface EvacuationRouteState {
   loading: boolean;
   error: string | null;
   rerouting: boolean;
+  tripActive: boolean;
+  currentPosition: Coordinate | null;
+}
+
+export interface EvacuationRouteControls extends EvacuationRouteState {
+  refetch: () => void;
+  startTrip: () => void;
+  endTrip: () => void;
+  setCurrentPosition: (coord: Coordinate) => void;
+  setRouteDirectly: (route: RouteResponse) => void;
 }
 
 export function useEvacuationRoute(
   origin: Coordinate | null,
   destination: Coordinate | null,
   profile?: RouteRequest["profile"]
-): EvacuationRouteState & { refetch: () => void } {
+): EvacuationRouteControls {
   const [state, setState] = useState<EvacuationRouteState>({
     route: null,
     loading: false,
     error: null,
     rerouting: false,
+    tripActive: false,
+    currentPosition: null,
   });
 
   const esRef = useRef<EventSource | null>(null);
+  const tripActiveRef = useRef(false);
+  const currentPosRef = useRef<Coordinate | null>(null);
 
   const fetchRoute = useCallback(async () => {
     if (!origin || !destination) return;
@@ -33,18 +47,20 @@ export function useEvacuationRoute(
     setState((s) => ({ ...s, loading: true, error: null }));
     try {
       const route = await requestRoute(origin, destination, profile);
-      setState({ route, loading: false, error: null, rerouting: false });
+      setState((s) => ({ ...s, route, loading: false, error: null, rerouting: false }));
 
-      // Close previous SSE connection
       esRef.current?.close();
 
-      // Open SSE subscription for live reroutes
       const es = subscribeToRouteUpdates(route.route_id, async (event) => {
         if (event.type === "reroute") {
           setState((s) => ({ ...s, rerouting: true }));
           try {
-            const newRoute = await requestRoute(origin, destination, profile);
-            setState({ route: newRoute, loading: false, error: null, rerouting: false });
+            const rerouteOrigin =
+              tripActiveRef.current && currentPosRef.current
+                ? currentPosRef.current
+                : origin;
+            const newRoute = await requestRoute(rerouteOrigin, destination, profile);
+            setState((s) => ({ ...s, route: newRoute, loading: false, error: null, rerouting: false }));
           } catch (err) {
             setState((s) => ({
               ...s,
@@ -56,12 +72,13 @@ export function useEvacuationRoute(
       });
       esRef.current = es;
     } catch (err) {
-      setState({
+      setState((s) => ({
+        ...s,
         route: null,
         loading: false,
         error: err instanceof Error ? err.message : "Route request failed",
         rerouting: false,
-      });
+      }));
     }
   }, [origin, destination, profile]);
 
@@ -72,5 +89,36 @@ export function useEvacuationRoute(
     };
   }, [fetchRoute]);
 
-  return { ...state, refetch: fetchRoute };
+  const startTrip = useCallback(() => {
+    if (!origin) return;
+    tripActiveRef.current = true;
+    currentPosRef.current = origin;
+    setState((s) => ({ ...s, tripActive: true, currentPosition: origin }));
+  }, [origin]);
+
+  const endTrip = useCallback(() => {
+    tripActiveRef.current = false;
+    currentPosRef.current = null;
+    esRef.current?.close();
+    esRef.current = null;
+    setState((s) => ({ ...s, tripActive: false, currentPosition: null }));
+  }, []);
+
+  const setCurrentPosition = useCallback((coord: Coordinate) => {
+    currentPosRef.current = coord;
+    setState((s) => ({ ...s, currentPosition: coord }));
+  }, []);
+
+  const setRouteDirectly = useCallback((route: RouteResponse) => {
+    setState((s) => ({ ...s, route, loading: false, error: null }));
+  }, []);
+
+  return {
+    ...state,
+    refetch: fetchRoute,
+    startTrip,
+    endTrip,
+    setCurrentPosition,
+    setRouteDirectly,
+  };
 }
