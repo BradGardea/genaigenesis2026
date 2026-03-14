@@ -40,6 +40,7 @@ export interface EvacuationPlan {
   summary: string;
   steps: string[];
   packingList: string[];
+  updatedAt?: string;
 }
 
 export type ConnectionRelationship = "dependent" | "guardian" | "friend" | "acquaintance";
@@ -72,6 +73,70 @@ export interface WeatherUpdate {
   details: string;
   severity: string;
   updatedAt: string;
+  rawData?: Record<string, unknown>;
+}
+
+export interface WeatherDatasetMetadata {
+  dataset_name: string;
+  version: string;
+  generated_at: string;
+  scenario_note: string;
+  location: Record<string, unknown>;
+  schema_alignment: Record<string, unknown>;
+}
+
+export interface WeatherStepMeta {
+  step_index: number;
+  step_time: string;
+  total_steps: number;
+  has_next: boolean;
+  next_step_index: number | null;
+}
+
+export interface WeatherStepResponse {
+  metadata: WeatherDatasetMetadata;
+  step: WeatherStepMeta;
+  beautified: WeatherUpdate[];
+  raw: Record<string, unknown>;
+}
+
+export type AlertUrgency =
+  | "notification"
+  | "caution"
+  | "warning"
+  | "urgent warning"
+  | "alert"
+  | "urgent alert"
+  | "extreme urgency alert";
+
+export interface CityStateAlertPayload {
+  id: string;
+  title: string;
+  details: string;
+  urgency: AlertUrgency;
+  category: string;
+  occurredAt: string;
+  updatedAt: string;
+  area: string;
+  source: string;
+  rawData?: Record<string, unknown>;
+}
+
+export interface CityStateCardPayload {
+  id: string;
+  headline: string;
+  details: string;
+  severity: "low" | "medium" | "high" | "extreme";
+  updatedAt: string;
+  rawData?: Record<string, unknown>;
+}
+
+export interface CityStateStepResponse {
+  metadata: WeatherDatasetMetadata;
+  step: WeatherStepMeta;
+  beautified: CityStateCardPayload[];
+  alerts: CityStateAlertPayload[];
+  raw: Record<string, unknown>;
 }
 
 export interface MapIncidentPoint {

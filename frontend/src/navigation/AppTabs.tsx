@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -6,6 +6,7 @@ import { userProfileMock } from "../data";
 import { InfoScreen } from "../screens/InfoScreen";
 import { MapScreen } from "../screens/MapScreen";
 import { ProfileScreen } from "../screens/ProfileScreen";
+import { useDisasterDemo } from "../state/DisasterDemoContext";
 import { AppTheme } from "../types/theme";
 
 type TabKey = "info" | "map" | "profile";
@@ -23,9 +24,37 @@ export function AppTabs() {
   const [fullName, setFullName] = useState(userProfileMock.fullName);
   const [phoneNumber, setPhoneNumber] = useState(userProfileMock.phoneNumber);
   const [homeArea, setHomeArea] = useState(userProfileMock.homeArea);
+  const { currentStepIndex, totalSteps, isFinalStep, isStepping, stepDisaster, latestHighRiskAlert } = useDisasterDemo();
+  const [visibleAlertBanner, setVisibleAlertBanner] = useState<{
+    id: string;
+    title: string;
+    urgency: string;
+    stepLabel: string;
+  } | null>(null);
 
   const insets = useSafeAreaInsets();
   const isDark = theme === "dark";
+
+  useEffect(() => {
+    if (!latestHighRiskAlert) {
+      return;
+    }
+
+    setVisibleAlertBanner({
+      id: `${latestHighRiskAlert.stepIndex}-${latestHighRiskAlert.title}`,
+      title: latestHighRiskAlert.title,
+      urgency: latestHighRiskAlert.urgency,
+      stepLabel: `Step ${latestHighRiskAlert.stepIndex + 1}`
+    });
+
+    const timeout = setTimeout(() => {
+      setVisibleAlertBanner(null);
+    }, 3500);
+
+    return () => {
+      clearTimeout(timeout);
+    };
+  }, [latestHighRiskAlert]);
 
   const activeScreen = useMemo(() => {
     switch (activeTab) {
@@ -46,13 +75,62 @@ export function AppTabs() {
         );
       case "info":
       default:
-        return <InfoScreen theme={theme} userPhoneNumber={phoneNumber} />;
+        return <InfoScreen theme={theme} />;
     }
   }, [activeTab, fullName, homeArea, phoneNumber, theme]);
 
   return (
     <View className={`flex-1 ${isDark ? "bg-slate-950" : "bg-slate-100"}`}>
+      {visibleAlertBanner ? (
+        <View
+          className={`absolute left-3 right-3 top-2 z-20 rounded-xl border px-3 py-2 ${
+            isDark ? "border-red-400 bg-red-900" : "border-red-300 bg-red-50"
+          }`}
+        >
+          <Text className={`text-[11px] font-semibold uppercase ${isDark ? "text-red-100" : "text-red-700"}`}>
+            High risk update | {visibleAlertBanner.urgency} | {visibleAlertBanner.stepLabel}
+          </Text>
+          <Text className={`mt-1 text-xs font-medium ${isDark ? "text-red-100" : "text-red-800"}`}>
+            {visibleAlertBanner.title}
+          </Text>
+        </View>
+      ) : null}
+
       <View className="flex-1">{activeScreen}</View>
+      <Pressable
+        className={`absolute left-4 rounded-xl border px-4 py-2 ${
+          isFinalStep || isStepping
+            ? isDark
+              ? "border-slate-700 bg-slate-800"
+              : "border-slate-300 bg-slate-200"
+            : isDark
+              ? "border-rose-700 bg-rose-900"
+              : "border-rose-300 bg-rose-50"
+        }`}
+        style={{ bottom: Math.max(insets.bottom, 6) + 64 }}
+        disabled={isFinalStep || isStepping}
+        onPress={() => {
+          void stepDisaster();
+        }}
+      >
+        <Text
+          className={`text-xs font-semibold ${
+            isFinalStep || isStepping
+              ? isDark
+                ? "text-slate-300"
+                : "text-slate-600"
+              : isDark
+                ? "text-rose-100"
+                : "text-rose-700"
+          }`}
+        >
+          {isStepping
+            ? "Stepping..."
+            : isFinalStep
+            ? `Final Step (${totalSteps}/${totalSteps})`
+            : `Step Disaster (${currentStepIndex + 1}/${totalSteps})`}
+        </Text>
+      </Pressable>
 
       <View
         className={`border-t px-3 ${
