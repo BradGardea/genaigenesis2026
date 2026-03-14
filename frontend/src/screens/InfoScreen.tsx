@@ -42,22 +42,6 @@ const URGENCY_PILL_TEXT_COLOR: Record<string, Record<AppTheme, string>> = {
   "extreme urgency alert": { light: "#7f1d1d", dark: "#ef4444" }
 };
 
-function hexToRgb(hex: string): [number, number, number] {
-  const parsed = hex.replace("#", "");
-  const value = Number.parseInt(parsed, 16);
-  return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
-}
-
-function interpolateHex(startHex: string, endHex: string, ratio: number): string {
-  const clamped = Math.max(0, Math.min(1, ratio));
-  const [r1, g1, b1] = hexToRgb(startHex);
-  const [r2, g2, b2] = hexToRgb(endHex);
-  const r = Math.round(r1 + (r2 - r1) * clamped);
-  const g = Math.round(g1 + (g2 - g1) * clamped);
-  const b = Math.round(b1 + (b2 - b1) * clamped);
-  return `rgb(${r}, ${g}, ${b})`;
-}
-
 function formatTime(dateValue: string): string {
   return new Date(dateValue).toLocaleString();
 }
@@ -115,28 +99,14 @@ export function InfoScreen({ theme }: InfoScreenProps) {
   const referenceNowMs = new Date(latestStep.simulatedAt).getTime();
 
   const commonCardClass = `mb-3 rounded-xl border p-4 ${
-    isDark ? "border-slate-700 bg-slate-900" : "border-brand-border bg-brand-card shadow-soft"
+    isDark ? "border-brand-darkBorder bg-brand-darkCard" : "border-brand-border bg-brand-card shadow-soft"
   }`;
 
   const getFreshnessColor = (isoTime: string): string => {
     const ageMinutes = Math.max(0, (referenceNowMs - new Date(isoTime).getTime()) / 60000);
-    const green = "#16a34a";
-    const yellow = "#eab308";
-    const red = "#dc2626";
-
-    if (ageMinutes <= 5) {
-      return green;
-    }
-
-    if (ageMinutes <= 10) {
-      return interpolateHex(green, yellow, (ageMinutes - 5) / 5);
-    }
-
-    if (ageMinutes <= 15) {
-      return interpolateHex(yellow, red, (ageMinutes - 10) / 5);
-    }
-
-    return red;
+    if (ageMinutes <= 5) return "text-status-success";
+    if (ageMinutes <= 10) return "text-status-warn";
+    return "text-status-danger";
   };
 
   const renderAlerts = () => (
@@ -156,8 +126,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
         return (
           <View key={`alerts-step-${stepIndex}`} className={`${commonCardClass} relative overflow-hidden`}>
             <Text
-              className="text-xs font-semibold uppercase"
-              style={{ color: getFreshnessColor(step.sectionUpdatedAt.alerts) }}
+              className={`text-xs font-semibold uppercase ${getFreshnessColor(step.sectionUpdatedAt.alerts)}`}
             >
               Step {stepIndex + 1} | fetched {formatTime(step.sectionUpdatedAt.alerts)}
             </Text>
@@ -199,10 +168,10 @@ export function InfoScreen({ theme }: InfoScreenProps) {
                     <Text className={`text-xs ${isDark ? "text-slate-200" : "text-slate-700"}`}>
                       Area: {item.area}
                     </Text>
-                    <Text className="mt-1 text-xs" style={{ color: getFreshnessColor(item.occurredAt) }}>
+                    <Text className={`mt-1 text-xs ${getFreshnessColor(item.occurredAt)}`}>
                       Occurred: {formatTime(item.occurredAt)}
                     </Text>
-                    <Text className="mt-1 text-xs" style={{ color: getFreshnessColor(item.updatedAt) }}>
+                    <Text className={`mt-1 text-xs ${getFreshnessColor(item.updatedAt)}`}>
                       Updated: {formatTime(item.updatedAt)}
                     </Text>
                     <Text className={`mt-1 text-xs ${isDark ? "text-slate-200" : "text-slate-700"}`}>
@@ -236,8 +205,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
         return (
           <View key={`plans-step-${stepIndex}`} className={`${commonCardClass} relative overflow-hidden`}>
             <Text
-              className="text-xs font-semibold uppercase"
-              style={{ color: getFreshnessColor(step.sectionUpdatedAt.evacuationPlans) }}
+              className={`text-xs font-semibold uppercase ${getFreshnessColor(step.sectionUpdatedAt.evacuationPlans)}`}
             >
               Step {stepIndex + 1} | fetched {formatTime(step.sectionUpdatedAt.evacuationPlans)}
             </Text>
@@ -277,7 +245,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
                   </Text>
                 ))}
                 {item.updatedAt ? (
-                  <Text className="mt-2 text-xs" style={{ color: getFreshnessColor(item.updatedAt) }}>
+                  <Text className={`mt-2 text-xs ${getFreshnessColor(item.updatedAt)}`}>
                     Updated: {formatTime(item.updatedAt)}
                   </Text>
                 ) : null}
@@ -301,8 +269,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
       {stepHistoryNewestFirst.map(({ step, stepIndex }) => (
         <View key={`connections-step-${stepIndex}`} className={`${commonCardClass} relative overflow-hidden`}>
           <Text
-            className="text-xs font-semibold uppercase"
-            style={{ color: getFreshnessColor(step.sectionUpdatedAt.connections) }}
+            className={`text-xs font-semibold uppercase ${getFreshnessColor(step.sectionUpdatedAt.connections)}`}
           >
             Step {stepIndex + 1} | fetched {formatTime(step.sectionUpdatedAt.connections)}
           </Text>
@@ -320,7 +287,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
                 <Text className={`mt-1 text-sm ${isDark ? "text-slate-300" : "text-slate-700"}`}>
                   Trust level: {item.trustLevel}
                 </Text>
-                <Text className="mt-1 text-xs" style={{ color: getFreshnessColor(item.updatedAt) }}>
+                <Text className={`mt-1 text-xs ${getFreshnessColor(item.updatedAt)}`}>
                   Updated: {formatTime(item.updatedAt)}
                 </Text>
               </View>
@@ -343,8 +310,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
       {stepHistoryNewestFirst.map(({ step, stepIndex }) => (
         <View key={`saved-step-${stepIndex}`} className={`${commonCardClass} relative overflow-hidden`}>
           <Text
-            className="text-xs font-semibold uppercase"
-            style={{ color: getFreshnessColor(step.sectionUpdatedAt.savedInformation) }}
+            className={`text-xs font-semibold uppercase ${getFreshnessColor(step.sectionUpdatedAt.savedInformation)}`}
           >
             Step {stepIndex + 1} | fetched {formatTime(step.sectionUpdatedAt.savedInformation)}
           </Text>
@@ -354,7 +320,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
                 {item.title}
               </Text>
               <Text className={`mt-2 text-sm ${isDark ? "text-slate-300" : "text-slate-700"}`}>{item.note}</Text>
-              <Text className="mt-2 text-xs" style={{ color: getFreshnessColor(item.updatedAt) }}>
+              <Text className={`mt-2 text-xs ${getFreshnessColor(item.updatedAt)}`}>
                 Updated: {formatTime(item.updatedAt)}
               </Text>
             </View>
@@ -376,8 +342,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
       {stepHistoryNewestFirst.map(({ step, stepIndex }) => (
         <View key={`weather-step-${stepIndex}`} className={`${commonCardClass} relative overflow-hidden`}>
           <Text
-            className="text-xs font-semibold uppercase"
-            style={{ color: getFreshnessColor(step.sectionUpdatedAt.weather) }}
+            className={`text-xs font-semibold uppercase ${getFreshnessColor(step.sectionUpdatedAt.weather)}`}
           >
             Step {stepIndex + 1} | fetched {formatTime(step.sectionUpdatedAt.weather)}
           </Text>
@@ -392,7 +357,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
                 </Text>
               </View>
               <Text className={`mt-2 text-sm ${isDark ? "text-slate-300" : "text-slate-700"}`}>{item.details}</Text>
-              <Text className="mt-2 text-xs" style={{ color: getFreshnessColor(item.updatedAt) }}>
+              <Text className={`mt-2 text-xs ${getFreshnessColor(item.updatedAt)}`}>
                 Updated: {formatTime(item.updatedAt)}
               </Text>
             </View>
@@ -412,7 +377,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
   return (
     <>
       <FlatList
-        className={`flex-1 ${isDark ? "bg-slate-950" : "bg-brand-surface"}`}
+        className={`flex-1 ${isDark ? "bg-brand-darkSurface" : "bg-brand-surface"}`}
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 18 }}
         data={[section]}
         keyExtractor={(item) => item}
@@ -454,7 +419,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
         ) : null}
               </Pressable>
 
-              <Text className={`ml-3 text-2xl font-semibold ${isDark ? "text-slate-100" : "text-brand-ink"}`}>
+              <Text className={`ml-3 text-2xl font-semibold ${isDark ? "text-brand-darkInk" : "text-brand-ink"}`}>
                 {toSectionTitle(section)}
               </Text>
 
@@ -464,12 +429,12 @@ export function InfoScreen({ theme }: InfoScreenProps) {
               <VoiceWidget/>
             </View>
 
-            <Text className={`mt-2 text-xs ${isDark ? "text-slate-400" : "text-brand-muted"}`}>
+            <Text className={`mt-2 text-xs ${isDark ? "text-brand-darkMuted" : "text-brand-muted"}`}>
               Step {currentStepIndex + 1}/{totalSteps} | T+{currentStepIndex * DISASTER_STEP_INTERVAL_MINUTES}m
             </Text>
-            <Text className={`mt-1 text-xs ${isDark ? "text-slate-400" : "text-brand-muted"}`}>
+            <Text className={`mt-1 text-xs ${isDark ? "text-brand-darkMuted" : "text-brand-muted"}`}>
               {toSectionTitle(section)} updated:{" "}
-              <Text style={{ color: getFreshnessColor(latestStep.sectionUpdatedAt[toSectionUpdatedAtKey(section)]) }}>
+              <Text className={getFreshnessColor(latestStep.sectionUpdatedAt[toSectionUpdatedAtKey(section)])}>
                 {formatTime(latestStep.sectionUpdatedAt[toSectionUpdatedAtKey(section)])}
               </Text>
             </Text>

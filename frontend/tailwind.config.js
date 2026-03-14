@@ -14,20 +14,30 @@ module.exports = {
         brand: {
           primary: "#0379d1",
           primaryStrong: "#004ed6",
-          secondary: "#0cba75",
+          secondary: "#01a564",
           accent: "#05989f",
           surface: "#f7f9fc",
           card: "#ffffff",
           border: "#d7deea",
           muted: "#6b7280",
-          ink: "#0e1932"
+          ink: "#0e1932",
+          darkSurface: "#0b1220",
+          darkCard: "#0f1a2e",
+          darkBorder: "#1d2a42",
+          darkMuted: "#cbd5e1",
+          darkInk: "#e5e7eb"
         },
         status: {
           info: "#0379d1",
           success: "#0cba75",
           warn: "#f5ca0b",
           danger: "#e11d48",
-          neutral: "#94a3b8"
+          neutral: "#94a3b8",
+          infoDark: "#60a5fa",
+          successDark: "#34d399",
+          warnDark: "#fbbf24",
+          dangerDark: "#f87171",
+          neutralDark: "#cbd5e1"
         },
         urgency: {
           notification: {

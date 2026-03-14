@@ -40,10 +40,11 @@ const sampleProfile: EvacuationProfile = {
 };
 
 export function HomeScreen() {
+  const isDark = false;
   return (
-    <ScrollView className="flex-1 bg-crisis-bg px-4 pt-12">
-      <Text className="mb-1 text-3xl font-bold text-crisis-text">CrisisNet</Text>
-      <Text className="mb-6 text-sm text-crisis-muted">
+    <ScrollView className="flex-1 bg-brand-surface px-4 pt-12">
+      <Text className="mb-1 text-3xl font-bold text-brand-ink">CrisisNet</Text>
+      <Text className="mb-6 text-sm text-brand-muted">
         Early warning, live detection, and personalized evacuation planning.
       </Text>
 
@@ -51,12 +52,13 @@ export function HomeScreen() {
         title="Early Warning"
         description="Risk signals aggregated from weather and seismic pipelines."
         badgeLabel="Monitoring"
-        badgeColorClass="bg-crisis-warn"
+        badgeColorClass="bg-status-warn text-brand-ink"
+        isDark={isDark}
       >
         {riskSignals.map((signal) => (
-          <View key={signal.id} className="mb-2 rounded-xl bg-black/20 p-3">
-            <Text className="text-sm font-semibold text-crisis-text">{signal.name}</Text>
-            <Text className="text-xs text-crisis-muted">
+          <View key={signal.id} className="mb-2 rounded-xl bg-brand-card p-3 shadow-soft">
+            <Text className="text-sm font-semibold text-brand-ink">{signal.name}</Text>
+            <Text className="text-xs text-brand-muted">
               {signal.value} | {signal.source}
             </Text>
           </View>
@@ -67,12 +69,13 @@ export function HomeScreen() {
         title="Detection"
         description="Incoming incidents correlated across dispatch, weather, and social channels."
         badgeLabel="1 Active"
-        badgeColorClass="bg-crisis-danger"
+        badgeColorClass="bg-status-danger text-white"
+        isDark={isDark}
       >
         {recentEvents.map((event) => (
-          <View key={event.id} className="mb-2 rounded-xl bg-black/20 p-3">
-            <Text className="text-sm font-semibold text-crisis-text">{event.title}</Text>
-            <Text className="text-xs text-crisis-muted">
+          <View key={event.id} className="mb-2 rounded-xl bg-brand-card p-3 shadow-soft">
+            <Text className="text-sm font-semibold text-brand-ink">{event.title}</Text>
+            <Text className="text-xs text-brand-muted">
               {event.location} | {event.source}
             </Text>
           </View>
@@ -83,14 +86,15 @@ export function HomeScreen() {
         title="Response"
         description="Personalized profile used to build evacuation protocol and route guidance."
         badgeLabel="Profile Ready"
-        badgeColorClass="bg-crisis-ok"
+        badgeColorClass="bg-status-success text-brand-ink"
+        isDark={isDark}
       >
-        <Text className="mb-3 text-xs text-crisis-muted">
+        <Text className="mb-3 text-xs text-brand-muted">
           Family: {sampleProfile.familySize} | Vehicles: {sampleProfile.vehicles} | Children:{" "}
           {sampleProfile.hasChildren ? "Yes" : "No"}
         </Text>
-        <Pressable className="rounded-xl bg-crisis-text p-3">
-          <Text className="text-center font-semibold text-crisis-bg">
+        <Pressable className="rounded-xl bg-brand-primary p-3 shadow-soft">
+          <Text className="text-center font-semibold text-white">
             Build Evacuation Plan
           </Text>
         </Pressable>
