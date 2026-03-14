@@ -26,7 +26,7 @@ export function reportHazard(
   hazardType: string,
   location: Coordinate,
   description: string = "",
-  radiusMeters?: number
+  radiusMeters?: number,
 ): Promise<HazardZone> {
   const body: HazardReport = {
     hazard_type: hazardType,
@@ -41,13 +41,14 @@ export function reportHazard(
 }
 
 export function getActiveHazards(): Promise<HazardZone[]> {
+  console.log("Fetching active hazards...");
   return request<HazardZone[]>("/hazards/active");
 }
 
 export function requestRoute(
   origin: Coordinate,
   destination: Coordinate,
-  profile?: RouteRequest["profile"]
+  profile?: RouteRequest["profile"],
 ): Promise<RouteResponse> {
   const body: RouteRequest = { origin, destination, profile };
   return request<RouteResponse>("/routes/plan", {
@@ -58,7 +59,7 @@ export function requestRoute(
 
 export function subscribeToRouteUpdates(
   routeId: string,
-  onEvent: (event: { type: string; data: Record<string, unknown> }) => void
+  onEvent: (event: { type: string; data: Record<string, unknown> }) => void,
 ): EventSource {
   const es = new EventSource(`${API_BASE}/routes/${routeId}/stream`);
 
@@ -85,6 +86,8 @@ export function fetchWeatherZones(): Promise<WeatherAlertCollection> {
   return request<WeatherAlertCollection>("/events/weather-zones");
 }
 
-export function fetchRouteWeather(routeId: string): Promise<RouteWeatherPoint[]> {
+export function fetchRouteWeather(
+  routeId: string,
+): Promise<RouteWeatherPoint[]> {
   return request<RouteWeatherPoint[]>(`/routes/${routeId}/weather`);
 }

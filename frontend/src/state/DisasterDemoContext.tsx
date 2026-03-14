@@ -13,6 +13,15 @@ import {
   WeatherStepResponse,
 } from "../data/types";
 
+interface StormZoneCollection {
+  type: "FeatureCollection";
+  features: {
+    type: "Feature";
+    geometry: { type: "Polygon"; coordinates: number[][][] };
+    properties: { id: string; event: string; severity: string; region: string };
+  }[];
+}
+
 interface DisasterDemoContextValue {
   currentStepIndex: number;
   totalSteps: number;
@@ -23,12 +32,58 @@ interface DisasterDemoContextValue {
   isFinalStep: boolean;
   isStepping: boolean;
   weatherDatasetMetadata: WeatherDatasetMetadata | null;
+  weatherZones: StormZoneCollection | null;
   latestHighRiskAlert: { stepIndex: number; title: string; urgency: string } | null;
   stepDisaster: () => Promise<void>;
   markSectionSeen: (section: keyof (typeof disasterStepsMock)[number]["updateSummary"]) => void;
 }
 
 const DisasterDemoContext = createContext<DisasterDemoContextValue | undefined>(undefined);
+
+function makeCircle(lat: number, lon: number, radiusKm: number): number[][] {
+  const R = 6371;
+  const steps = 64;
+  const d = radiusKm / R;
+  const latR = (lat * Math.PI) / 180;
+  const lonR = (lon * Math.PI) / 180;
+  const pts: number[][] = [];
+  for (let i = 0; i <= steps; i++) {
+    const brng = (2 * Math.PI * i) / steps;
+    const pLat = Math.asin(
+      Math.sin(latR) * Math.cos(d) + Math.cos(latR) * Math.sin(d) * Math.cos(brng)
+    );
+    const pLon =
+      lonR +
+      Math.atan2(
+        Math.sin(brng) * Math.sin(d) * Math.cos(latR),
+        Math.cos(d) - Math.sin(latR) * Math.sin(pLat)
+      );
+    pts.push([(pLon * 180) / Math.PI, (pLat * 180) / Math.PI]);
+  }
+  return pts;
+}
+
+function buildStormZones(raw: Record<string, unknown>): StormZoneCollection | null {
+  const ss = raw.storm_state as any;
+  if (!ss?.storm_center) return null;
+  const { lat, lon } = ss.storm_center as { lat: number; lon: number };
+  const radii = [
+    { key: "r34", label: "34-kt wind radius", severity: "moderate" },
+    { key: "r50", label: "50-kt wind radius", severity: "severe" },
+    { key: "r64", label: "64-kt wind radius", severity: "extreme" },
+  ] as const;
+  const features = radii
+    .filter(({ key }) => (ss.wind_radii_km?.[key] ?? 0) > 0)
+    .map(({ key, label, severity }) => ({
+      type: "Feature" as const,
+      geometry: {
+        type: "Polygon" as const,
+        coordinates: [makeCircle(lat, lon, ss.wind_radii_km[key] as number)],
+      },
+      properties: { id: `storm-${key}`, event: label, severity, region: "Goma, DR Congo" },
+    }));
+  return features.length ? { type: "FeatureCollection", features } : null;
+}
 
 function applyWeatherPayloadToStep(
   step: (typeof disasterStepsMock)[number],
@@ -98,6 +153,7 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
   } | null>(null);
   const [isStepping, setIsStepping] = useState(false);
   const [weatherDatasetMetadata, setWeatherDatasetMetadata] = useState<WeatherDatasetMetadata | null>(null);
+  const [currentStepRaw, setCurrentStepRaw] = useState<Record<string, unknown> | null>(null);
   const currentStep = stepHistory[stepHistory.length - 1]?.step ?? disasterStepsMock[0];
   const isFinalStep = currentStepIndex >= disasterStepsMock.length - 1;
   const unreadUpdates = Object.values(unreadBySection).reduce((sum, count) => sum + count, 0);
@@ -116,6 +172,7 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
         }
 
         setWeatherDatasetMetadata(weatherPayload.metadata);
+        setCurrentStepRaw(weatherPayload.raw as Record<string, unknown>);
         setStepHistory((previous) => {
           if (previous.length === 0) {
             return previous;
@@ -137,6 +194,11 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const weatherZones = useMemo(
+    () => (currentStepRaw ? buildStormZones(currentStepRaw) : null),
+    [currentStepRaw],
+  );
+
   const value = useMemo<DisasterDemoContextValue>(
     () => ({
       currentStepIndex,
@@ -148,6 +210,7 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
       isFinalStep,
       isStepping,
       weatherDatasetMetadata,
+      weatherZones,
       latestHighRiskAlert,
       stepDisaster: async () => {
         if (isStepping) {
@@ -169,6 +232,7 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
             fetchCityStateNextStep(currentStepIndex),
           ]);
           setWeatherDatasetMetadata(weatherPayload.metadata);
+          setCurrentStepRaw(weatherPayload.raw as Record<string, unknown>);
           const weatherPatched = applyWeatherPayloadToStep(baseNextStep, weatherPayload);
           resolvedNextStep = applyCityStatePayloadToStep(weatherPatched, cityPayload);
         } catch {
@@ -216,6 +280,7 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
       latestHighRiskAlert,
       stepHistory,
       weatherDatasetMetadata,
+      weatherZones,
       unreadBySection,
       unreadUpdates,
     ]
