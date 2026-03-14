@@ -148,7 +148,7 @@ export function MapScreen({ theme }: MapScreenProps) {
   const {
     route, loading, error, rerouting,
     tripActive, currentPosition,
-    refetch, startTrip, endTrip, setCurrentPosition, setRouteDirectly,
+    refetch, startTrip, endTrip, setCurrentPosition, setRouteDirectly, setRerouting,
   } = useEvacuationRoute(origin, destination);
 
   // Restore persisted route on first render
@@ -162,12 +162,21 @@ export function MapScreen({ theme }: MapScreenProps) {
   const [followCamera, setFollowCamera] = useState(true);
 
   // ── Trip simulation ────────────────────────────────────────
-  const { position: simPosition, bearing: simBearing, progress: simProgress } = useTripSimulation(
+  const {
+    position: simPosition,
+    bearing: simBearing,
+    progress: simProgress,
+    pause: pauseSimulation,
+  } = useTripSimulation(
     route?.geometry ?? null,
     route?.segment_durations,
     tripActive,
-    10
+    20,
+    rerouting
   );
+
+  const currentPositionRef = useRef<Coordinate | null>(null);
+  currentPositionRef.current = currentPosition;
 
   useEffect(() => {
     if (simPosition && tripActive) {
@@ -321,18 +330,20 @@ export function MapScreen({ theme }: MapScreenProps) {
     if (route?.geometry) {
       source.setData({ type: "Feature", properties: {}, geometry: route.geometry });
 
-      const coords = (route.geometry as GeoJSONLineString).coordinates as [number, number][];
-      if (coords.length > 1) {
-        const bounds = coords.reduce(
-          (b, c) => b.extend(c as mapboxgl.LngLatLike),
-          new mapboxgl.LngLatBounds(coords[0], coords[0])
-        );
-        map.fitBounds(bounds, { padding: 80, duration: 800 });
+      if (!tripActive) {
+        const coords = (route.geometry as GeoJSONLineString).coordinates as [number, number][];
+        if (coords.length > 1) {
+          const bounds = coords.reduce(
+            (b, c) => b.extend(c as mapboxgl.LngLatLike),
+            new mapboxgl.LngLatBounds(coords[0], coords[0])
+          );
+          map.fitBounds(bounds, { padding: 80, duration: 800 });
+        }
       }
     } else {
       source.setData({ type: "FeatureCollection", features: [] });
     }
-  }, [route]);
+  }, [route, tripActive]);
 
   // ── Update origin/dest markers ────────────────────────────
   useEffect(() => {
@@ -516,13 +527,16 @@ export function MapScreen({ theme }: MapScreenProps) {
       endTrip,
       refetch,
       setRouteDirectly,
+      setRerouting,
+      pauseSimulation,
       fetchHazards,
       setDemoStatus,
       fitMapToRoute,
+      getCurrentPosition: () => currentPositionRef.current,
     };
     await runDemo(controls);
     setDemoRunning(false);
-  }, [demoRunning, tripActive, startTrip, endTrip, refetch, setRouteDirectly, fetchHazards, fitMapToRoute]);
+  }, [demoRunning, tripActive, startTrip, endTrip, refetch, setRouteDirectly, setRerouting, pauseSimulation, fetchHazards, fitMapToRoute]);
 
   // Auto-trigger demo from ?demo URL parameter
   const demoTriggeredRef = useRef(false);

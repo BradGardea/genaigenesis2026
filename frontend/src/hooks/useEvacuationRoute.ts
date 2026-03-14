@@ -21,6 +21,7 @@ export interface EvacuationRouteControls extends EvacuationRouteState {
   endTrip: () => void;
   setCurrentPosition: (coord: Coordinate) => void;
   setRouteDirectly: (route: RouteResponse) => void;
+  setRerouting: (value: boolean) => void;
 }
 
 export function useEvacuationRoute(
@@ -110,7 +111,11 @@ export function useEvacuationRoute(
   }, []);
 
   const setRouteDirectly = useCallback((route: RouteResponse) => {
-    setState((s) => ({ ...s, route, loading: false, error: null }));
+    setState((s) => ({ ...s, route, loading: false, error: null, rerouting: false }));
+  }, []);
+
+  const setRerouting = useCallback((value: boolean) => {
+    setState((s) => ({ ...s, rerouting: value }));
   }, []);
 
   return {
@@ -120,5 +125,6 @@ export function useEvacuationRoute(
     endTrip,
     setCurrentPosition,
     setRouteDirectly,
+    setRerouting,
   };
 }

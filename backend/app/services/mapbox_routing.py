@@ -13,57 +13,67 @@ logger = logging.getLogger(__name__)
 
 MAPBOX_DIRECTIONS_URL = "https://api.mapbox.com/directions/v5/mapbox/driving"
 MAX_RETRIES = 2
+MIN_OFFSET_DEG = 0.003  # ~330 m — enough to reach a parallel street in a city grid
 
 
-def compute_avoidance_waypoints(
-    origin: Coordinate,
-    destination: Coordinate,
+def _compute_waypoints_from_route(
+    route_geometry: dict,
     hazard_polygons: list[dict],
-    repulsion_factor: float = 1.5,
+    repulsion_factor: float = 2.0,
 ) -> list[Coordinate]:
-    """Compute waypoints that push the route away from hazard zones.
+    """Place avoidance waypoints perpendicular to the *actual road* at each hazard.
 
-    For each hazard whose centroid is near the direct path, place a waypoint
-    on the opposite side of the path from the hazard centroid.
+    Using the route geometry (not the OD straight line) gives a perpendicular
+    direction that aligns with the local road orientation, so the waypoint
+    naturally falls on a parallel street rather than causing Mapbox to create
+    a circular detour.
     """
     if not hazard_polygons:
         return []
 
-    ox, oy = origin.lng, origin.lat
-    dx, dy = destination.lng, destination.lat
-    path_vec = (dx - ox, dy - oy)
-    path_len = math.hypot(*path_vec)
-    if path_len == 0:
-        return []
-
+    route_line = LineString(route_geometry["coordinates"])
     waypoints: list[Coordinate] = []
+
     for poly_geojson in hazard_polygons:
         poly = shape(poly_geojson)
-        cx, cy = poly.centroid.x, poly.centroid.y
+        if not route_line.intersects(poly):
+            continue
 
-        # Project centroid onto the origin→destination line
-        t = ((cx - ox) * path_vec[0] + (cy - oy) * path_vec[1]) / (path_len**2)
-        if t < 0.05 or t > 0.95:
-            continue  # hazard is near endpoints; waypoint won't help much
+        centroid = poly.centroid
+        d = route_line.project(centroid)
 
-        # Perpendicular offset: push away from hazard centroid
-        proj_x = ox + t * path_vec[0]
-        proj_y = oy + t * path_vec[1]
-        perp_x = cx - proj_x
-        perp_y = cy - proj_y
-        perp_len = math.hypot(perp_x, perp_y)
-        if perp_len == 0:
-            perp_x, perp_y = -path_vec[1], path_vec[0]
-            perp_len = math.hypot(perp_x, perp_y)
+        # Skip hazards at the very start/end of the route
+        if d < route_line.length * 0.05 or d > route_line.length * 0.95:
+            continue
 
-        # Radius in degrees (rough)
-        bounds = poly.bounds  # (minx, miny, maxx, maxy)
+        nearest = route_line.interpolate(d)
+
+        # Route tangent at the hazard point
+        eps = max(route_line.length * 0.01, 0.0001)
+        p_before = route_line.interpolate(max(0, d - eps))
+        p_after = route_line.interpolate(min(route_line.length, d + eps))
+        tx = p_after.x - p_before.x
+        ty = p_after.y - p_before.y
+        tlen = math.hypot(tx, ty)
+        if tlen == 0:
+            continue
+
+        # Perpendicular to route direction (rotated 90°)
+        perp_x = -ty / tlen
+        perp_y = tx / tlen
+
+        # Determine which side of the route the hazard centroid is on
+        dx = centroid.x - nearest.x
+        dy = centroid.y - nearest.y
+        side = dx * perp_x + dy * perp_y
+        direction = -1.0 if side > 0 else 1.0
+
+        bounds = poly.bounds
         radius_deg = max(bounds[2] - bounds[0], bounds[3] - bounds[1]) / 2
+        offset = max(radius_deg * repulsion_factor, MIN_OFFSET_DEG)
 
-        offset = radius_deg * repulsion_factor
-        wp_x = proj_x - (perp_x / perp_len) * offset
-        wp_y = proj_y - (perp_y / perp_len) * offset
-
+        wp_x = nearest.x + direction * perp_x * offset
+        wp_y = nearest.y + direction * perp_y * offset
         waypoints.append(Coordinate(lng=round(wp_x, 6), lat=round(wp_y, 6)))
 
     return waypoints
@@ -117,28 +127,41 @@ async def compute_route(
     destination: Coordinate,
     hazard_polygons: list[dict],
 ) -> dict:
-    """Compute a route avoiding hazard zones, with retry on intersection."""
+    """Compute a route avoiding hazard zones, with retry on intersection.
 
-    repulsion = 1.5
+    1. Fetch the natural route (no waypoints).
+    2. If it intersects any hazard, compute avoidance waypoints *from the
+       route geometry* so they're perpendicular to the actual road.
+    3. Retry with increasing repulsion until the route is clear (or max retries).
+    """
+    route = await fetch_route(origin, destination)
+    geometry = route["geometry"]
+
+    if not hazard_polygons or not _route_intersects_hazards(geometry, hazard_polygons):
+        route["_avoidance_waypoints"] = []
+        return route
+
+    repulsion = 2.0
+    waypoints: list[Coordinate] = []
+
     for attempt in range(MAX_RETRIES + 1):
-        waypoints = compute_avoidance_waypoints(
-            origin, destination, hazard_polygons, repulsion_factor=repulsion
+        waypoints = _compute_waypoints_from_route(
+            geometry, hazard_polygons, repulsion_factor=repulsion
         )
         route = await fetch_route(origin, destination, waypoints)
-
         geometry = route["geometry"]
-        if not hazard_polygons or not _route_intersects_hazards(geometry, hazard_polygons):
+
+        if not _route_intersects_hazards(geometry, hazard_polygons):
             route["_avoidance_waypoints"] = [
                 {"lng": w.lng, "lat": w.lat} for w in waypoints
             ]
             return route
 
         logger.warning(
-            "Route attempt %d intersects hazards, retrying with more repulsion",
+            "Route attempt %d still intersects hazards, retrying with more repulsion",
             attempt + 1,
         )
         repulsion *= 2.0
 
-    # Return last attempt even if it still intersects
     route["_avoidance_waypoints"] = [{"lng": w.lng, "lat": w.lat} for w in waypoints]
     return route
