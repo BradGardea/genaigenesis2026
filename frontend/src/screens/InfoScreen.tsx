@@ -10,6 +10,7 @@ import {
 } from "../data";
 import { useDisasterDemo } from "../state/DisasterDemoContext";
 import { AppTheme } from "../types/theme";
+import VoiceWidget from "@/components/Audio";
 
 type InfoSection =
   | "alerts"
@@ -437,6 +438,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
                   </View>
                 ) : null}
               </Pressable>
+               <VoiceWidget/>
 
               <Text className={`ml-3 text-2xl font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
                 {toSectionTitle(section)}

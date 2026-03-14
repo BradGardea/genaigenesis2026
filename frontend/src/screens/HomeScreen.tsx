@@ -1,6 +1,7 @@
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { StatusCard } from "../components/StatusCard";
 import { EmergencyEvent, EvacuationProfile, RiskSignal } from "../types/domain";
+import VoiceWidget from "@/components/Audio";
 
 const riskSignals: RiskSignal[] = [
   {
