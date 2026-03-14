@@ -1,10 +1,10 @@
 import os
 import json
 import httpx
-import requests
 from dotenv import load_dotenv
 
 from app.services.weather_steps_service import get_weather_current_step
+from app.services.city_state_steps_service import get_city_state_current_step
 
 load_dotenv()
 API_KEY = os.getenv("OPENAI_API_KEY")
@@ -12,6 +12,7 @@ API_KEY = os.getenv("OPENAI_API_KEY")
 # Register your functions in a dictionary
 TOOLS = {
     "get_weather_current_step": get_weather_current_step,
+    "get_city_state_current_step": get_city_state_current_step,
 }
 
 async def handle_message(message: str, step: int):
@@ -29,6 +30,22 @@ async def handle_message(message: str, step: int):
             "function": {
                 "name": "get_weather_current_step",
                 "description": "Get weather for a specific step",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "step": {
+                            "type": "integer"
+                        }
+                    },
+                    "required": ["step"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_city_state_current_step",
+                "description": "Get information about city/state level alerts.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -60,17 +77,30 @@ async def handle_message(message: str, step: int):
 
     print("Tool decision:", response_json)
 
-    tool_call = response_json["choices"][0]["message"].get("tool_calls")
+    tool_calls = response_json["choices"][0]["message"].get("tool_calls") or []
 
-    if not tool_call:
+    if not tool_calls:
         return ""
 
-    fn_name = tool_call[0]["function"]["name"]
-    args = json.loads(tool_call[0]["function"]["arguments"])
+    def _to_serializable(value):
+        if hasattr(value, "model_dump"):
+            return value.model_dump()
+        if isinstance(value, (dict, list, str, int, float, bool)) or value is None:
+            return value
+        return str(value)
 
-    if fn_name in TOOLS:
-        result = await TOOLS[fn_name](**args)
-        print(f"Function {fn_name} called with args {args}, result: {result}")
-        return result
+    results = []
+    for call in tool_calls:
+        fn_name = call["function"]["name"]
+        args = json.loads(call["function"]["arguments"])
 
-    return ""
+        if fn_name in TOOLS:
+            result = await TOOLS[fn_name](**args)
+            serialized = _to_serializable(result)
+            results.append({"function": fn_name, "args": args, "result": serialized})
+            print(f"Function {fn_name} called with args {args}, result: {serialized}")
+
+    if not results:
+        return ""
+
+    return json.dumps(results, indent=2)
