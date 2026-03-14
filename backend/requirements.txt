@@ -4,5 +4,6 @@ pydantic==2.11.7
 pydantic-settings==2.10.1
 python-dotenv==1.1.1
 httpx==0.28.1
+shapely==2.0.7
 pytest==8.4.1
 

@@ -25,3 +25,58 @@ export interface EvacuationProfile {
   hasMobilityNeeds: boolean;
 }
 
+export interface Coordinate {
+  lng: number;
+  lat: number;
+}
+
+export interface HazardReport {
+  hazard_type: string;
+  location: Coordinate;
+  radius_meters?: number;
+  description?: string;
+}
+
+export interface GeoJSONPolygon {
+  type: "Polygon";
+  coordinates: number[][][];
+}
+
+export interface GeoJSONLineString {
+  type: "LineString";
+  coordinates: number[][];
+}
+
+export interface HazardZone {
+  hazard_id: string;
+  polygon: GeoJSONPolygon;
+  hazard_type: string;
+  severity: string;
+  radius_meters: number;
+}
+
+export interface RouteRequest {
+  origin: Coordinate;
+  destination: Coordinate;
+  profile?: EvacuationProfileInput;
+}
+
+export interface EvacuationProfileInput {
+  family_size?: number;
+  vehicles?: number;
+  has_children?: boolean;
+  has_elderly?: boolean;
+  has_mobility_needs?: boolean;
+}
+
+export interface RouteResponse {
+  route_id: string;
+  geometry: GeoJSONLineString;
+  distance_meters: number;
+  duration_seconds: number;
+  waypoints: Coordinate[];
+  hazards_avoided: string[];
+  instructions: string[];
+  backup_route: GeoJSONLineString | null;
+}
+
