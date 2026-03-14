@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
+    agents,
     alerts,
     city_state_steps,
     events,
@@ -28,3 +29,4 @@ api_router.include_router(storms.router)
 api_router.include_router(weather_steps.router)
 api_router.include_router(city_state_steps.router)
 api_router.include_router(simulation.router)
+api_router.include_router(agents.router)

@@ -157,11 +157,14 @@ async def generate_decision(
             return _rule_based_decision(situation)
 
 
-async def _call_watsonx(
-    situation: AgentSituation, model_id: str
-) -> AgentDecision:
-    """Call watsonx API in a thread to avoid blocking the event loop."""
-    user_prompt = _build_user_prompt(situation)
+async def call_watsonx_raw(
+    system_prompt: str,
+    user_prompt: str,
+    model_id: str = "meta-llama/llama-3-3-70b-instruct",
+    max_tokens: int = 500,
+    temperature: float = 0.1,
+) -> str:
+    """Low-level WatsonX call returning raw text. Raises on failure."""
 
     def _sync_call() -> str:
         from ibm_watsonx_ai import Credentials
@@ -177,17 +180,30 @@ async def _call_watsonx(
             project_id=settings.watsonx_project_id,
             params={
                 "decoding_method": "greedy",
-                "max_new_tokens": 200,
-                "temperature": 0.1,
+                "max_new_tokens": max_tokens,
+                "temperature": temperature,
             },
         )
-        response = model.generate_text(
-            prompt=f"{SYSTEM_PROMPT}\n\nUser: {user_prompt}\nAssistant:"
+        return model.generate_text(
+            prompt=f"{system_prompt}\n\nUser: {user_prompt}\nAssistant:"
         )
-        return response
 
     loop = asyncio.get_running_loop()
-    result_text = await loop.run_in_executor(None, _sync_call)
+    return await loop.run_in_executor(None, _sync_call)
+
+
+async def _call_watsonx(
+    situation: AgentSituation, model_id: str
+) -> AgentDecision:
+    """Call watsonx API in a thread to avoid blocking the event loop."""
+    user_prompt = _build_user_prompt(situation)
+    result_text = await call_watsonx_raw(
+        system_prompt=SYSTEM_PROMPT,
+        user_prompt=user_prompt,
+        model_id=model_id,
+        max_tokens=200,
+        temperature=0.1,
+    )
 
     decision = _parse_decision(result_text)
     if decision is None:
