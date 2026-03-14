@@ -98,7 +98,6 @@ function ensureCarMarkerCSS() {
       align-items: center;
       justify-content: center;
       filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
-      transition: transform 0.2s ease-out;
     }
     .crisisnet-car-marker svg {
       width: 100%;
@@ -108,13 +107,14 @@ function ensureCarMarkerCSS() {
   document.head.appendChild(style);
 }
 
-function createCarMarkerElement(bearing: number): HTMLDivElement {
+function createCarMarkerElement(): HTMLDivElement {
   const el = document.createElement("div");
   el.className = "crisisnet-car-marker";
-  // Car icon points right by default; subtract 90 so bearing 0 (north) points up
-  el.style.transform = `rotate(${bearing - 90}deg)`;
+  // Rotation is applied to the SVG child, not the outer element,
+  // because Mapbox uses transform on the marker element for positioning.
   el.innerHTML = `
-    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"
+        >
       <path d="M5 17h14v-5H5v5zm2.5-4a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5zm9 0a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5z" fill="#1e40af"/>
       <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16a1.5 1.5 0 0 1 0-3 1.5 1.5 0 0 1 0 3zm11 0a1.5 1.5 0 0 1 0-3 1.5 1.5 0 0 1 0 3zM5 11l1.5-4h11l1.5 4H5z" fill="#3b82f6"/>
     </svg>
@@ -249,7 +249,12 @@ export function MapScreen({ theme }: MapScreenProps) {
           type: "line",
           source: ROUTE_SOURCE,
           layout: { "line-join": "round", "line-cap": "round" },
-          paint: { "line-color": "#3b82f6", "line-width": 5, "line-opacity": 0.85 },
+          paint: {
+            "line-color": "#3b82f6",
+            "line-width": 5,
+            "line-opacity": 0.85,
+            "line-opacity-transition": { duration: 200, delay: 0 },
+          },
         });
 
         map.addSource(HAZARD_SOURCE, {
@@ -321,6 +326,8 @@ export function MapScreen({ theme }: MapScreenProps) {
   }, [mapClickMode]);
 
   // ── Update route line ─────────────────────────────────────
+  const prevRouteIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -328,7 +335,19 @@ export function MapScreen({ theme }: MapScreenProps) {
     if (!source) return;
 
     if (route?.geometry) {
-      source.setData({ type: "Feature", properties: {}, geometry: route.geometry });
+      const routeChanged = prevRouteIdRef.current !== null && prevRouteIdRef.current !== route.route_id;
+      prevRouteIdRef.current = route.route_id;
+
+      if (tripActive && routeChanged && map.getLayer(ROUTE_LAYER)) {
+        // Fade out, swap data, fade back in
+        map.setPaintProperty(ROUTE_LAYER, "line-opacity", 0);
+        setTimeout(() => {
+          source.setData({ type: "Feature", properties: {}, geometry: route.geometry });
+          map.setPaintProperty(ROUTE_LAYER, "line-opacity", 0.85);
+        }, 200);
+      } else {
+        source.setData({ type: "Feature", properties: {}, geometry: route.geometry });
+      }
 
       if (!tripActive) {
         const coords = (route.geometry as GeoJSONLineString).coordinates as [number, number][];
@@ -341,6 +360,7 @@ export function MapScreen({ theme }: MapScreenProps) {
         }
       }
     } else {
+      prevRouteIdRef.current = null;
       source.setData({ type: "FeatureCollection", features: [] });
     }
   }, [route, tripActive]);
@@ -374,14 +394,13 @@ export function MapScreen({ theme }: MapScreenProps) {
     if (currentPosition && tripActive) {
       ensureCarMarkerCSS();
       if (!positionMarkerRef.current) {
-        const el = createCarMarkerElement(simBearing);
+        const el = createCarMarkerElement();
         positionMarkerRef.current = new mapboxgl.Marker({ element: el, anchor: "center" })
           .setLngLat([currentPosition.lng, currentPosition.lat])
           .addTo(map);
       } else {
         positionMarkerRef.current.setLngLat([currentPosition.lng, currentPosition.lat]);
-        const el = positionMarkerRef.current.getElement();
-        if (el) el.style.transform = `rotate(${simBearing - 90}deg)`;
+        // No rotation — car keeps its default orientation
       }
     } else {
       positionMarkerRef.current?.remove();
@@ -391,20 +410,25 @@ export function MapScreen({ theme }: MapScreenProps) {
 
   // ── Follow-camera: nav-mode tracking during active trip ────
   const prevTripActiveRef = useRef(false);
+  const lastCameraUpdateRef = useRef(0);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
     if (tripActive && currentPosition && followCamera) {
-      map.easeTo({
-        center: [currentPosition.lng, currentPosition.lat],
-        bearing: simBearing,
-        pitch: 60,
-        zoom: 15.5,
-        duration: 500,
-        easing: (t) => t,
-      });
+      const now = Date.now();
+      if (now - lastCameraUpdateRef.current >= 300) {
+        lastCameraUpdateRef.current = now;
+        map.easeTo({
+          center: [currentPosition.lng, currentPosition.lat],
+          bearing: simBearing,
+          pitch: 60,
+          zoom: 15.5,
+          duration: 350,
+          easing: (t) => t,
+        });
+      }
     }
 
     // When trip ends, reset to overhead view showing the full route

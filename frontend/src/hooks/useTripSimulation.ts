@@ -96,6 +96,49 @@ function bearingAtSegment(coords: number[][], segIndex: number): number {
 }
 
 /**
+ * Project a point onto the nearest segment of a route.
+ * Returns the elapsed time at the projected point, or null if the point
+ * is more than `maxDistM` meters from any segment.
+ */
+function projectOntoRoute(
+  point: Coordinate,
+  coords: number[][],
+  cumTime: number[],
+  maxDistM = 200
+): { elapsed: number; segIndex: number } | null {
+  let bestDist = Infinity;
+  let bestElapsed = 0;
+  let bestSeg = 0;
+
+  for (let i = 0; i < coords.length - 1; i++) {
+    const ax = coords[i][0], ay = coords[i][1];
+    const bx = coords[i + 1][0], by = coords[i + 1][1];
+    const dx = bx - ax, dy = by - ay;
+    const lenSq = dx * dx + dy * dy;
+
+    // Parameter t along segment [0,1]
+    let t = 0;
+    if (lenSq > 0) {
+      t = Math.max(0, Math.min(1, ((point.lng - ax) * dx + (point.lat - ay) * dy) / lenSq));
+    }
+
+    const projLng = ax + t * dx;
+    const projLat = ay + t * dy;
+    const dist = haversineDistance(point, { lng: projLng, lat: projLat });
+
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestSeg = i;
+      const segDuration = cumTime[i + 1] - cumTime[i];
+      bestElapsed = cumTime[i] + t * segDuration;
+    }
+  }
+
+  if (bestDist > maxDistM) return null;
+  return { elapsed: bestElapsed, segIndex: bestSeg };
+}
+
+/**
  * Time-based simulation along a GeoJSON LineString using per-segment durations.
  * When segmentDurations is provided (from Mapbox annotations), the marker moves
  * at realistic road speeds — slow on residential streets, fast on highways.
@@ -113,6 +156,7 @@ export function useTripSimulation(
   const [bearing, setBearing] = useState(0);
   const [progress, setProgress] = useState(0);
   const elapsedRef = useRef(0);
+  const positionRef = useRef<Coordinate | null>(null);
 
   // Two independent pause signals — either one freezes the simulation.
   // propPaused tracks the React prop (e.g. rerouting state).
@@ -129,6 +173,7 @@ export function useTripSimulation(
 
     if (!active || !geometry || geometry.coordinates.length < 2) {
       elapsedRef.current = 0;
+      positionRef.current = null;
       setPosition(null);
       setBearing(0);
       setProgress(0);
@@ -141,33 +186,69 @@ export function useTripSimulation(
 
     if (totalTime === 0) return;
 
-    setPosition({ lng: coords[0][0], lat: coords[0][1] });
-    setBearing(bearingAtSegment(coords, 0));
-    setProgress(0);
-    elapsedRef.current = 0;
-
-    const tickMs = 500;
-
-    const interval = setInterval(() => {
-      if (propPausedRef.current || manualPausedRef.current) return;
-
-      const newElapsed = elapsedRef.current + (tickMs / 1000) * timeScale;
-      elapsedRef.current = Math.min(newElapsed, totalTime);
-
-      const seg = findSegmentByTime(cumTime, elapsedRef.current);
-      const segDuration = cumTime[seg + 1] - cumTime[seg];
-      const t = segDuration > 0 ? (elapsedRef.current - cumTime[seg]) / segDuration : 0;
-
-      setPosition(interpolatePosition(coords, seg, t));
-      setBearing(bearingAtSegment(coords, seg));
-      setProgress(elapsedRef.current / totalTime);
-
-      if (elapsedRef.current >= totalTime) {
-        clearInterval(interval);
+    // Smart reroute: if we have a current position (mid-trip), project onto the new route
+    if (positionRef.current) {
+      const proj = projectOntoRoute(positionRef.current, coords, cumTime);
+      if (proj) {
+        // Continue from the projected point on the new route
+        elapsedRef.current = proj.elapsed;
+        const segDuration = cumTime[proj.segIndex + 1] - cumTime[proj.segIndex];
+        const t = segDuration > 0 ? (proj.elapsed - cumTime[proj.segIndex]) / segDuration : 0;
+        setPosition(interpolatePosition(coords, proj.segIndex, t));
+        setBearing(bearingAtSegment(coords, proj.segIndex));
+        setProgress(proj.elapsed / totalTime);
+      } else {
+        // Too far from new route — start from beginning
+        setPosition({ lng: coords[0][0], lat: coords[0][1] });
+        setBearing(bearingAtSegment(coords, 0));
+        setProgress(0);
+        elapsedRef.current = 0;
       }
-    }, tickMs);
+    } else {
+      setPosition({ lng: coords[0][0], lat: coords[0][1] });
+      setBearing(bearingAtSegment(coords, 0));
+      setProgress(0);
+      elapsedRef.current = 0;
+    }
 
-    return () => clearInterval(interval);
+    let rafId: number;
+    let lastFrameTime: number | null = null;
+
+    const tick = (now: number) => {
+      if (lastFrameTime === null) {
+        lastFrameTime = now;
+        rafId = requestAnimationFrame(tick);
+        return;
+      }
+
+      if (!propPausedRef.current && !manualPausedRef.current) {
+        const dtMs = Math.min(now - lastFrameTime, 100); // cap to avoid large jumps on tab-switch
+        const newElapsed = elapsedRef.current + (dtMs / 1000) * timeScale;
+        elapsedRef.current = Math.min(newElapsed, totalTime);
+
+        const seg = findSegmentByTime(cumTime, elapsedRef.current);
+        const segDuration = cumTime[seg + 1] - cumTime[seg];
+        const t = segDuration > 0 ? (elapsedRef.current - cumTime[seg]) / segDuration : 0;
+
+        const newPos = interpolatePosition(coords, seg, t);
+        positionRef.current = newPos;
+        setPosition(newPos);
+        setBearing(bearingAtSegment(coords, seg));
+        setProgress(elapsedRef.current / totalTime);
+
+        if (elapsedRef.current >= totalTime) {
+          lastFrameTime = now;
+          return; // stop requesting frames
+        }
+      }
+
+      lastFrameTime = now;
+      rafId = requestAnimationFrame(tick);
+    };
+
+    rafId = requestAnimationFrame(tick);
+
+    return () => cancelAnimationFrame(rafId);
   }, [active, geometry, segmentDurations, timeScale]);
 
   return { position, bearing, progress, pause, resume };
