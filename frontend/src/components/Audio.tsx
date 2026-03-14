@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect, CSSProperties } from "react";
+import { useDisasterDemo } from "../state/DisasterDemoContext";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const WS_URL = "ws://localhost:8000/api/v1/realtime/ws";
@@ -115,6 +116,7 @@ export default function VoiceWidget({ wsUrl = WS_URL, userId = USER_ID }: VoiceW
   const [errorMsg, setErrorMsg] = useState("");
   const [level, setLevel] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
+  const { currentStepIndex } = useDisasterDemo();
 
   const wsRef = useRef<WebSocket | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -263,7 +265,7 @@ export default function VoiceWidget({ wsUrl = WS_URL, userId = USER_ID }: VoiceW
     wsRef.current = ws;
 
     ws.onopen = (): void => {
-      ws.send(JSON.stringify({ user_id: userId }));
+      ws.send(JSON.stringify({ user_id: userId, step_index: currentStepIndex }));
       ws.send(
         JSON.stringify({
           type: "session.update",
@@ -294,7 +296,7 @@ export default function VoiceWidget({ wsUrl = WS_URL, userId = USER_ID }: VoiceW
         // ignore malformed frames
       }
     };
-  }, [wsUrl, userId, startMic, stopMic, handleMsg]);
+  }, [wsUrl, userId, currentStepIndex, startMic, stopMic, handleMsg]);
 
   const disconnect = useCallback((): void => {
     stopMic();

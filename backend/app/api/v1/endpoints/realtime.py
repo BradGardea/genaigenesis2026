@@ -13,10 +13,8 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview"
 print("Loaded OpenAI API Key:", OPENAI_API_KEY)
 
-
-
 # ── Replace this with your real data-fetching logic ─────────────────────────
-async def get_context_for_user(user_id: str, transcript: str) -> dict:
+async def get_context_for_user(user_id: str, transcript: str, step_index: int) -> dict:
     """
     Fetch whatever backend data is relevant to this user + what they just said.
     Return a dict — it will be serialized and injected as context to GPT.
@@ -29,6 +27,7 @@ async def get_context_for_user(user_id: str, transcript: str) -> dict:
         "name": "Jane Doe",
         "account_status": "premium",
         "recent_orders": ["Order #1021 - pending"],
+        "current_step_index": step_index,
     }
 # ────────────────────────────────────────────────────────────────────────────
 
@@ -43,10 +42,12 @@ async def realtime_proxy(client_ws: WebSocket):
 
     # The frontend sends a JSON handshake first: {"user_id": "abc123"}
     user_id = "anonymous"
+    step_index = 0
     try:
         handshake_raw = await asyncio.wait_for(client_ws.receive_text(), timeout=5.0)
         handshake = json.loads(handshake_raw)
         user_id = handshake.get("user_id", "anonymous")
+        step_index = int(handshake.get("step_index", 0))
         print(f"User connected: {user_id}")
     except Exception:
         print("No handshake received, using anonymous user")
@@ -115,9 +116,9 @@ async def realtime_proxy(client_ws: WebSocket):
                             # Stop forwarding any in-flight response content until context is injected
                             suppress_responses = True
 
-                            context = await get_context_for_user(user_id, transcript)
+                            context = await get_context_for_user(user_id, transcript, step_index)
                             context_str = json.dumps(context, indent=2)
-                            extra = await handle_message(transcript, step=1)
+                            extra = await handle_message(transcript, step=step_index)
 
                             inject_event = {
                                 "type": "conversation.item.create",
