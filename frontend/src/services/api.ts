@@ -26,7 +26,7 @@ export function reportHazard(
   hazardType: string,
   location: Coordinate,
   description: string = "",
-  radiusMeters?: number
+  radiusMeters?: number,
 ): Promise<HazardZone> {
   const body: HazardReport = {
     hazard_type: hazardType,
@@ -41,6 +41,7 @@ export function reportHazard(
 }
 
 export function getActiveHazards(): Promise<HazardZone[]> {
+  console.log("Fetching active hazards...");
   return request<HazardZone[]>("/hazards/active");
 }
 
@@ -51,7 +52,7 @@ export async function deactivateHazard(hazardId: string): Promise<void> {
 export function requestRoute(
   origin: Coordinate,
   destination: Coordinate,
-  profile?: RouteRequest["profile"]
+  profile?: RouteRequest["profile"],
 ): Promise<RouteResponse> {
   const body: RouteRequest = { origin, destination, profile };
   return request<RouteResponse>("/routes/plan", {
@@ -62,7 +63,7 @@ export function requestRoute(
 
 export function subscribeToRouteUpdates(
   routeId: string,
-  onEvent: (event: { type: string; data: Record<string, unknown> }) => void
+  onEvent: (event: { type: string; data: Record<string, unknown> }) => void,
 ): EventSource {
   const es = new EventSource(`${API_BASE}/routes/${routeId}/stream`);
   const parseEventData = (raw: string): Record<string, unknown> => {
@@ -96,6 +97,37 @@ export function fetchWeatherZones(): Promise<WeatherAlertCollection> {
   return request<WeatherAlertCollection>("/events/weather-zones");
 }
 
-export function fetchRouteWeather(routeId: string): Promise<RouteWeatherPoint[]> {
+export function fetchRouteWeather(
+  routeId: string,
+): Promise<RouteWeatherPoint[]> {
   return request<RouteWeatherPoint[]>(`/routes/${routeId}/weather`);
+}
+
+export function fetchWeatherAlerts(): Promise<WeatherAlertCollection> {
+  return request<WeatherAlertCollection>("/events/weather-alerts");
+}
+
+export interface AlertSignalFeature {
+  type: "Feature";
+  geometry: { type: string; coordinates: unknown } | null;
+  properties: {
+    id: string;
+    signal_type: string;
+    value: string;
+    severity: string;
+    source: string;
+    latitude: number | null;
+    longitude: number | null;
+    region: string | null;
+    timestamp: string | null;
+  };
+}
+
+export interface AlertSignalCollection {
+  type: "FeatureCollection";
+  features: AlertSignalFeature[];
+}
+
+export function fetchAlertSignals(): Promise<AlertSignalCollection> {
+  return request<AlertSignalCollection>("/alerts/signals");
 }

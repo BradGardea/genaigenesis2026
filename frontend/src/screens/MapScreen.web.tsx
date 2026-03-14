@@ -14,6 +14,11 @@ import {
   reportHazard,
 } from "../services/api";
 import { ReportHazardModal } from "../components/ReportHazardModal";
+import {
+  WeatherLayerOverlay,
+  WeatherLayerMode,
+} from "../components/WeatherLayerOverlay";
+import { AlertSignalsLayer } from "../components/AlertSignalsLayer";
 import { useDisasterDemo } from "../state/DisasterDemoContext";
 
 interface MapScreenProps {
@@ -33,7 +38,7 @@ const WEATHER_ALERT_SOURCE = "weather-alerts";
 const WEATHER_ALERT_FILL = "weather-alerts-fill";
 const WEATHER_ALERT_OUTLINE = "weather-alerts-outline";
 const CITY_STATE_SOURCE = "city-state-impacts";
-const CITY_STATE_LAYER = "city-state-impacts-circle";
+const CITY_STATE_LAYER = "city-state-impacts-heatmap";
 const CITY_STATE_LABEL_LAYER = "city-state-impacts-label";
 
 const DEFAULT_CENTER: [number, number] = [35.321269, -21.992207];
@@ -320,6 +325,7 @@ export function MapScreen({ theme }: MapScreenProps) {
   const [mapError, setMapError] = useState<string | null>(null);
   const [plannerCollapsed, setPlannerCollapsed] = useState(false);
   const [mapReadyVersion, setMapReadyVersion] = useState(0);
+  const [mapIsLoaded, setMapIsLoaded] = useState(false);
 
   // â”€â”€ Weather layer state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [showWind, setShowWind] = useState(false);
@@ -410,6 +416,7 @@ export function MapScreen({ theme }: MapScreenProps) {
 
       map.on("load", () => {
         setMapReadyVersion((value) => value + 1);
+        setMapIsLoaded(true);
         map.addSource(ROUTE_SOURCE, {
           type: "geojson",
           data: { type: "FeatureCollection", features: [] },
@@ -477,32 +484,46 @@ export function MapScreen({ theme }: MapScreenProps) {
         });
         map.addLayer({
           id: CITY_STATE_LAYER,
-          type: "circle",
+          type: "heatmap",
           source: CITY_STATE_SOURCE,
           paint: {
-            "circle-radius": ["interpolate", ["linear"], ["get", "severity"], 0, 4, 100, 11],
-            "circle-color": [
-              "match",
-              ["get", "impact_type"],
-              "rain",
-              "#7dd3fc",
-              "high_wind",
-              "#94a3b8",
-              "flooding",
-              "#0ea5e9",
-              "road_closure",
-              "#ef4444",
-              "powerline_failure",
-              "#eab308",
-              "structure_damage",
-              "#dc2626",
-              "debris",
-              "#8b5cf6",
-              "#ef4444",
+            // Weight each point by its severity (0–100 → 0–1)
+            "heatmap-weight": [
+              "interpolate",
+              ["linear"],
+              ["get", "severity"],
+              0, 0,
+              100, 1,
             ],
-            "circle-stroke-color": "#0f172a",
-            "circle-stroke-width": 1,
-            "circle-opacity": 0.9,
+            // Increase intensity at higher zoom levels
+            "heatmap-intensity": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              8, 0.6,
+              14, 2,
+            ],
+            // Radius grows with zoom
+            "heatmap-radius": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              8, 18,
+              14, 48,
+            ],
+            // Severity gradient: transparent → blue → cyan → green → yellow → orange → red
+            "heatmap-color": [
+              "interpolate",
+              ["linear"],
+              ["heatmap-density"],
+              0,   "rgba(0,0,255,0)",
+              0.15, "rgba(65,182,196,0.6)",
+              0.35, "rgba(127,205,187,0.75)",
+              0.55, "rgba(255,237,160,0.85)",
+              0.75, "rgba(253,141,60,0.9)",
+              1,   "rgba(215,25,28,1)",
+            ],
+            "heatmap-opacity": 0.85,
           },
         });
         map.addLayer({
@@ -1607,6 +1628,20 @@ export function MapScreen({ theme }: MapScreenProps) {
               </Text>
             </View>
           )}
+          <WeatherLayerOverlay
+            map={mapRef.current}
+            mapLoaded={mapIsLoaded}
+            showWeatherAlerts={showWeatherAlerts}
+            showWind={showWind}
+            onToggleAlerts={() => setShowWeatherAlerts((v) => !v)}
+            onToggleWind={() => setShowWind((v) => !v)}
+            theme={theme}
+            offsetTop={100}
+          />
+          <AlertSignalsLayer
+            map={mapRef.current}
+            mapLoaded={mapIsLoaded}
+          />
         </View>
       </View>
 

@@ -1,13 +1,13 @@
 {
-  "dataset_name": "goma_severe_storm_12h_72_timesteps_city_state",
+  "dataset_name": "vilankulo_tropical_cyclone_12h_72_timesteps_city_state",
   "version": "1.7",
   "generated_at": "2026-03-14T20:05:00Z",
   "scenario_note": "Dense coastal rain/high-wind seeds from west Goma through southern shoreline and farther southeast near Gisenyi. Early coastal seeds are protected from compression; runtime propagation drifts north-northeast from seed cells.",
   "location": {
-    "name": "Goma, DR Congo",
-    "latitude": -1.679,
-    "longitude": 29.222,
-    "timezone": "Africa/Lubumbashi"
+    "name": "Vilankulo, Mozambique",
+    "latitude": -22.0,
+    "longitude": 35.32,
+    "timezone": "Africa/Maputo"
   },
   "schema_alignment": {
     "source_dataset": "goma_severe_storm_12h_10min_mock",
