@@ -1,10 +1,17 @@
 import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
 import {
+  fetchCityStateCurrentStep,
+  fetchCityStateNextStep,
   fetchWeatherCurrentStep,
   fetchWeatherNextStep,
 } from "../data/api";
 import { disasterStepsMock } from "../data/mock/disasterSteps";
-import { URGENCY_WEIGHT, WeatherDatasetMetadata, WeatherStepResponse } from "../data/types";
+import {
+  CityStateStepResponse,
+  URGENCY_WEIGHT,
+  WeatherDatasetMetadata,
+  WeatherStepResponse,
+} from "../data/types";
 
 interface DisasterDemoContextValue {
   currentStepIndex: number;
@@ -43,8 +50,38 @@ function applyWeatherPayloadToStep(
   };
 }
 
+function applyCityStatePayloadToStep(
+  step: (typeof disasterStepsMock)[number],
+  cityPayload: CityStateStepResponse
+): (typeof disasterStepsMock)[number] {
+  const alertsUpdatedAt = cityPayload.step.step_time;
+  return {
+    ...step,
+    alerts: cityPayload.alerts.map((item) => ({
+      id: item.id,
+      title: item.title,
+      details: item.details,
+      urgency: item.urgency,
+      category: "hazard update",
+      occurredAt: item.occurredAt,
+      updatedAt: item.updatedAt,
+      area: item.area,
+      source: item.source,
+    })),
+    sectionUpdatedAt: {
+      ...step.sectionUpdatedAt,
+      alerts: alertsUpdatedAt,
+    },
+    updateSummary: {
+      ...step.updateSummary,
+      alerts: cityPayload.alerts.length,
+    },
+  };
+}
+
 export function DisasterDemoProvider({ children }: { children: ReactNode }) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [totalSteps, setTotalSteps] = useState(disasterStepsMock.length);
   const [stepHistory, setStepHistory] = useState<{ stepIndex: number; step: (typeof disasterStepsMock)[number] }[]>([
     { stepIndex: 0, step: disasterStepsMock[0] }
   ]);
@@ -63,7 +100,7 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
   const [isStepping, setIsStepping] = useState(false);
   const [weatherDatasetMetadata, setWeatherDatasetMetadata] = useState<WeatherDatasetMetadata | null>(null);
   const currentStep = stepHistory[stepHistory.length - 1]?.step ?? disasterStepsMock[0];
-  const isFinalStep = currentStepIndex >= disasterStepsMock.length - 1;
+  const isFinalStep = currentStepIndex >= totalSteps - 1;
   const unreadUpdates = Object.values(unreadBySection).reduce((sum, count) => sum + count, 0);
 
   useEffect(() => {
@@ -71,22 +108,34 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
 
     async function loadInitialWeatherStep() {
       try {
-        const payload = await fetchWeatherCurrentStep(0);
+        const [weatherPayload, cityPayload] = await Promise.all([
+          fetchWeatherCurrentStep(0),
+          fetchCityStateCurrentStep(0),
+        ]);
         if (cancelled) {
           return;
         }
 
-        setWeatherDatasetMetadata(payload.metadata);
+        setWeatherDatasetMetadata(weatherPayload.metadata);
+        setTotalSteps(cityPayload.step.total_steps);
+        if (weatherPayload.step.total_steps !== cityPayload.step.total_steps) {
+          console.warn(
+            "Weather and city-state step totals differ:",
+            weatherPayload.step.total_steps,
+            cityPayload.step.total_steps
+          );
+        }
         setStepHistory((previous) => {
           if (previous.length === 0) {
             return previous;
           }
           const initial = previous[0];
-          const updatedInitialStep = applyWeatherPayloadToStep(initial.step, payload);
+          const weatherPatched = applyWeatherPayloadToStep(initial.step, weatherPayload);
+          const updatedInitialStep = applyCityStatePayloadToStep(weatherPatched, cityPayload);
           return [{ stepIndex: 0, step: updatedInitialStep }, ...previous.slice(1)];
         });
       } catch {
-        // Keep local weather mock when backend dataset endpoint is unavailable.
+        // Keep local mocks when dataset endpoints are unavailable.
       }
     }
 
@@ -100,7 +149,7 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
   const value = useMemo<DisasterDemoContextValue>(
     () => ({
       currentStepIndex,
-      totalSteps: disasterStepsMock.length,
+      totalSteps,
       currentStep,
       stepHistory,
       unreadBySection,
@@ -114,19 +163,24 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const nextIndex = Math.min(currentStepIndex + 1, disasterStepsMock.length - 1);
+        const nextIndex = Math.min(currentStepIndex + 1, totalSteps - 1);
         if (nextIndex === currentStepIndex) {
           return;
         }
 
         setIsStepping(true);
-        const baseNextStep = disasterStepsMock[nextIndex];
+        const baseNextStep = disasterStepsMock[Math.min(nextIndex, disasterStepsMock.length - 1)];
         let resolvedNextStep = { ...baseNextStep };
 
         try {
-          const weatherPayload = await fetchWeatherNextStep(currentStepIndex);
+          const [weatherPayload, cityPayload] = await Promise.all([
+            fetchWeatherNextStep(currentStepIndex),
+            fetchCityStateNextStep(currentStepIndex),
+          ]);
           setWeatherDatasetMetadata(weatherPayload.metadata);
-          resolvedNextStep = applyWeatherPayloadToStep(baseNextStep, weatherPayload);
+          setTotalSteps(cityPayload.step.total_steps);
+          const weatherPatched = applyWeatherPayloadToStep(baseNextStep, weatherPayload);
+          resolvedNextStep = applyCityStatePayloadToStep(weatherPatched, cityPayload);
         } catch {
           resolvedNextStep = { ...baseNextStep };
         } finally {
@@ -167,6 +221,7 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
     [
       currentStep,
       currentStepIndex,
+      totalSteps,
       isStepping,
       isFinalStep,
       latestHighRiskAlert,

@@ -13,6 +13,7 @@ from app.services.timestep_dataset import TimestepDataset
 from app.utils.openai_weather_beautifier import beautify_weather_step
 
 WEATHER_DATASET_FILENAME = "goma_severe_storm_12h_72_timesteps.json"
+_WEATHER_RESPONSE_CACHE: dict[int, WeatherStepResponse] = {}
 
 
 @lru_cache(maxsize=1)
@@ -34,9 +35,11 @@ def _metadata_model() -> WeatherDatasetMetadata:
 
 
 async def _build_response(step_index: int) -> WeatherStepResponse:
+    if step_index in _WEATHER_RESPONSE_CACHE:
+        return _WEATHER_RESPONSE_CACHE[step_index]
+
     dataset = _weather_dataset()
     step = dataset.get_step(step_index)
-    print("Raw step", step)
     beautified_cards = await beautify_weather_step(step)
     step_time = str(step.get("time", ""))
 
@@ -54,7 +57,7 @@ async def _build_response(step_index: int) -> WeatherStepResponse:
 
     next_index = step_index + 1 if step_index < dataset.total_steps - 1 else None
 
-    return WeatherStepResponse(
+    payload = WeatherStepResponse(
         metadata=_metadata_model(),
         step=WeatherStepMeta(
             step_index=step_index,
@@ -66,6 +69,8 @@ async def _build_response(step_index: int) -> WeatherStepResponse:
         beautified=cards,
         raw=step,
     )
+    _WEATHER_RESPONSE_CACHE[step_index] = payload
+    return payload
 
 
 async def get_weather_current_step(step: int) -> WeatherStepResponse:
