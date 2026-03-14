@@ -4,7 +4,7 @@ import logging
 import math
 
 import httpx
-from shapely.geometry import LineString, mapping, shape
+from shapely.geometry import GeometryCollection, LineString, MultiPoint, Point, mapping, shape
 
 from app.core.config import settings
 from app.models.routing import Coordinate
@@ -13,8 +13,74 @@ logger = logging.getLogger(__name__)
 
 MAPBOX_DIRECTIONS_URL = "https://api.mapbox.com/directions/v5/mapbox/driving-traffic"
 MAX_RETRIES = 2
-MIN_OFFSET_DEG = 0.003  # ~330 m — enough to reach a parallel street in a city grid
+MIN_OFFSET_DEG = 0.008  # ~900 m — reaches major arterials, skips residential dead-ends
 CRISIS_TRAFFIC_FACTOR = 1.5  # multiplier for durations to reflect evacuation congestion
+WAYPOINT_SNAP_RADIUS_M = 100  # max metres Mapbox may move an avoidance waypoint when snapping
+ENTRY_EXIT_MARGIN_DEG = 0.002  # ~220 m buffer before entry / after exit of hazard
+
+
+def _extract_points(geom) -> list[Point]:
+    """Extract Point objects from a Shapely intersection result."""
+    if geom.is_empty:
+        return []
+    if isinstance(geom, Point):
+        return [geom]
+    if isinstance(geom, MultiPoint):
+        return list(geom.geoms)
+    if isinstance(geom, GeometryCollection):
+        pts = []
+        for g in geom.geoms:
+            if isinstance(g, Point):
+                pts.append(g)
+            elif isinstance(g, MultiPoint):
+                pts.extend(g.geoms)
+        return pts
+    # LineString (tangent case) — use endpoints
+    if isinstance(geom, LineString):
+        coords = list(geom.coords)
+        if len(coords) >= 2:
+            return [Point(coords[0]), Point(coords[-1])]
+    return []
+
+
+def _add_single_waypoint(
+    route_line: LineString,
+    poly,
+    repulsion_factor: float,
+) -> Coordinate | None:
+    """Fallback: place a single perpendicular waypoint (original V-detour logic)."""
+    centroid = poly.centroid
+    d = route_line.project(centroid)
+
+    if d < route_line.length * 0.05 or d > route_line.length * 0.95:
+        return None
+
+    nearest = route_line.interpolate(d)
+
+    eps = max(route_line.length * 0.01, 0.0001)
+    p_before = route_line.interpolate(max(0, d - eps))
+    p_after = route_line.interpolate(min(route_line.length, d + eps))
+    tx = p_after.x - p_before.x
+    ty = p_after.y - p_before.y
+    tlen = math.hypot(tx, ty)
+    if tlen == 0:
+        return None
+
+    perp_x = -ty / tlen
+    perp_y = tx / tlen
+
+    dx = centroid.x - nearest.x
+    dy = centroid.y - nearest.y
+    side = dx * perp_x + dy * perp_y
+    direction = -1.0 if side > 0 else 1.0
+
+    bounds = poly.bounds
+    radius_deg = max(bounds[2] - bounds[0], bounds[3] - bounds[1]) / 2
+    offset = max(radius_deg * repulsion_factor, MIN_OFFSET_DEG)
+
+    wp_x = nearest.x + direction * perp_x * offset
+    wp_y = nearest.y + direction * perp_y * offset
+    return Coordinate(lng=round(wp_x, 6), lat=round(wp_y, 6))
 
 
 def _compute_waypoints_from_route(
@@ -22,50 +88,64 @@ def _compute_waypoints_from_route(
     hazard_polygons: list[dict],
     repulsion_factor: float = 2.0,
 ) -> list[Coordinate]:
-    """Place avoidance waypoints perpendicular to the *actual road* at each hazard.
+    """Place entry/exit corridor waypoints around each hazard.
 
-    Using the route geometry (not the OD straight line) gives a perpendicular
-    direction that aligns with the local road orientation, so the waypoint
-    naturally falls on a parallel street rather than causing Mapbox to create
-    a circular detour.
+    Instead of a single perpendicular waypoint (V-detour), emit two waypoints —
+    one before the route enters the hazard and one after it exits — both offset
+    to the same side. This creates a rectangular corridor along a parallel street.
+    Falls back to a single waypoint when fewer than 2 crossing points exist.
     """
     if not hazard_polygons:
         return []
 
     route_line = LineString(route_geometry["coordinates"])
-    waypoints: list[Coordinate] = []
+    # Collect (projected_distance, Coordinate) tuples for final sorting
+    wp_with_dist: list[tuple[float, Coordinate]] = []
 
     for poly_geojson in hazard_polygons:
         poly = shape(poly_geojson)
         if not route_line.intersects(poly):
             continue
 
-        centroid = poly.centroid
-        d = route_line.project(centroid)
+        # Find where the route crosses the hazard boundary
+        crossing = route_line.intersection(poly.boundary)
+        points = _extract_points(crossing)
 
-        # Skip hazards at the very start/end of the route
-        if d < route_line.length * 0.05 or d > route_line.length * 0.95:
+        if len(points) < 2:
+            # Degenerate case: route starts/ends inside hazard or tangent
+            wp = _add_single_waypoint(route_line, poly, repulsion_factor)
+            if wp is not None:
+                d = route_line.project(Point(wp.lng, wp.lat))
+                wp_with_dist.append((d, wp))
             continue
 
-        nearest = route_line.interpolate(d)
+        # Project crossing points onto route and sort by distance
+        projected = sorted(
+            [(route_line.project(p), p) for p in points], key=lambda t: t[0]
+        )
+        entry_d = projected[0][0]
+        exit_d = projected[-1][0]
 
-        # Route tangent at the hazard point
+        # Compute tangent at midpoint between entry and exit
+        mid_d = (entry_d + exit_d) / 2
         eps = max(route_line.length * 0.01, 0.0001)
-        p_before = route_line.interpolate(max(0, d - eps))
-        p_after = route_line.interpolate(min(route_line.length, d + eps))
+        p_before = route_line.interpolate(max(0, mid_d - eps))
+        p_after = route_line.interpolate(min(route_line.length, mid_d + eps))
         tx = p_after.x - p_before.x
         ty = p_after.y - p_before.y
         tlen = math.hypot(tx, ty)
         if tlen == 0:
             continue
 
-        # Perpendicular to route direction (rotated 90°)
+        # Perpendicular direction
         perp_x = -ty / tlen
         perp_y = tx / tlen
 
-        # Determine which side of the route the hazard centroid is on
-        dx = centroid.x - nearest.x
-        dy = centroid.y - nearest.y
+        # Push away from hazard centroid
+        centroid = poly.centroid
+        mid_pt = route_line.interpolate(mid_d)
+        dx = centroid.x - mid_pt.x
+        dy = centroid.y - mid_pt.y
         side = dx * perp_x + dy * perp_y
         direction = -1.0 if side > 0 else 1.0
 
@@ -73,11 +153,29 @@ def _compute_waypoints_from_route(
         radius_deg = max(bounds[2] - bounds[0], bounds[3] - bounds[1]) / 2
         offset = max(radius_deg * repulsion_factor, MIN_OFFSET_DEG)
 
-        wp_x = nearest.x + direction * perp_x * offset
-        wp_y = nearest.y + direction * perp_y * offset
-        waypoints.append(Coordinate(lng=round(wp_x, 6), lat=round(wp_y, 6)))
+        # Waypoint A: before entry
+        d_a = max(0, entry_d - ENTRY_EXIT_MARGIN_DEG)
+        if d_a >= route_line.length * 0.05:
+            pt_a = route_line.interpolate(d_a)
+            wp_a = Coordinate(
+                lng=round(pt_a.x + direction * perp_x * offset, 6),
+                lat=round(pt_a.y + direction * perp_y * offset, 6),
+            )
+            wp_with_dist.append((d_a, wp_a))
 
-    return waypoints
+        # Waypoint B: after exit
+        d_b = min(route_line.length, exit_d + ENTRY_EXIT_MARGIN_DEG)
+        if d_b <= route_line.length * 0.95:
+            pt_b = route_line.interpolate(d_b)
+            wp_b = Coordinate(
+                lng=round(pt_b.x + direction * perp_x * offset, 6),
+                lat=round(pt_b.y + direction * perp_y * offset, 6),
+            )
+            wp_with_dist.append((d_b, wp_b))
+
+    # Sort all waypoints by distance along route for correct ordering
+    wp_with_dist.sort(key=lambda t: t[0])
+    return [wp for _, wp in wp_with_dist]
 
 
 def _route_intersects_hazards(
@@ -131,7 +229,7 @@ async def fetch_route(
     coords_str = ";".join(coords_parts)
 
     url = f"{MAPBOX_DIRECTIONS_URL}/{coords_str}"
-    params = {
+    params: dict = {
         "access_token": settings.mapbox_access_token,
         "geometries": "geojson",
         "overview": "full",
@@ -141,8 +239,20 @@ async def fetch_route(
         "alternatives": "true",
     }
 
+    # Constrain waypoint snapping radius so Mapbox doesn't slide avoidance
+    # waypoints onto dead-end streets or service roads far from the intended
+    # perpendicular offset.  Origin and destination use "unlimited".
+    if waypoints:
+        radiuses = ["unlimited"] + [str(WAYPOINT_SNAP_RADIUS_M)] * len(waypoints) + ["unlimited"]
+        params["radiuses"] = ";".join(radiuses)
+
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.get(url, params=params)
+        # If snapping radius is too tight Mapbox returns 422; retry without it
+        if resp.status_code == 422 and "radiuses" in params:
+            logger.warning("Waypoint snapping radius too tight, retrying without radius constraint")
+            params.pop("radiuses")
+            resp = await client.get(url, params=params)
         resp.raise_for_status()
         data = resp.json()
 

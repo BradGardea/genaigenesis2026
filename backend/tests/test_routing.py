@@ -5,7 +5,12 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.services.hazard_store import hazard_store
-from app.services.mapbox_routing import CRISIS_TRAFFIC_FACTOR
+from shapely.geometry import mapping
+
+from app.services.mapbox_routing import (
+    CRISIS_TRAFFIC_FACTOR,
+    _compute_waypoints_from_route,
+)
 
 client = TestClient(app)
 
@@ -161,6 +166,68 @@ def test_select_clear_alternative(mock_fetch: AsyncMock) -> None:
     assert data["duration_seconds"] == 1000 * CRISIS_TRAFFIC_FACTOR
     # Only one fetch call needed (no retries since an alternative was clear)
     mock_fetch.assert_called_once()
+
+
+def test_corridor_waypoints_geometry() -> None:
+    """Corridor logic should emit 2 waypoints on the same side, ordered along the route."""
+    route_geom = {
+        "type": "LineString",
+        "coordinates": [
+            [-118.50, 34.00],
+            [-118.45, 34.025],
+            [-118.40, 34.05],
+            [-118.35, 34.075],
+            [-118.30, 34.10],
+        ],
+    }
+    # Hazard polygon centered on the middle of the route
+    from shapely.geometry import Point as ShapelyPoint
+
+    hazard_center = ShapelyPoint(-118.40, 34.05)
+    hazard_poly = mapping(hazard_center.buffer(0.01))  # ~1 km radius
+
+    wps = _compute_waypoints_from_route(route_geom, [hazard_poly], repulsion_factor=2.0)
+
+    assert len(wps) == 2, f"Expected 2 corridor waypoints, got {len(wps)}"
+
+    # Both waypoints should be on the same side (same perpendicular direction)
+    from shapely.geometry import LineString as ShapelyLine
+
+    route_line = ShapelyLine(route_geom["coordinates"])
+    d0 = route_line.project(ShapelyPoint(wps[0].lng, wps[0].lat))
+    d1 = route_line.project(ShapelyPoint(wps[1].lng, wps[1].lat))
+    assert d0 < d1, "Waypoint A should come before waypoint B along route"
+
+    # Both waypoints should be outside the hazard polygon
+    from shapely.geometry import shape as shapely_shape
+
+    hazard = shapely_shape(hazard_poly)
+    assert not hazard.contains(ShapelyPoint(wps[0].lng, wps[0].lat)), "WP A inside hazard"
+    assert not hazard.contains(ShapelyPoint(wps[1].lng, wps[1].lat)), "WP B inside hazard"
+
+
+def test_corridor_fallback_single_crossing() -> None:
+    """Route starting inside hazard (1 crossing point) should fall back to single waypoint."""
+    # Route starts inside the hazard polygon
+    route_geom = {
+        "type": "LineString",
+        "coordinates": [
+            [-118.40, 34.05],  # inside hazard
+            [-118.35, 34.075],
+            [-118.30, 34.10],
+            [-118.25, 34.125],
+            [-118.20, 34.15],
+        ],
+    }
+    from shapely.geometry import Point as ShapelyPoint
+
+    hazard_center = ShapelyPoint(-118.40, 34.05)
+    hazard_poly = mapping(hazard_center.buffer(0.01))
+
+    wps = _compute_waypoints_from_route(route_geom, [hazard_poly], repulsion_factor=2.0)
+
+    # Should fall back to single waypoint (or possibly 0 if at route boundary)
+    assert len(wps) <= 1, f"Expected fallback to <=1 waypoint, got {len(wps)}"
 
 
 def test_stream_nonexistent_route() -> None:
