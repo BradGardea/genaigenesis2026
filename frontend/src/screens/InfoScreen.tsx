@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { FlatList, Modal, Pressable, Text, View } from "react-native";
 import {
   DISASTER_STEP_INTERVAL_MINUTES,
@@ -95,26 +95,16 @@ export function InfoScreen({ theme }: InfoScreenProps) {
   } = useDisasterDemo();
   const [menuOpen, setMenuOpen] = useState(false);
   const [section, setSection] = useState<InfoSection>("alerts");
-  const [nowMs, setNowMs] = useState(() => Date.now());
   const stepHistoryNewestFirst = useMemo(() => [...stepHistory].reverse(), [stepHistory]);
   const latestStep = stepHistory[stepHistory.length - 1]?.step ?? disasterStepsMock[0];
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setNowMs(Date.now());
-    }, 30000);
-
-    return () => {
-      clearInterval(interval);
-    };
-  }, []);
+  const referenceNowMs = new Date(latestStep.simulatedAt).getTime();
 
   const commonCardClass = `mb-3 rounded-2xl border p-4 ${
     isDark ? "border-slate-700 bg-slate-900" : "border-slate-300 bg-white"
   }`;
 
   const getFreshnessColor = (isoTime: string): string => {
-    const ageMinutes = Math.max(0, (nowMs - new Date(isoTime).getTime()) / 60000);
+    const ageMinutes = Math.max(0, (referenceNowMs - new Date(isoTime).getTime()) / 60000);
     const green = "#16a34a";
     const yellow = "#eab308";
     const red = "#dc2626";
