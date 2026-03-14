@@ -91,3 +91,32 @@ export function fetchRouteWeather(
 ): Promise<RouteWeatherPoint[]> {
   return request<RouteWeatherPoint[]>(`/routes/${routeId}/weather`);
 }
+
+export function fetchWeatherAlerts(): Promise<WeatherAlertCollection> {
+  return request<WeatherAlertCollection>("/events/weather-alerts");
+}
+
+export interface AlertSignalFeature {
+  type: "Feature";
+  geometry: { type: string; coordinates: unknown } | null;
+  properties: {
+    id: string;
+    signal_type: string;
+    value: string;
+    severity: string;
+    source: string;
+    latitude: number | null;
+    longitude: number | null;
+    region: string | null;
+    timestamp: string | null;
+  };
+}
+
+export interface AlertSignalCollection {
+  type: "FeatureCollection";
+  features: AlertSignalFeature[];
+}
+
+export function fetchAlertSignals(): Promise<AlertSignalCollection> {
+  return request<AlertSignalCollection>("/alerts/signals");
+}

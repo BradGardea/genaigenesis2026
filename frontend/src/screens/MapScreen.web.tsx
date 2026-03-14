@@ -19,6 +19,10 @@ import {
   fetchRouteWeather,
 } from "../services/api";
 import { ReportHazardModal } from "../components/ReportHazardModal";
+import {
+  WeatherLayerOverlay,
+  WeatherLayerMode,
+} from "../components/WeatherLayerOverlay";
 import { runDemo, DemoControls } from "../demo/runDemo";
 import { useDisasterDemo } from "../state/DisasterDemoContext";
 
@@ -170,13 +174,19 @@ export function MapScreen({ theme }: MapScreenProps) {
   const [demoRunning, setDemoRunning] = useState(false);
   const [demoStatus, setDemoStatus] = useState("");
   const [mapError, setMapError] = useState<string | null>(null);
+  const [mapIsLoaded, setMapIsLoaded] = useState(false);
 
   const { weatherZones } = useDisasterDemo();
 
   // ── Weather layer state ──────────────────────────────────
-  const [showWind, setShowWind] = useState(false);
-  const [showWeatherAlerts, setShowWeatherAlerts] = useState(false);
-  const [showRouteWeather, setShowRouteWeather] = useState(false);
+  const [activeWeatherLayer, setActiveWeatherLayer] =
+    useState<WeatherLayerMode>(null);
+
+  // Set this to "wind" instead of null if you want the screenshot-style
+  // wind layer to be on by default.
+  const showWind = activeWeatherLayer === "wind";
+  const showWeatherAlerts = activeWeatherLayer === "alerts";
+  const showRouteWeather = activeWeatherLayer === "route-weather";
   const [routeWeatherPoints, setRouteWeatherPoints] = useState<
     RouteWeatherPoint[]
   >([]);
@@ -229,7 +239,11 @@ export function MapScreen({ theme }: MapScreenProps) {
       setCurrentPosition(simPosition);
     }
   }, [simPosition, tripActive, setCurrentPosition]);
-
+  useEffect(() => {
+    if (!route?.route_id && activeWeatherLayer === "route-weather") {
+      setActiveWeatherLayer(null);
+    }
+  }, [route?.route_id, activeWeatherLayer]);
   // ── Persist session when route changes ─────────────────────
   useEffect(() => {
     if (route && origin && destination) {
@@ -353,61 +367,44 @@ export function MapScreen({ theme }: MapScreenProps) {
           layout: { visibility: "none" },
         });
 
-        // ── Wind particle layer (Mapbox native GFS wind data) ──
-        map.addSource(WIND_SOURCE, {
-          type: "raster-array" as any,
-          url: "mapbox://rasterarrayexamples.gfs-winds",
-          tileSize: 512,
-        });
-        map.addLayer({
-          id: WIND_LAYER,
-          type: "raster-particle" as any,
-          source: WIND_SOURCE,
-          "source-layer": "10winds",
-          paint: {
-            "raster-particle-speed-factor": 0.4,
-            "raster-particle-fade-opacity-factor": 0.9,
-            "raster-particle-reset-rate-factor": 0.4,
-            "raster-particle-count": 4000,
-            "raster-particle-max-speed": 40,
-            "raster-particle-color": [
-              "interpolate",
-              ["linear"],
-              ["raster-particle-speed"],
-              1.5,
-              "rgba(134,163,171,255)",
-              4.12,
-              "rgba(110,143,208,255)",
-              6.17,
-              "rgba(15,147,167,255)",
-              9.26,
-              "rgba(57,163,57,255)",
-              11.83,
-              "rgba(194,134,62,255)",
-              14.92,
-              "rgba(200,66,13,255)",
-              18.0,
-              "rgba(210,0,50,255)",
-              21.6,
-              "rgba(175,80,136,255)",
-              25.21,
-              "rgba(117,74,147,255)",
-              29.32,
-              "rgba(68,105,141,255)",
-              33.44,
-              "rgba(194,251,119,255)",
-              43.72,
-              "rgba(241,255,109,255)",
-              50.41,
-              "rgba(255,255,255,255)",
-              59.16,
-              "rgba(0,255,255,255)",
-              69.44,
-              "rgba(255,37,255,255)",
-            ],
-          } as any,
-          layout: { visibility: "none" },
-        } as any);
+        // ── Wind particle layer (requires Mapbox GL JS v3+) ──
+        // Note: raster-array sources only support raster-particle, not raster layers.
+        // try {
+
+        //   map.addLayer({
+        //     id: WIND_LAYER,
+        //     type: "raster-particle" as any,
+        //     source: WIND_SOURCE,
+        //     "source-layer": "10winds",
+        //     paint: {
+        //       "raster-particle-speed-factor": 0.25,
+        //       "raster-particle-fade-opacity-factor": 0.92,
+        //       "raster-particle-reset-rate-factor": 0.35,
+        //       "raster-particle-count": 12000,
+        //       "raster-particle-max-speed": 90,
+        //       "raster-particle-color": [
+        //         "interpolate",
+        //         ["linear"],
+        //         ["raster-particle-speed"],
+        //         0,
+        //         "#25305a",
+        //         10,
+        //         "#2b5fb8",
+        //         25,
+        //         "#22b8c8",
+        //         40,
+        //         "#3fda7d",
+        //         60,
+        //         "#d9eb4b",
+        //         90,
+        //         "#fff7a3",
+        //       ],
+        //     } as any,
+        //     layout: { visibility: "visible" },
+        //   } as any);
+        // } catch {
+        //   // raster-particle/raster-array require Mapbox GL JS v3+
+        // }
 
         // Click handler for weather alert popups
         map.on("click", WEATHER_ALERT_FILL, (e) => {
@@ -429,6 +426,8 @@ export function MapScreen({ theme }: MapScreenProps) {
         map.on("mouseleave", WEATHER_ALERT_FILL, () => {
           map.getCanvas().style.cursor = "";
         });
+
+        setMapIsLoaded(true);
       });
 
       const markers: mapboxgl.Marker[] = [];
@@ -459,6 +458,7 @@ export function MapScreen({ theme }: MapScreenProps) {
         markers.forEach((m) => m.remove());
         map.remove();
         mapRef.current = null;
+        setMapIsLoaded(false);
       };
     } catch (err) {
       console.error("Map init failed:", err);
@@ -694,7 +694,7 @@ export function MapScreen({ theme }: MapScreenProps) {
   // ── Weather: toggle alert zones visibility + fetch data ────
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || !mapIsLoaded) return;
     if (map.getLayer(WEATHER_ALERT_FILL)) {
       map.setLayoutProperty(
         WEATHER_ALERT_FILL,
@@ -727,17 +727,17 @@ export function MapScreen({ theme }: MapScreenProps) {
           .catch(() => {});
       }
     }
-  }, [showWeatherAlerts, weatherZones]);
+  }, [showWeatherAlerts, weatherZones, mapIsLoaded]);
 
   // ── Weather: live-update alert zones when demo steps ───────
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !showWeatherAlerts || !weatherZones) return;
+    if (!map || !mapIsLoaded || !showWeatherAlerts || !weatherZones) return;
     const source = map.getSource(WEATHER_ALERT_SOURCE) as
       | mapboxgl.GeoJSONSource
       | undefined;
     source?.setData(weatherZones as any);
-  }, [weatherZones, showWeatherAlerts]);
+  }, [weatherZones, showWeatherAlerts, mapIsLoaded]);
 
   // ── Weather: fetch route weather when route changes ────────
   useEffect(() => {
@@ -1221,66 +1221,17 @@ export function MapScreen({ theme }: MapScreenProps) {
           className="flex-1"
           style={{ minHeight: 400, position: "relative" as any }}
         >
-          {/* Weather controls overlay */}
+          {/* Weather layer overlay (includes live alert signal heatmaps) */}
           {MAPBOX_PUBLIC_TOKEN && !mapError && (
-            <View
-              style={{
-                position: "absolute" as any,
-                top: 10,
-                left: 10,
-                zIndex: 10,
-              }}
-            >
-              <View
-                className={`rounded-lg ${isDark ? "bg-slate-900/90" : "bg-white/90"}`}
-                style={
-                  {
-                    paddingHorizontal: 10,
-                    paddingVertical: 6,
-                    gap: 4,
-                    backdropFilter: "blur(6px)",
-                  } as any
-                }
-              >
-                <Text
-                  className={`text-xs font-semibold uppercase tracking-wide ${isDark ? "text-slate-400" : "text-slate-500"}`}
-                >
-                  Layers
-                </Text>
-                <Pressable
-                  onPress={() => setShowWind((v) => !v)}
-                  className={`flex-row items-center rounded px-2 py-1 ${showWind ? (isDark ? "bg-sky-900/50" : "bg-sky-100") : ""}`}
-                >
-                  <Text
-                    className={`text-xs ${showWind ? (isDark ? "text-sky-300" : "text-sky-700") : isDark ? "text-slate-300" : "text-slate-600"}`}
-                  >
-                    {showWind ? "◉" : "○"} Wind
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setShowWeatherAlerts((v) => !v)}
-                  className={`flex-row items-center rounded px-2 py-1 ${showWeatherAlerts ? (isDark ? "bg-amber-900/50" : "bg-amber-100") : ""}`}
-                >
-                  <Text
-                    className={`text-xs ${showWeatherAlerts ? (isDark ? "text-amber-300" : "text-amber-700") : isDark ? "text-slate-300" : "text-slate-600"}`}
-                  >
-                    {showWeatherAlerts ? "◉" : "○"} Alerts
-                  </Text>
-                </Pressable>
-                {route && (
-                  <Pressable
-                    onPress={() => setShowRouteWeather((v) => !v)}
-                    className={`flex-row items-center rounded px-2 py-1 ${showRouteWeather ? (isDark ? "bg-emerald-900/50" : "bg-emerald-100") : ""}`}
-                  >
-                    <Text
-                      className={`text-xs ${showRouteWeather ? (isDark ? "text-emerald-300" : "text-emerald-700") : isDark ? "text-slate-300" : "text-slate-600"}`}
-                    >
-                      {showRouteWeather ? "◉" : "○"} Route Wx
-                    </Text>
-                  </Pressable>
-                )}
-              </View>
-            </View>
+            <WeatherLayerOverlay
+              map={mapRef.current}
+              mapLoaded={mapIsLoaded}
+              showWeatherAlerts={showWeatherAlerts}
+              showWind={showWind}
+              onToggleAlerts={(on) => setActiveWeatherLayer(on ? "alerts" : null)}
+              onToggleWind={(on) => setActiveWeatherLayer(on ? "wind" : null)}
+              theme={theme}
+            />
           )}
           {mapError ? (
             <View

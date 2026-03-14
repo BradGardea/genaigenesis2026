@@ -20,6 +20,29 @@ import {
   WeatherStepResponse,
 } from "../data/types";
 
+export interface StormState {
+  center: { lat: number; lon: number };
+  windRadiiKm: { r34: number; r50: number; r64: number };
+  focusPoints: { name: string; lat: number; lon: number }[];
+  movement: { direction_deg: number; speed_kmh: number } | null;
+  radiusOfMaxWindKm: number;
+}
+
+export interface AffectedArea {
+  lat: number;
+  lon: number;
+  impact_type:
+    | "flooding"
+    | "road_closure"
+    | "powerline_failure"
+    | "debris"
+    | "structure_damage";
+  severity: number;
+  danger_to_remain: string;
+  status: string;
+  radius_m: number;
+}
+
 interface StormZoneCollection {
   type: "FeatureCollection";
   features: {
@@ -43,6 +66,8 @@ interface DisasterDemoContextValue {
   isStepping: boolean;
   weatherDatasetMetadata: WeatherDatasetMetadata | null;
   weatherZones: StormZoneCollection | null;
+  stormState: StormState | null;
+  cityAffectedAreas: AffectedArea[];
   latestHighRiskAlert: {
     stepIndex: number;
     title: string;
@@ -190,6 +215,10 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
     string,
     unknown
   > | null>(null);
+  const [currentCityStateRaw, setCurrentCityStateRaw] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
   const currentStep =
     stepHistory[stepHistory.length - 1]?.step ?? disasterStepsMock[0];
   const isFinalStep = currentStepIndex >= totalSteps - 1;
@@ -212,6 +241,8 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
         }
 
         setWeatherDatasetMetadata(weatherPayload.metadata);
+        setCurrentStepRaw(weatherPayload.raw as Record<string, unknown>);
+        setCurrentCityStateRaw(cityPayload.raw as Record<string, unknown>);
         setTotalSteps(cityPayload.step.total_steps);
         if (weatherPayload.step.total_steps !== cityPayload.step.total_steps) {
           console.warn(
@@ -238,8 +269,8 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
             ...previous.slice(1),
           ];
         });
-      } catch {
-        // Keep local mocks when dataset endpoints are unavailable.
+      } catch (err) {
+        console.error("[DisasterDemo] Failed to load initial weather step:", err);
       }
     }
 
@@ -255,6 +286,27 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
     [currentStepRaw],
   );
 
+  const stormState = useMemo<StormState | null>(() => {
+    const ss = currentStepRaw?.storm_state as any;
+    if (!ss?.storm_center) return null;
+    return {
+      center: ss.storm_center,
+      windRadiiKm: {
+        r34: ss.wind_radii_km?.r34 ?? 0,
+        r50: ss.wind_radii_km?.r50 ?? 0,
+        r64: ss.wind_radii_km?.r64 ?? 0,
+      },
+      focusPoints: Array.isArray(ss.focus_points) ? ss.focus_points : [],
+      movement: ss.movement ?? null,
+      radiusOfMaxWindKm: ss.radius_of_maximum_wind_km ?? 0,
+    };
+  }, [currentStepRaw]);
+
+  const cityAffectedAreas = useMemo<AffectedArea[]>(() => {
+    const areas = (currentCityStateRaw?.city_state as any)?.affected_areas;
+    return Array.isArray(areas) ? (areas as AffectedArea[]) : [];
+  }, [currentCityStateRaw]);
+
   const value = useMemo<DisasterDemoContextValue>(
     () => ({
       currentStepIndex,
@@ -267,6 +319,8 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
       isStepping,
       weatherDatasetMetadata,
       weatherZones,
+      stormState,
+      cityAffectedAreas,
       latestHighRiskAlert,
       stepDisaster: async () => {
         if (isStepping) {
@@ -289,6 +343,8 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
             fetchCityStateNextStep(currentStepIndex),
           ]);
           setWeatherDatasetMetadata(weatherPayload.metadata);
+          setCurrentStepRaw(weatherPayload.raw as Record<string, unknown>);
+          setCurrentCityStateRaw(cityPayload.raw as Record<string, unknown>);
           setTotalSteps(cityPayload.step.total_steps);
           const weatherPatched = applyWeatherPayloadToStep(
             baseNextStep,
@@ -298,7 +354,8 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
             weatherPatched,
             cityPayload,
           );
-        } catch {
+        } catch (err) {
+          console.error("[DisasterDemo] Failed to fetch next step:", err);
           resolvedNextStep = { ...baseNextStep };
         } finally {
           setIsStepping(false);
@@ -358,6 +415,8 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
       stepHistory,
       weatherDatasetMetadata,
       weatherZones,
+      stormState,
+      cityAffectedAreas,
       unreadBySection,
       unreadUpdates,
     ],
