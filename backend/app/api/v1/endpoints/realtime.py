@@ -93,6 +93,14 @@ async def realtime_proxy(client_ws: WebSocket):
                 try:
                     while True:
                         message = await client_ws.receive_text()
+                        try:
+                            maybe_json = json.loads(message)
+                            if isinstance(maybe_json, dict) and maybe_json.get("type") == "meta.step":
+                                step_index = int(maybe_json.get("step_index", step_index))
+                                print(f"Updated step_index to {step_index} for user {user_id}")
+                                continue
+                        except Exception:
+                            pass
                         await openai_ws.send(message)
                 except WebSocketDisconnect:
                     print(f"Client {user_id} disconnected")

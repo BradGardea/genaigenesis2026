@@ -371,6 +371,13 @@ export default function VoiceWidget({ wsUrl = WS_URL, userId = USER_ID }: VoiceW
 
   useEffect(() => () => disconnect(), [disconnect]);
 
+  useEffect(() => {
+    const connected = (["ready", "listening", "speaking"] as Phase[]).includes(phase);
+    if (connected && wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "meta.step", step_index: currentStepIndex }));
+    }
+  }, [currentStepIndex, phase]);
+
   // ── Derived ──────────────────────────────────────────────────────────────────
   const isConnected = (["ready", "listening", "speaking"] as Phase[]).includes(phase);
 

@@ -21,6 +21,7 @@ TOOLS = {
 }
 
 async def handle_message(message: str, step: int):
+    step+=1
 
     url = "https://api.openai.com/v1/chat/completions"
 
@@ -81,6 +82,7 @@ async def handle_message(message: str, step: int):
     ]
 
     extra_context = f"Current step: {step}. Decide if the function(s) should be called."
+    print("Sending message to OpenAI with context:", extra_context)
 
     payload = {
         "model": "gpt-4.1-mini",
