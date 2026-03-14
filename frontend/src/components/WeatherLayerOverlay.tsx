@@ -30,7 +30,7 @@ const LIVE_ALERT_LAYERS: Record<string, string> = {
   general: "live-alerts-general",
 };
 const LIVE_ALERTS_HOVER_SOURCE = "live-alerts-hover-src";
-const LIVE_ALERTS_HOVER_LAYER  = "live-alerts-hover-circles";
+const LIVE_ALERTS_HOVER_LAYER = "live-alerts-hover-circles";
 
 // ── Disaster typing ──────────────────────────────────────────────────────────
 type DisasterType = "storm" | "flood" | "fire" | "earthquake" | "general";
@@ -183,12 +183,13 @@ type FeatureCollection = {
 };
 
 /**
- * Generates a fine-grained storm heatmap using:
- * - An anisotropic bivariate Gaussian background cloud
- * - Discrete wind-band rings at r34 / r50 / r64 / eyewall radii
+ * Generates a cyclone-shaped storm heatmap using:
+ * - A compact Gaussian core cloud concentrated near the center
+ * - A tight eyewall ring at radius-of-max-wind
+ * - Logarithmic spiral rainbands that wrap outward from the eyewall
  * - High-intensity clusters at each focus point
  */
-function buildStormGeoJSON(storm: StormState, N = 800): FeatureCollection {
+function buildStormGeoJSON(storm: StormState): FeatureCollection {
   const { center, windRadiiKm, focusPoints, movement, radiusOfMaxWindKm } =
     storm;
 
@@ -197,37 +198,23 @@ function buildStormGeoJSON(storm: StormState, N = 800): FeatureCollection {
 
   const r34 = windRadiiKm.r34;
   const r50 = windRadiiKm.r50;
-  const r64 = windRadiiKm.r64;
-  // Eyewall at radius-of-max-wind; fall back to fraction of r50
   const rmw =
     radiusOfMaxWindKm > 0 ? radiusOfMaxWindKm : r50 > 0 ? r50 * 0.28 : 0;
 
-  // Outer sigma: keep background cloud tightly inside r50 (not r34) so the
-  // heatmap footprint matches the storm's core rather than its full gale radius.
-  const sigmaKm = r50 > 0 ? r50 * 0.55 : r34 > 0 ? r34 * 0.22 : 10;
+  // Core reference radius — kept tight so the center looks clustered
+  const coreKm = r50 > 0 ? r50 * 0.4 : r34 > 0 ? r34 * 0.18 : 8;
+  // Outer boundary for spiral arms
+  const outerKm = r34 > 0 ? r34 : r50 > 0 ? r50 * 1.8 : coreKm * 4;
 
-  // Elongation along movement direction
-  const speedFactor = movement ? Math.min(1.6, 1 + movement.speed_kmh / 60) : 1;
-  const movAngle = movement
-    ? ((90 - movement.direction_deg) * Math.PI) / 180
-    : 0;
-  const cosA = Math.cos(movAngle);
-  const sinA = Math.sin(movAngle);
+  // Scale all point budgets with storm area so density stays constant as it grows.
+  // Clamp between 0.5× and 4× to avoid extremes.
+  const BASELINE_KM = 56; // same reference as heatmap radius
+  const areaSacle = Math.min(4, Math.max(0.5, (outerKm / BASELINE_KM) ** 2));
+  const scalePts = (n: number) => Math.round(n * areaSacle);
 
   const features: GeoJSONPoint[] = [];
 
-  // ── Background anisotropic Gaussian cloud ────────────────────────
-  for (let i = 0; i < N; i++) {
-    const uAligned = randn() * sigmaKm * speedFactor;
-    const vPerp = randn() * sigmaKm * 0.72;
-    const dxKm = uAligned * cosA - vPerp * sinA;
-    const dyKm = uAligned * sinA + vPerp * cosA;
-    const distKm = Math.sqrt(dxKm ** 2 + dyKm ** 2);
-    const sigma50 = r50 > 0 ? r50 : sigmaKm * 0.5;
-    const weight = Math.max(
-      0.05,
-      Math.exp(-(distKm ** 2) / (2 * sigma50 ** 2)),
-    );
+  function push(dxKm: number, dyKm: number, weight: number) {
     features.push({
       type: "Feature",
       geometry: {
@@ -237,58 +224,97 @@ function buildStormGeoJSON(storm: StormState, N = 800): FeatureCollection {
           center.lat + dyKm / KM_PER_LAT,
         ],
       },
-      properties: { weight },
+      properties: { weight: Math.max(0.01, Math.min(1, weight)) },
     });
   }
 
-  // ── Wind-band ring helper ────────────────────────────────────────
-  function addRing(
-    radiusKm: number,
-    count: number,
-    baseWeight: number,
-    jitterFraction: number,
-  ) {
-    const jitterKm = radiusKm * jitterFraction;
+  // ── 1. Center-peaked core ────────────────────────────────────────
+  // Sample radius from an exponential distribution (peaks at r=0, decays
+  // outward) to avoid the annular density artifact of Cartesian Gaussian sampling.
+  const sigmaKm = coreKm * 0.5;
+  const speedFactor = movement ? Math.min(1.4, 1 + movement.speed_kmh / 80) : 1;
+  const movAngle = movement
+    ? ((90 - movement.direction_deg) * Math.PI) / 180
+    : 0;
+  const cosA = Math.cos(movAngle);
+  const sinA = Math.sin(movAngle);
+
+  const N = scalePts(1200);
+  for (let i = 0; i < N; i++) {
+    const angle = Math.random() * 2 * Math.PI;
+    // Exponential radius: -ln(U) gives Exp(1); scale to sigmaKm
+    const r = -sigmaKm * Math.log(Math.random() + 1e-9) * 0.55;
+    // Slight directional elongation along movement
+    const stretch = 1 + (speedFactor - 1) * Math.abs(Math.cos(angle - movAngle)) * 0.5;
+    const dxKm = r * stretch * Math.cos(angle);
+    const dyKm = r * Math.sin(angle);
+    const weight = Math.exp(-r / sigmaKm) * 0.85 + 0.05;
+    push(dxKm * cosA - dyKm * sinA, dxKm * sinA + dyKm * cosA, weight);
+  }
+
+  // ── 2. Eyewall — scattered annular cloud, not a ring ─────────────
+  // Use random angle + wide radial spread so it reads as a bright inner
+  // region rather than a distinct circle.
+  if (rmw > 1) {
+    const count = scalePts(300);
     for (let i = 0; i < count; i++) {
-      // Evenly-spaced angle with a tiny random perturbation for natural look
-      const angle = (2 * Math.PI * i) / count + (Math.random() - 0.5) * 0.15;
-      const r = radiusKm + randn() * jitterKm;
-      const dxKm = r * Math.cos(angle);
-      const dyKm = r * Math.sin(angle);
-      features.push({
-        type: "Feature",
-        geometry: {
-          type: "Point",
-          coordinates: [
-            center.lon + dxKm / KM_PER_LON,
-            center.lat + dyKm / KM_PER_LAT,
-          ],
-        },
-        properties: { weight: baseWeight * (0.85 + Math.random() * 0.15) },
-      });
+      const angle = Math.random() * 2 * Math.PI;
+      // Wide annular band: ±40% of rmw so it blends with the core
+      const r = rmw * (0.6 + Math.random() * 0.8);
+      const weight = Math.exp(-Math.abs(r - rmw) / (rmw * 0.3)) * 0.9;
+      push(r * Math.cos(angle), r * Math.sin(angle), weight);
     }
   }
 
-  // Eyewall (peak winds, highest weight)
-  if (rmw > 1) addRing(rmw, 140, 1.0, 0.1);
-  // 64-kt destructive-wind radius
-  if (r64 > 0) addRing(r64, 110, 0.82, 0.08);
-  // 50-kt damaging-wind radius
-  if (r50 > 0) addRing(r50, 130, 0.62, 0.1);
-  // 34-kt gale-wind outer boundary
-  if (r34 > 0) addRing(r34, 150, 0.38, 0.12);
+  // ── 3. Noisy spiral rainbands ─────────────────────────────────────
+  const numArms = 15;
+  const spiralStartR = rmw > 1 ? rmw * (0.8 + Math.random() * 0.6) : coreKm * 0.5;
+  const spiralMaxR = spiralStartR + (outerKm - spiralStartR) * 0.2;
 
-  // ── Focus-point clusters (convective cores, rain bands) ──────────
-  // Only render focus points that lie within r34 of the storm center —
-  // points further out are artefacts of the data and would bloat the heatmap.
+  for (let arm = 0; arm < numArms; arm++) {
+    // Each arm gets a unique random offset and length so they're not evenly spaced
+    const armOffset = (2 * Math.PI * arm) / numArms + (Math.random() - 0.5) * 0.9;
+    // Vary arm length per arm (60%–100% of max)
+    const armLength = spiralMaxR * (0.6 + Math.random() * 0.4);
+    const armEnd = spiralStartR + (armLength - spiralStartR);
+    // Scale point count with storm size so arms stay dense as storm grows
+    const pts = scalePts(60 + Math.floor(Math.random() * 80));
+    // Per-arm curl variation so not all arms sweep the same angle
+    const curlFactor = 0.6 + Math.random() * 0.8;
+    // Random "wobble" frequency for this arm — makes each arm undulate differently
+    const wobbleFreq = 2 + Math.random() * 4;
+    const wobbleAmp = 0.03 + Math.random() * 0.07;
+
+    for (let j = 0; j < pts; j++) {
+      const t = j / (pts - 1); // 0 → 1
+      const r = spiralStartR + (armEnd - spiralStartR) * t;
+      const spiralAngle = armOffset + t * Math.PI * curlFactor;
+
+      // Perpendicular jitter: narrow base + sinusoidal wobble along the arm
+      const sinWobble = Math.sin(t * wobbleFreq * Math.PI) * wobbleAmp;
+      const jitter = (randn() * 0.025 + sinWobble) * r;
+      const perpAngle = spiralAngle + Math.PI / 2;
+
+      // Radial scatter: small random push in/out so the band isn't a perfect curve
+      const radialNoise = randn() * r * 0.03;
+      const rx = (r + radialNoise) * Math.cos(spiralAngle) + jitter * Math.cos(perpAngle);
+      const ry = (r + radialNoise) * Math.sin(spiralAngle) + jitter * Math.sin(perpAngle);
+
+      // Weight: decays outward with extra noise so intensity is patchy, not smooth
+      const weight = (0.85 - t * 0.55) * (0.65 + Math.random() * 0.35);
+      push(rx, ry, weight);
+    }
+  }
+
+  // ── 4. Focus-point clusters (convective cores / rain bands) ──────
   const outerBoundKm = r34 > 0 ? r34 : r50 * 2;
   focusPoints.forEach((fp) => {
     const fpDxKm = (fp.lon - center.lon) * KM_PER_LON;
     const fpDyKm = (fp.lat - center.lat) * KM_PER_LAT;
     const fpDistKm = Math.sqrt(fpDxKm ** 2 + fpDyKm ** 2);
-    if (fpDistKm > outerBoundKm) return; // skip out-of-bounds focus points
+    if (fpDistKm > outerBoundKm) return;
 
-    const clusterSigmaKm = Math.max(0.5, sigmaKm * 0.15);
+    const clusterSigmaKm = Math.max(0.5, coreKm * 0.12);
     for (let i = 0; i < 60; i++) {
       const dx = randn() * clusterSigmaKm;
       const dy = randn() * clusterSigmaKm;
@@ -431,10 +457,10 @@ function buildAlertGeoJSON(features: AlertSignalFeature[]): FeatureCollection {
     }
     if (lon == null || lat == null) continue;
 
-    const cat    = categorizeSignal(p.signal_type);
-    const baseW  = signalSeverityWeight(p.severity);
+    const cat = categorizeSignal(p.signal_type);
+    const baseW = signalSeverityWeight(p.severity);
     const radius = ALERT_SCATTER_RADIUS[cat] ?? 0.15;
-    const count  = ALERT_SCATTER_COUNT[cat] ?? 30;
+    const count = ALERT_SCATTER_COUNT[cat] ?? 30;
     for (let i = 0; i < count; i++) {
       pts.push({
         type: "Feature",
@@ -476,10 +502,10 @@ function buildHoverGeoJSON(features: AlertSignalFeature[]) {
           geometry: { type: "Point" as const, coordinates: [lon, lat] },
           properties: {
             signal_type: p.signal_type ?? "",
-            value:       p.value ?? "",
-            severity:    p.severity ?? "",
-            source:      p.source ?? "",
-            region:      p.region ?? "",
+            value: p.value ?? "",
+            severity: p.severity ?? "",
+            source: p.source ?? "",
+            region: p.region ?? "",
           },
         };
       })
@@ -489,7 +515,10 @@ function buildHoverGeoJSON(features: AlertSignalFeature[]) {
 
 function formatSource(src: string): string {
   const MAP: Record<string, string> = {
-    usgs: "USGS", "nasa-firms": "NASA FIRMS", "noaa-nws": "NOAA NWS", gdacs: "GDACS",
+    usgs: "USGS",
+    "nasa-firms": "NASA FIRMS",
+    "noaa-nws": "NOAA NWS",
+    gdacs: "GDACS",
   };
   return MAP[src] ?? src.toUpperCase();
 }
@@ -503,19 +532,29 @@ function formatSignalType(t: string): string {
 
 function severityHex(severity: string): string {
   switch ((severity ?? "").toLowerCase()) {
-    case "extreme": case "red":    return "#ef4444";
-    case "severe":  case "high":   return "#f97316";
-    case "moderate":case "medium": case "orange": return "#f59e0b";
-    case "low":     case "green":  return "#22c55e";
-    default: return "#94a3b8";
+    case "extreme":
+    case "red":
+      return "#ef4444";
+    case "severe":
+    case "high":
+      return "#f97316";
+    case "moderate":
+    case "medium":
+    case "orange":
+      return "#f59e0b";
+    case "low":
+    case "green":
+      return "#22c55e";
+    default:
+      return "#94a3b8";
   }
 }
 
 function buildPopupHTML(props: Record<string, string>): string {
   const color = severityHex(props.severity);
   const title = formatSignalType(props.signal_type);
-  const sev   = (props.severity ?? "unknown").toUpperCase();
-  const src   = formatSource(props.source);
+  const sev = (props.severity ?? "unknown").toUpperCase();
+  const src = formatSource(props.source);
   return `
     <div style="font-family:system-ui;font-size:13px;max-width:230px;padding:2px 0;">
       <div style="font-weight:700;font-size:14px;color:#f1f5f9;margin-bottom:5px;">${title}</div>
@@ -581,17 +620,19 @@ const BASELINE_R34_KM = 56;
  * visually distinct; density/overlap creates the intensity gradient.
  */
 function stormHeatmapRadius(r34Km: number) {
-  const scale = r34Km > 0 ? r34Km / BASELINE_R34_KM : 1;
+  // Use a power >1 so radius grows faster than linearly as the storm expands,
+  // keeping points overlapping and the heatmap dense at larger scales.
+  const scale = r34Km > 0 ? Math.pow(r34Km / BASELINE_R34_KM, 1.4) : 1;
   return [
     "interpolate",
     ["linear"],
     ["zoom"],
     0,
-    Math.max(2, Math.round(4 * scale)),
+    Math.max(3, Math.round(6 * scale)),
     5,
-    Math.max(5, Math.round(12 * scale)),
+    Math.max(10, Math.round(22 * scale)),
     9,
-    Math.max(8, Math.round(22 * scale)),
+    Math.max(16, Math.round(40 * scale)),
   ];
 }
 
@@ -676,7 +717,9 @@ export function WeatherLayerOverlay({
 
   // Live alert signals state
   const [alertGeoJSON, setAlertGeoJSON] = useState<FeatureCollection>(EMPTY_FC);
-  const [alertHoverGeoJSON, setAlertHoverGeoJSON] = useState<ReturnType<typeof buildHoverGeoJSON>>({ type: "FeatureCollection", features: [] });
+  const [alertHoverGeoJSON, setAlertHoverGeoJSON] = useState<
+    ReturnType<typeof buildHoverGeoJSON>
+  >({ type: "FeatureCollection", features: [] });
   const [alertVisible, setAlertVisible] = useState<Record<string, boolean>>({});
   const popupRef = useRef<mapboxgl.Popup | null>(null);
 
@@ -932,8 +975,10 @@ export function WeatherLayerOverlay({
         map.off("mouseleave", LIVE_ALERTS_HOVER_LAYER, onLeave);
         popupRef.current?.remove();
         popupRef.current = null;
-        if (map.getLayer(LIVE_ALERTS_HOVER_LAYER)) map.removeLayer(LIVE_ALERTS_HOVER_LAYER);
-        if (map.getSource(LIVE_ALERTS_HOVER_SOURCE)) map.removeSource(LIVE_ALERTS_HOVER_SOURCE);
+        if (map.getLayer(LIVE_ALERTS_HOVER_LAYER))
+          map.removeLayer(LIVE_ALERTS_HOVER_LAYER);
+        if (map.getSource(LIVE_ALERTS_HOVER_SOURCE))
+          map.removeSource(LIVE_ALERTS_HOVER_SOURCE);
         for (const layerId of Object.values(LIVE_ALERT_LAYERS)) {
           if (map.getLayer(layerId)) map.removeLayer(layerId);
         }
@@ -955,7 +1000,9 @@ export function WeatherLayerOverlay({
   // ── Live alert signals: update hover source data ──────────────────────────
   useEffect(() => {
     if (!map || !mapLoaded) return;
-    (map.getSource(LIVE_ALERTS_HOVER_SOURCE) as any)?.setData(alertHoverGeoJSON);
+    (map.getSource(LIVE_ALERTS_HOVER_SOURCE) as any)?.setData(
+      alertHoverGeoJSON,
+    );
   }, [map, mapLoaded, alertHoverGeoJSON]);
 
   // ── Live alert signals: toggle visibility ────────────────────────────────
@@ -996,150 +1043,150 @@ export function WeatherLayerOverlay({
         zIndex: 20,
       }}
     >
-        <View
+      <View
+        style={{
+          width: 248,
+          backgroundColor: panelBg,
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: panelBorder,
+          overflow: "hidden" as any,
+          ...({
+            boxShadow: isDark
+              ? "0 8px 24px rgba(0,0,0,0.45)"
+              : "0 4px 16px rgba(0,0,0,0.12)",
+          } as any),
+        }}
+      >
+        {/* ── Collapse header ── */}
+        <Pressable
+          onPress={() => setCollapsed((v) => !v)}
           style={{
-            width: 248,
-            backgroundColor: panelBg,
-            borderRadius: 14,
-            borderWidth: 1,
-            borderColor: panelBorder,
-            overflow: "hidden" as any,
-            ...({
-              boxShadow: isDark
-                ? "0 8px 24px rgba(0,0,0,0.45)"
-                : "0 4px 16px rgba(0,0,0,0.12)",
-            } as any),
+            flexDirection: "row",
+            alignItems: "center",
+            paddingHorizontal: 12,
+            paddingVertical: 9,
+            gap: 8,
           }}
         >
-          {/* ── Collapse header ── */}
-          <Pressable
-            onPress={() => setCollapsed((v) => !v)}
+          {/* Stack icon */}
+          <View style={{ width: 18, alignItems: "center" }}>
+            {[0, 3, 6].map((offset) => (
+              <View
+                key={offset}
+                style={{
+                  width: 14,
+                  height: 2,
+                  borderRadius: 1,
+                  backgroundColor: iconColor,
+                  marginBottom: offset < 6 ? 2 : 0,
+                }}
+              />
+            ))}
+          </View>
+
+          <Text
             style={{
-              flexDirection: "row",
-              alignItems: "center",
-              paddingHorizontal: 12,
-              paddingVertical: 9,
-              gap: 8,
+              color: titleColor,
+              fontSize: 12,
+              fontWeight: "700",
+              flex: 1,
             }}
           >
-            {/* Stack icon */}
-            <View style={{ width: 18, alignItems: "center" }}>
-              {[0, 3, 6].map((offset) => (
-                <View
-                  key={offset}
-                  style={{
-                    width: 14,
-                    height: 2,
-                    borderRadius: 1,
-                    backgroundColor: iconColor,
-                    marginBottom: offset < 6 ? 2 : 0,
-                  }}
-                />
-              ))}
-            </View>
+            Map Layers
+          </Text>
 
-            <Text
-              style={{
-                color: titleColor,
-                fontSize: 12,
-                fontWeight: "700",
-                flex: 1,
-              }}
-            >
-              Map Layers
-            </Text>
-
-            {activeCount > 0 && (
-              <View
-                style={{
-                  backgroundColor: "#3b82f680",
-                  borderRadius: 999,
-                  paddingHorizontal: 7,
-                  paddingVertical: 2,
-                  marginRight: 6,
-                }}
-              >
-                <Text
-                  style={{ color: "#93c5fd", fontSize: 10, fontWeight: "700" }}
-                >
-                  {activeCount} on
-                </Text>
-              </View>
-            )}
-
-            {/* Chevron */}
-            <Text style={{ color: chevronColor, fontSize: 10 }}>
-              {collapsed ? "▸" : "▾"}
-            </Text>
-          </Pressable>
-
-          {/* ── Expanded layer rows ── */}
-          {!collapsed && (
+          {activeCount > 0 && (
             <View
               style={{
-                paddingHorizontal: 12,
-                paddingBottom: 12,
-                borderTopWidth: 1,
-                borderTopColor: panelBorder,
-                paddingTop: 10,
-                gap: 12,
+                backgroundColor: "#3b82f680",
+                borderRadius: 999,
+                paddingHorizontal: 7,
+                paddingVertical: 2,
+                marginRight: 6,
               }}
             >
-              {stormData && (
-                <LegendRow
-                  palette={stormPalette}
-                  active={showStorm}
-                  isDark={isDark}
-                  onToggle={() => setShowStorm((v) => !v)}
-                />
-              )}
-              {floodData && (
-                <LegendRow
-                  palette={floodPalette}
-                  active={showFlood}
-                  isDark={isDark}
-                  onToggle={() => setShowFlood((v) => !v)}
-                />
-              )}
-              {onToggleAlerts && (
-                <LegendRow
-                  palette={ALERT_LAYER_META}
-                  active={showWeatherAlerts}
-                  isDark={isDark}
-                  onToggle={() => onToggleAlerts(!showWeatherAlerts)}
-                />
-              )}
-              {onToggleWind && (
-                <LegendRow
-                  palette={WIND_LAYER_META}
-                  active={showWind}
-                  isDark={isDark}
-                  onToggle={() => onToggleWind(!showWind)}
-                />
-              )}
-              {Object.keys(alertVisible).map((cat) => {
-                const palette =
-                  DISASTER_PALETTES[cat as DisasterType] ??
-                  DISASTER_PALETTES.general;
-                const liveLabel = `Live ${palette.label}`;
-                return (
-                  <LegendRow
-                    key={cat}
-                    palette={{ ...palette, label: liveLabel }}
-                    active={alertVisible[cat]}
-                    isDark={isDark}
-                    onToggle={() =>
-                      setAlertVisible((prev) => ({
-                        ...prev,
-                        [cat]: !prev[cat],
-                      }))
-                    }
-                  />
-                );
-              })}
+              <Text
+                style={{ color: "#93c5fd", fontSize: 10, fontWeight: "700" }}
+              >
+                {activeCount} on
+              </Text>
             </View>
           )}
-        </View>
+
+          {/* Chevron */}
+          <Text style={{ color: chevronColor, fontSize: 10 }}>
+            {collapsed ? "▸" : "▾"}
+          </Text>
+        </Pressable>
+
+        {/* ── Expanded layer rows ── */}
+        {!collapsed && (
+          <View
+            style={{
+              paddingHorizontal: 12,
+              paddingBottom: 12,
+              borderTopWidth: 1,
+              borderTopColor: panelBorder,
+              paddingTop: 10,
+              gap: 12,
+            }}
+          >
+            {stormData && (
+              <LegendRow
+                palette={stormPalette}
+                active={showStorm}
+                isDark={isDark}
+                onToggle={() => setShowStorm((v) => !v)}
+              />
+            )}
+            {floodData && (
+              <LegendRow
+                palette={floodPalette}
+                active={showFlood}
+                isDark={isDark}
+                onToggle={() => setShowFlood((v) => !v)}
+              />
+            )}
+            {onToggleAlerts && (
+              <LegendRow
+                palette={ALERT_LAYER_META}
+                active={showWeatherAlerts}
+                isDark={isDark}
+                onToggle={() => onToggleAlerts(!showWeatherAlerts)}
+              />
+            )}
+            {onToggleWind && (
+              <LegendRow
+                palette={WIND_LAYER_META}
+                active={showWind}
+                isDark={isDark}
+                onToggle={() => onToggleWind(!showWind)}
+              />
+            )}
+            {Object.keys(alertVisible).map((cat) => {
+              const palette =
+                DISASTER_PALETTES[cat as DisasterType] ??
+                DISASTER_PALETTES.general;
+              const liveLabel = `Live ${palette.label}`;
+              return (
+                <LegendRow
+                  key={cat}
+                  palette={{ ...palette, label: liveLabel }}
+                  active={alertVisible[cat]}
+                  isDark={isDark}
+                  onToggle={() =>
+                    setAlertVisible((prev) => ({
+                      ...prev,
+                      [cat]: !prev[cat],
+                    }))
+                  }
+                />
+              );
+            })}
+          </View>
+        )}
+      </View>
     </View>
   );
 }

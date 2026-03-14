@@ -394,7 +394,8 @@ def remap_track_to_bezier(
             raise ValueError("Every timestep must have storm_state.storm_center.")
         original_centers.append({"lat": center["lat"], "lon": center["lon"]})
 
-    progress = compute_track_progress(original_centers)
+    n = len(original_centers)
+    progress = [i / (n - 1) if n > 1 else 0.0 for i in range(n)]
 
     start = {"lat": start_lat, "lon": start_lon}
     end = {"lat": end_lat, "lon": end_lon}
