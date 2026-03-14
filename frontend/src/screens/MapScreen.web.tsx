@@ -36,9 +36,10 @@ const CITY_STATE_SOURCE = "city-state-impacts";
 const CITY_STATE_LAYER = "city-state-impacts-circle";
 const CITY_STATE_LABEL_LAYER = "city-state-impacts-label";
 
-const DEFAULT_CENTER: [number, number] = [29.222, -1.679];
-const DEFAULT_ROUTE_ORIGIN: Coordinate = { lat: -1.661392, lng: 29.174324 };
-const DEFAULT_ROUTE_DESTINATION: Coordinate = { lat: -1.632659, lng: 29.248804 };
+const DEFAULT_CENTER: [number, number] = [35.321269, -21.992207];
+const DEFAULT_ROUTE_ORIGIN: Coordinate = { lat: -21.992207, lng: 35.321269 };
+const DEFAULT_ROUTE_DESTINATION: Coordinate = { lat: -21.972420, lng: 35.274289 };
+const PROTECTED_SEED_STEPS = 30;
 
 function coordFromText(text: string): Coordinate | null {
   const parts = text.split(",").map((s) => s.trim());
@@ -139,7 +140,7 @@ function isHighDanger(area: CityStateArea): boolean {
 }
 
 function isProtectedCoastalSeed(area: CityStateArea, stepIndex: number): boolean {
-  return stepIndex <= 15 && area.source_kind === "seed_coast_protected";
+  return stepIndex <= PROTECTED_SEED_STEPS && (area.source_kind?.endsWith("_protected") ?? false);
 }
 
 function approxDistanceMeters(a: CityStateArea, b: CityStateArea): number {

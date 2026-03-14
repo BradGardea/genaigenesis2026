@@ -9,20 +9,57 @@ from typing import Any
 from app.models.routing import HazardReport
 from app.services.hazard_store import hazard_store
 
-ROUTE_ORIGIN = (-1.661392, 29.174324)  # (lat, lon)
-ROUTE_DESTINATION = (-1.632659, 29.248804)  # (lat, lon)
-CITY_CENTER = (-1.679, 29.222)
+ROUTE_ORIGIN = (-21.910876, 38.412837)  # storm source (lat, lon)
+ROUTE_DESTINATION = (-21.972420, 35.274289)  # storm landfall/end (lat, lon)
+CITY_CENTER = (-21.941648, 36.843563)
 BASE_SEED = 20260314
 STORM_WEAKEN_RANGE_M = 160_934  # ~100 miles
-PROTECT_SEED_STEPS = 15
+SEED_FRONTIER_SIBLINGS = 2
+SEED_FRONTIER_SPREAD_M = 800
+MAX_COASTAL_SEED_SOURCES = 8
+MAX_PROTECTED_FRONTIER_EVENTS = MAX_COASTAL_SEED_SOURCES * (SEED_FRONTIER_SIBLINGS + 1)
+SEED_SPAWN_ACTIVE_STEPS = 30
+SEED_PROTECTED_STEPS = 30
+NODE_INERT_PROBABILITY = 0.20
+SEED_CHILD_BASE_PROBABILITY = 0.34
+GENERAL_CHILD_BASE_PROBABILITY = 0.24
+CHILD_MAX_STEP_DECAY = 0.42
+CHILD_SEVERITY_RETENTION_MIN = 0.52
+CHILD_SEVERITY_RETENTION_MAX = 0.90
+CHILD_RADIUS_RETENTION_MIN = 0.68
+CHILD_RADIUS_RETENTION_MAX = 0.96
+FLOOD_RAIN_SEVERITY_THRESHOLD = 50
+FLOOD_WIND_SEVERITY_THRESHOLD = 54
+FLOOD_NEARBY_WIND_DISTANCE_M = 1_800
+FLOOD_GENERATION_PROBABILITY = 0.96
+FLOOD_SEVERITY_RETENTION = 0.86
+SECONDARY_FLOOD_SEVERITY_THRESHOLD = 40
+SECONDARY_WIND_SEVERITY_THRESHOLD = 58
+SECONDARY_NEARBY_WIND_DISTANCE_M = 1_050
+SECONDARY_DAMAGE_PROBABILITY = 0.88
+SECONDARY_DAMAGE_SEVERITY_RETENTION = 0.78
+POWERLINE_GENERATION_PROBABILITY = 0.55
+POWERLINE_SEVERITY_RETENTION = 0.72
+ROAD_CLOSURE_FLOOD_THRESHOLD = 68
+ROAD_CLOSURE_FROM_FLOOD_PROBABILITY = 0.58
+ROAD_CLOSURE_FROM_DAMAGE_PROBABILITY = 0.36
+ROAD_CLOSURE_SEVERITY_RETENTION = 0.76
+INITIAL_FRONT_OFFSHORE_M = 2600
+FRONT_INLAND_ADVANCE_PER_STEP_M = 230
+FRONT_INLAND_PROGRESS_BOOST_M = 1100
+FRONT_LATERAL_DRIFT_M = 180
+OPEN_WATER_FRONT_OFFSET_M = 1100
+OPEN_WATER_SPREAD_M = 950
 COASTLINE_ANCHORS: list[tuple[float, float]] = [
-    (-1.6652, 29.1682),
-    (-1.6698, 29.1785),
-    (-1.6752, 29.1918),
-    (-1.6818, 29.2068),
-    (-1.6896, 29.2228),
-    (-1.6984, 29.2388),
-    (-1.7068, 29.2515),
+    (-21.910876, 38.412837),
+    (-21.918412, 38.037624),
+    (-21.925948, 37.662412),
+    (-21.933484, 37.287199),
+    (-21.941020, 36.911987),
+    (-21.948556, 36.536774),
+    (-21.956092, 36.161562),
+    (-21.963628, 35.786349),
+    (-21.972420, 35.274289),
 ]
 
 # Low-frequency route hazard injection controls.
@@ -97,20 +134,30 @@ def _storm_intensity(progress: float) -> float:
     return _clamp(0.35 + 0.75 * bell + pulse, 0.28, 1.12)
 
 
-def _route_point(progress: float) -> tuple[float, float]:
-    lat = ROUTE_ORIGIN[0] + (ROUTE_DESTINATION[0] - ROUTE_ORIGIN[0]) * progress
-    lon = ROUTE_ORIGIN[1] + (ROUTE_DESTINATION[1] - ROUTE_ORIGIN[1]) * progress
-    return lat, lon
+def _coast_point_and_normals(progress: float) -> tuple[float, float, tuple[float, float], tuple[float, float]]:
+    if len(COASTLINE_ANCHORS) < 2:
+        lat, lon = COASTLINE_ANCHORS[0]
+        return lat, lon, (-1.0, 0.0), (1.0, 0.0)
 
+    clamped = _clamp(progress, 0.0, 1.0)
+    scaled = clamped * (len(COASTLINE_ANCHORS) - 1)
+    idx = min(int(math.floor(scaled)), len(COASTLINE_ANCHORS) - 2)
+    local_t = scaled - idx
+    a_lat, a_lon = COASTLINE_ANCHORS[idx]
+    b_lat, b_lon = COASTLINE_ANCHORS[idx + 1]
+    lat = a_lat + (b_lat - a_lat) * local_t
+    lon = a_lon + (b_lon - a_lon) * local_t
 
-def _route_unit_vectors() -> tuple[tuple[float, float], tuple[float, float]]:
-    dy = (ROUTE_DESTINATION[0] - ROUTE_ORIGIN[0]) * 111_320.0
-    avg_lat = (ROUTE_DESTINATION[0] + ROUTE_ORIGIN[0]) / 2
-    dx = (ROUTE_DESTINATION[1] - ROUTE_ORIGIN[1]) * 111_320.0 * math.cos(math.radians(avg_lat))
+    avg_lat = (a_lat + b_lat) / 2
+    dx = (b_lon - a_lon) * 111_320.0 * math.cos(math.radians(avg_lat))
+    dy = (b_lat - a_lat) * 111_320.0
     mag = math.hypot(dx, dy) or 1.0
-    forward = (dx / mag, dy / mag)
-    lateral = (-forward[1], forward[0])
-    return forward, lateral
+    tangent = (dx / mag, dy / mag)
+    left = (-tangent[1], tangent[0])
+    right = (tangent[1], -tangent[0])
+    offshore = left if left[0] < right[0] else right
+    inland = (-offshore[0], -offshore[1])
+    return lat, lon, offshore, inland
 
 
 def _danger_from_severity(overall: int) -> str:
@@ -141,10 +188,118 @@ def _status_label(progress: float, rnd: random.Random) -> str:
     return "persistent" if rnd.random() < 0.7 else "worsening"
 
 
+def _impact_priority(impact_type: str) -> int:
+    priorities = {
+        "road_closure": 6,
+        "structure_damage": 5,
+        "powerline_failure": 4,
+        "debris": 4,
+        "flooding": 3,
+        "high_wind": 2,
+        "rain": 1,
+    }
+    return priorities.get(impact_type, 0)
+
+
 def _seeded_random(route_id: str, step_index: int) -> random.Random:
     digest = hashlib.sha256(f"{route_id}:{step_index}:{BASE_SEED}".encode("utf-8")).hexdigest()
     seed = int(digest[:16], 16)
     return random.Random(seed)
+
+
+def _lineage_random(seed_ref: str, step_index: int) -> random.Random:
+    digest = hashlib.sha256(f"{seed_ref}:{step_index}:{BASE_SEED}".encode("utf-8")).hexdigest()
+    seed = int(digest[:16], 16)
+    return random.Random(seed)
+
+
+def _has_seed_lineage(source_kind: str, source_refs: list[str] | None) -> bool:
+    if source_kind.startswith("seed_") or source_kind in {"propagated_seed_drift", "seeded_generated"}:
+        return True
+    refs = source_refs or []
+    return any(str(ref).startswith("seed:") for ref in refs)
+
+
+def _event_lineage_key(area: dict[str, Any]) -> str:
+    refs = [str(ref) for ref in area.get("source_refs", []) if str(ref)]
+    if refs:
+        return "|".join(sorted(refs))
+    node_id = str(area.get("node_id", ""))
+    if node_id:
+        return node_id
+    return f"{area.get('impact_type', 'other')}:{area.get('lat', 0)}:{area.get('lon', 0)}"
+
+
+def _event_step_random(area: dict[str, Any], step_index: int, salt: str) -> random.Random:
+    digest = hashlib.sha256(
+        f"{_event_lineage_key(area)}:{step_index}:{salt}:{BASE_SEED}".encode("utf-8")
+    ).hexdigest()
+    return random.Random(int(digest[:16], 16))
+
+
+def _seed_refs(area: dict[str, Any]) -> set[str]:
+    return {str(ref) for ref in area.get("source_refs", []) if str(ref).startswith("seed:")}
+
+
+def _shares_seed_lineage(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    return bool(_seed_refs(left) & _seed_refs(right))
+
+
+def _child_decay(progress: float, intensity: float, *, seed_lineage: bool) -> float:
+    fade = 1.0 - CHILD_MAX_STEP_DECAY * progress
+    if seed_lineage:
+        fade += 0.06
+    fade -= max(0.0, intensity - 0.85) * 0.08
+    return _clamp(fade, CHILD_SEVERITY_RETENTION_MIN, CHILD_SEVERITY_RETENTION_MAX)
+
+
+def _child_radius_decay(progress: float, intensity: float) -> float:
+    fade = 1.0 - (CHILD_MAX_STEP_DECAY * 0.55) * progress + max(0.0, intensity - 0.75) * 0.05
+    return _clamp(fade, CHILD_RADIUS_RETENTION_MIN, CHILD_RADIUS_RETENTION_MAX)
+
+
+def _drift_seed_inland(
+    *,
+    seed_ref: str,
+    lat: float,
+    lon: float,
+    step_index: int,
+    progress: float,
+    intensity: float,
+) -> tuple[float, float]:
+    """Advect coastal seed anchors inland over time instead of pinning them to the coast."""
+    rnd = _lineage_random(seed_ref, step_index)
+    coastal_progress = 0.0
+    for idx, (_lat, _lon) in enumerate(COASTLINE_ANCHORS):
+        if abs(_lat - lat) < 0.02 and abs(_lon - lon) < 0.02:
+            coastal_progress = idx / max(len(COASTLINE_ANCHORS) - 1, 1)
+            break
+    _, _, offshore, inland = _coast_point_and_normals(coastal_progress)
+    inland_distance_m = (
+        -INITIAL_FRONT_OFFSHORE_M
+        + step_index * FRONT_INLAND_ADVANCE_PER_STEP_M
+        + progress * FRONT_INLAND_PROGRESS_BOOST_M
+    )
+    lateral_angle = math.atan2(inland[1], inland[0]) + math.pi / 2
+    lateral_distance_m = rnd.uniform(-FRONT_LATERAL_DRIFT_M, FRONT_LATERAL_DRIFT_M) * (0.55 + 0.45 * intensity)
+    return _offset_lat_lon(
+        lat,
+        lon,
+        inland_distance_m * inland[0] + lateral_distance_m * math.cos(lateral_angle),
+        inland_distance_m * inland[1] + lateral_distance_m * math.sin(lateral_angle),
+    )
+
+
+def _select_evenly_spaced_seeds(
+    seeds: list[tuple[str, dict[str, Any]]], max_items: int
+) -> list[tuple[str, dict[str, Any]]]:
+    if len(seeds) <= max_items:
+        return seeds
+    selected: list[tuple[str, dict[str, Any]]] = []
+    for idx in range(max_items):
+        pos = round(idx * (len(seeds) - 1) / max(max_items - 1, 1))
+        selected.append(seeds[pos])
+    return selected
 
 
 def _event(
@@ -180,7 +335,7 @@ def _is_low_danger(area: dict[str, Any]) -> bool:
 
 
 def _is_protected_seed(area: dict[str, Any]) -> bool:
-    return str(area.get("source_kind", "")) == "seed_coast_protected"
+    return str(area.get("source_kind", "")).endswith("_protected")
 
 
 def _cluster_dense_overlaps(
@@ -269,70 +424,49 @@ def _cluster_dense_overlaps(
     return kept, merged_events
 
 
-def _place_corridor_point(
-    progress: float,
-    intensity: float,
-    forward: tuple[float, float],
-    lateral: tuple[float, float],
+def _place_front_band_point(
     rnd: random.Random,
+    intensity: float,
+    progress: float,
     *,
-    ahead_bias: float = 0.0,
+    offshore_bias_m: float = 0.0,
+    along_bias: float = 0.0,
 ) -> tuple[float, float]:
-    anchor_progress = _clamp(progress + rnd.uniform(-0.22, 0.20) + ahead_bias, 0.0, 1.0)
-    a_lat, a_lon = _route_point(anchor_progress)
-    along = rnd.uniform(-900, 1100) * (0.6 + 0.45 * intensity)
-    side = rnd.uniform(-1100, 1100) * (0.55 + 0.4 * intensity)
-    return _offset_lat_lon(
-        a_lat,
-        a_lon,
-        along * forward[0] + side * lateral[0],
-        along * forward[1] + side * lateral[1],
+    anchor_progress = _clamp(rnd.uniform(0.02, 0.98) + along_bias, 0.0, 1.0)
+    base_lat, base_lon, offshore, inland = _coast_point_and_normals(anchor_progress)
+    offshore_m = (
+        OPEN_WATER_FRONT_OFFSET_M
+        + rnd.uniform(-OPEN_WATER_SPREAD_M, OPEN_WATER_SPREAD_M) * (0.75 + 0.35 * intensity)
+        + offshore_bias_m
+        - progress * (FRONT_INLAND_ADVANCE_PER_STEP_M * 0.45)
     )
-
-
-def _place_southeast_point(rnd: random.Random, intensity: float) -> tuple[float, float]:
-    base_lat, base_lon = _offset_lat_lon(
-        CITY_CENTER[0],
-        CITY_CENTER[1],
-        rnd.uniform(1800, 6200),
-        rnd.uniform(-5400, -900),
-    )
+    along_angle = math.atan2(inland[1], inland[0]) + math.pi / 2
+    along_m = rnd.uniform(-900, 900) * (0.7 + 0.35 * intensity)
     return _offset_lat_lon(
         base_lat,
         base_lon,
-        rnd.uniform(-750, 750) * (0.6 + 0.4 * intensity),
-        rnd.uniform(-750, 750) * (0.6 + 0.4 * intensity),
+        offshore_m * offshore[0] + along_m * math.cos(along_angle),
+        offshore_m * offshore[1] + along_m * math.sin(along_angle),
     )
 
 
-def _place_far_southeast_point(rnd: random.Random, intensity: float) -> tuple[float, float]:
-    base_lat, base_lon = _offset_lat_lon(
-        CITY_CENTER[0],
-        CITY_CENTER[1],
-        rnd.uniform(2800, 8600),
-        rnd.uniform(-7600, -2200),
-    )
-    return _offset_lat_lon(
-        base_lat,
-        base_lon,
-        rnd.uniform(-850, 850) * (0.65 + 0.35 * intensity),
-        rnd.uniform(-850, 850) * (0.65 + 0.35 * intensity),
+def _place_open_water_front_point(rnd: random.Random, intensity: float, progress: float) -> tuple[float, float]:
+    return _place_front_band_point(
+        rnd,
+        intensity,
+        progress,
+        offshore_bias_m=rnd.uniform(350, 1100),
+        along_bias=rnd.uniform(-0.06, 0.06),
     )
 
 
-def _place_east_point(rnd: random.Random, intensity: float) -> tuple[float, float]:
-    # Strong east / northeast spread so the storm does not over-centralize near start.
-    base_lat, base_lon = _offset_lat_lon(
-        ROUTE_ORIGIN[0],
-        ROUTE_ORIGIN[1],
-        rnd.uniform(2500, 7600),
-        rnd.uniform(-1200, 2200),
-    )
-    return _offset_lat_lon(
-        base_lat,
-        base_lon,
-        rnd.uniform(-850, 850) * (0.65 + 0.35 * intensity),
-        rnd.uniform(-850, 850) * (0.65 + 0.35 * intensity),
+def _place_outer_front_point(rnd: random.Random, intensity: float, progress: float) -> tuple[float, float]:
+    return _place_front_band_point(
+        rnd,
+        intensity,
+        progress,
+        offshore_bias_m=rnd.uniform(900, 1800),
+        along_bias=rnd.uniform(-0.12, 0.12),
     )
 
 
@@ -568,7 +702,6 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
     progress = step_index / max(total_steps - 1, 1)
     intensity = _storm_intensity(progress)
     rnd = random.Random(BASE_SEED + step_index * 101)
-    forward, lateral = _route_unit_vectors()
 
     # Keep a few seed anchors as spatial hints only.
     anchors: list[tuple[str, float, float]] = []
@@ -579,12 +712,23 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
                 lat = float(item["lat"])
                 lon = float(item["lon"])
                 seed_ref = f"seed:{idx}"
-                anchors.append((seed_ref, lat, lon))
                 impact = str(item.get("impact_type", ""))
                 if impact in {"rain", "high_wind"} and _is_near_coast(lat, lon):
+                    drift_lat, drift_lon = _drift_seed_inland(
+                        seed_ref=seed_ref,
+                        lat=lat,
+                        lon=lon,
+                        step_index=step_index,
+                        progress=progress,
+                        intensity=intensity,
+                    )
+                    anchors.append((seed_ref, drift_lat, drift_lon))
                     coastal_seed_nodes.append((seed_ref, item))
+                else:
+                    anchors.append((seed_ref, lat, lon))
             except (KeyError, TypeError, ValueError):
                 continue
+    coastal_seed_nodes = _select_evenly_spaced_seeds(coastal_seed_nodes, MAX_COASTAL_SEED_SOURCES)
 
     events: list[dict[str, Any]] = []
     event_seq = 0
@@ -614,45 +758,79 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
             node_id=f"step{step_index}-n{event_seq}",
         )
 
-    preserve_coast_seeds = step_index <= PROTECT_SEED_STEPS
+    preserve_coast_seeds = step_index <= SEED_PROTECTED_STEPS
     for seed_ref, raw_seed in coastal_seed_nodes:
         lat = float(raw_seed.get("lat", ROUTE_ORIGIN[0]))
         lon = float(raw_seed.get("lon", ROUTE_ORIGIN[1]))
+        drift_lat, drift_lon = _drift_seed_inland(
+            seed_ref=seed_ref,
+            lat=lat,
+            lon=lon,
+            step_index=step_index,
+            progress=progress,
+            intensity=intensity,
+        )
         severity = int(raw_seed.get("severity", 50))
         radius = int(raw_seed.get("radius_m", 180))
         impact_type = str(raw_seed.get("impact_type", "rain"))
-        events.append(
-            emit_event(
-                lat=lat,
-                lon=lon,
-                impact_type=impact_type,
-                severity=int(_clamp(severity, 28, 76)),
-                radius_m=int(_clamp(radius, 100, 460)),
-                status=str(raw_seed.get("status", "persistent")),
-                source_kind="seed_coast_protected" if preserve_coast_seeds else "seed_coast",
-                source_refs=[seed_ref],
+        drift_rnd = _lineage_random(seed_ref, step_index)
+        frontier_angle = drift_rnd.normalvariate(2.20, 0.14)
+        frontier_offsets = [0.0]
+        for sibling_index in range(SEED_FRONTIER_SIBLINGS):
+            direction = -1 if sibling_index % 2 == 0 else 1
+            frontier_offsets.append(direction * (sibling_index // 2 + 1) * SEED_FRONTIER_SPREAD_M)
+
+        for offset_index, frontier_offset in enumerate(frontier_offsets):
+            seed_lat, seed_lon = _offset_lat_lon(
+                drift_lat,
+                drift_lon,
+                frontier_offset * math.cos(frontier_angle),
+                frontier_offset * math.sin(frontier_angle),
             )
-        )
+            sibling_severity = severity * (1.0 - min(abs(frontier_offset) / max(SEED_FRONTIER_SPREAD_M, 1), 2.0) * 0.08)
+            sibling_radius = radius * (1.0 - min(abs(frontier_offset) / max(SEED_FRONTIER_SPREAD_M, 1), 2.0) * 0.06)
+            source_kind = "seed_coast_protected" if offset_index == 0 and preserve_coast_seeds else "seed_coast"
+            if offset_index > 0:
+                source_kind = "seed_frontier_protected" if preserve_coast_seeds else "seed_frontier"
+            events.append(
+                emit_event(
+                    lat=seed_lat,
+                    lon=seed_lon,
+                    impact_type=impact_type,
+                    severity=int(_clamp(sibling_severity, 26, 76)),
+                    radius_m=int(_clamp(sibling_radius, 100, 460)),
+                    status=str(raw_seed.get("status", "persistent")),
+                    source_kind=source_kind,
+                    source_refs=[seed_ref, f"frontier:{offset_index}"] if offset_index > 0 else [seed_ref],
+                )
+            )
 
     # Explicit seed drift: children from coastal seeds move north/northeast over time.
-    for event in [e for e in events if str(e.get("source_kind", "")).startswith("seed_coast")]:
-        if rnd.random() > (0.18 + 0.16 * intensity):
+    for event in [e for e in events if str(e.get("source_kind", "")).startswith("seed_")]:
+        if step_index > SEED_SPAWN_ACTIVE_STEPS:
+            continue
+        if _event_step_random(event, step_index, "seed-inert").random() < NODE_INERT_PROBABILITY:
+            continue
+        if rnd.random() > min(0.95, SEED_CHILD_BASE_PROBABILITY + 0.20 * intensity):
             continue
         mean_angle = 1.00 + 0.24 * progress  # NE -> NNE
         angle = rnd.normalvariate(mean_angle, 0.20)
         dist = rnd.uniform(240, 980)
         lat, lon = _offset_lat_lon(float(event["lat"]), float(event["lon"]), dist * math.cos(angle), dist * math.sin(angle))
         decay = _origin_decay_factor(lat, lon)
+        child_decay = _child_decay(progress, intensity, seed_lineage=True)
+        radius_decay = _child_radius_decay(progress, intensity)
         events.append(
             emit_event(
                 lat=lat,
                 lon=lon,
                 impact_type=str(event["impact_type"]),
-                severity=int(int(event["severity"]) * rnd.uniform(0.74, 0.90) * decay),
-                radius_m=int(int(event["radius_m"]) * rnd.uniform(0.70, 0.92)),
+                severity=int(int(event["severity"]) * rnd.uniform(0.84, 0.98) * child_decay * decay),
+                radius_m=int(int(event["radius_m"]) * rnd.uniform(0.84, 0.98) * radius_decay),
                 status="worsening",
                 source_kind="propagated_seed_drift",
-                source_refs=[str(event.get("node_id", ""))],
+                source_refs=[str(event.get("node_id", ""))]
+                + [str(ref) for ref in event.get("source_refs", []) if str(ref)],
             )
         )
 
@@ -660,27 +838,29 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
     wind_count = 3 + int(2 * intensity)
     for _ in range(wind_count):
         selector = rnd.random()
-        if selector < 0.18:
-            lat, lon = _place_southeast_point(rnd, intensity)
-            refs: list[str] = ["placement:southeast"]
-            source_kind = "generated_southeast"
-        elif selector < 0.34:
-            lat, lon = _place_far_southeast_point(rnd, intensity)
-            refs = ["placement:far_southeast"]
-            source_kind = "generated_far_southeast"
-        elif selector < 0.52:
-            lat, lon = _place_east_point(rnd, intensity)
-            refs = ["placement:east"]
-            source_kind = "generated_east"
+        if selector < 0.30:
+            lat, lon = _place_open_water_front_point(rnd, intensity, progress)
+            refs: list[str] = ["placement:front_open_water"]
+            source_kind = "generated_front_open_water"
+        elif selector < 0.58:
+            lat, lon = _place_outer_front_point(rnd, intensity, progress)
+            refs = ["placement:front_outer"]
+            source_kind = "generated_front_outer"
         elif anchors and rnd.random() < 0.42:
             seed_ref, base_lat, base_lon = rnd.choice(anchors)
-            lat, lon = _offset_lat_lon(base_lat, base_lon, rnd.uniform(-700, 700), rnd.uniform(-700, 700))
+            anchor_rnd = _lineage_random(seed_ref, step_index)
+            lat, lon = _offset_lat_lon(
+                base_lat,
+                base_lon,
+                anchor_rnd.uniform(-360, 520),
+                anchor_rnd.uniform(90, 760),
+            )
             refs = [seed_ref]
             source_kind = "seeded_generated"
         else:
-            lat, lon = _place_corridor_point(progress, intensity, forward, lateral, rnd, ahead_bias=0.03)
-            refs = ["placement:corridor"]
-            source_kind = "generated_corridor"
+            lat, lon = _place_front_band_point(rnd, intensity, progress, offshore_bias_m=rnd.uniform(-180, 380))
+            refs = ["placement:front_band"]
+            source_kind = "generated_front_band"
         decay = _origin_decay_factor(lat, lon)
         events.append(
             emit_event(
@@ -699,22 +879,18 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
     rain_count = 3 + int(3 * intensity)
     for _ in range(rain_count):
         selector = rnd.random()
-        if selector < 0.16:
-            lat, lon = _place_southeast_point(rnd, intensity)
-            refs = ["placement:southeast"]
-            source_kind = "generated_southeast"
-        elif selector < 0.32:
-            lat, lon = _place_far_southeast_point(rnd, intensity)
-            refs = ["placement:far_southeast"]
-            source_kind = "generated_far_southeast"
-        elif selector < 0.56:
-            lat, lon = _place_east_point(rnd, intensity)
-            refs = ["placement:east"]
-            source_kind = "generated_east"
+        if selector < 0.28:
+            lat, lon = _place_open_water_front_point(rnd, intensity, progress)
+            refs = ["placement:front_open_water"]
+            source_kind = "generated_front_open_water"
+        elif selector < 0.52:
+            lat, lon = _place_outer_front_point(rnd, intensity, progress)
+            refs = ["placement:front_outer"]
+            source_kind = "generated_front_outer"
         else:
-            lat, lon = _place_corridor_point(progress, intensity, forward, lateral, rnd)
-            refs = ["placement:corridor"]
-            source_kind = "generated_corridor"
+            lat, lon = _place_front_band_point(rnd, intensity, progress, offshore_bias_m=rnd.uniform(-260, 320))
+            refs = ["placement:front_band"]
+            source_kind = "generated_front_band"
         decay = _origin_decay_factor(lat, lon)
         events.append(
             emit_event(
@@ -735,52 +911,71 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
         e for e in events if e["impact_type"] in {"rain", "high_wind"} and int(e["severity"]) >= 58
     ]
     for src in propagation_sources:
-        if rnd.random() > (0.18 + 0.32 * intensity):
+        step_rnd = _event_step_random(src, step_index, "child-propagation")
+        if step_rnd.random() < NODE_INERT_PROBABILITY:
+            continue
+        seed_lineage = _has_seed_lineage(str(src.get("source_kind", "")), [str(r) for r in src.get("source_refs", [])])
+        child_probability = SEED_CHILD_BASE_PROBABILITY if seed_lineage else GENERAL_CHILD_BASE_PROBABILITY
+        if rnd.random() > min(0.94, child_probability + 0.30 * intensity):
             continue
         source_kind = str(src.get("source_kind", ""))
-        if source_kind in {"seed_coast_protected", "seed_coast"}:
+        source_refs = [str(r) for r in src.get("source_refs", [])]
+        if seed_lineage:
             # Make seeded coastal growth drift north/northeast over time.
             mean_angle = 1.02 + 0.22 * progress  # ~58deg to ~71deg from east axis
             angle = rnd.normalvariate(mean_angle, 0.22)
-            dist = rnd.uniform(220, 980)
+            dist = rnd.uniform(260, 1120)
         else:
             angle = rnd.uniform(0, 2 * math.pi)
             dist = rnd.uniform(180, 820)
         lat, lon = _offset_lat_lon(float(src["lat"]), float(src["lon"]), dist * math.cos(angle), dist * math.sin(angle))
         decay = _origin_decay_factor(lat, lon)
-        refs = [str(src.get("node_id", ""))] + [str(r) for r in src.get("source_refs", [])]
+        child_decay = _child_decay(progress, intensity, seed_lineage=seed_lineage)
+        radius_decay = _child_radius_decay(progress, intensity)
+        refs = [str(src.get("node_id", ""))] + source_refs
         events.append(
             emit_event(
                 lat=lat,
                 lon=lon,
                 impact_type=str(src["impact_type"]),
-                severity=int(int(src["severity"]) * rnd.uniform(0.76, 0.92) * decay),
-                radius_m=int(int(src["radius_m"]) * rnd.uniform(0.72, 0.95)),
+                severity=int(int(src["severity"]) * rnd.uniform(0.82, 0.96) * child_decay * decay),
+                radius_m=int(int(src["radius_m"]) * rnd.uniform(0.80, 0.96) * radius_decay),
                 status="worsening",
                 source_kind="propagated",
                 source_refs=[r for r in refs if r],
             )
         )
 
-    rains = [e for e in events if e["impact_type"] == "rain" and int(e["severity"]) >= 56]
-    winds = [e for e in events if e["impact_type"] == "high_wind" and int(e["severity"]) >= 64]
+    rains = [e for e in events if e["impact_type"] == "rain" and int(e["severity"]) >= FLOOD_RAIN_SEVERITY_THRESHOLD]
+    winds = [e for e in events if e["impact_type"] == "high_wind" and int(e["severity"]) >= FLOOD_WIND_SEVERITY_THRESHOLD]
 
     # 3) Flooding emerges from co-located rain + wind.
     for rain in rains:
         nearby_wind = [
             w
             for w in winds
-            if _distance_m(float(rain["lat"]), float(rain["lon"]), float(w["lat"]), float(w["lon"])) <= 900
+            if _distance_m(float(rain["lat"]), float(rain["lon"]), float(w["lat"]), float(w["lon"]))
+            <= FLOOD_NEARBY_WIND_DISTANCE_M
         ]
         if not nearby_wind:
             continue
-        if rnd.random() > 0.68:
+        if _event_step_random(rain, step_index, "flood-inert").random() < NODE_INERT_PROBABILITY * 0.5:
+            continue
+        shared_lineage = any(_shares_seed_lineage(rain, wind) for wind in nearby_wind)
+        flood_probability = min(0.995, FLOOD_GENERATION_PROBABILITY + (0.03 if shared_lineage else 0.0))
+        if rnd.random() > flood_probability:
             continue
         mean_wind_sev = sum(int(w["severity"]) for w in nearby_wind) / len(nearby_wind)
-        lat = float(rain["lat"])
-        lon = float(rain["lon"])
+        strongest_wind = max(nearby_wind, key=lambda wind: int(wind["severity"]))
+        lat = (float(rain["lat"]) + float(strongest_wind["lat"])) / 2
+        lon = (float(rain["lon"]) + float(strongest_wind["lon"])) / 2
         decay = _origin_decay_factor(lat, lon)
-        flood_sev = int((0.6 * int(rain["severity"]) + 0.45 * mean_wind_sev + rnd.randint(-6, 8)) * decay)
+        flood_sev = int(
+            (0.52 * int(rain["severity"]) + 0.42 * mean_wind_sev + rnd.randint(-4, 8))
+            * FLOOD_SEVERITY_RETENTION
+            * _child_decay(progress, intensity, seed_lineage=_has_seed_lineage(str(rain.get("source_kind", "")), [str(r) for r in rain.get("source_refs", [])]))
+            * decay
+        )
         refs = [str(rain.get("node_id", ""))] + [str(w.get("node_id", "")) for w in nearby_wind[:3]]
         events.append(
             emit_event(
@@ -795,32 +990,42 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
             )
         )
 
-    floods = [e for e in events if e["impact_type"] == "flooding" and int(e["severity"]) >= 66]
+    floods = [e for e in events if e["impact_type"] == "flooding" and int(e["severity"]) >= SECONDARY_FLOOD_SEVERITY_THRESHOLD]
 
     # 4) Debris/structure damage only when BOTH flood and high wind are severe.
     for flood in floods:
         close_wind = [
             w
             for w in winds
-            if _distance_m(float(flood["lat"]), float(flood["lon"]), float(w["lat"]), float(w["lon"])) <= 700
+            if _distance_m(float(flood["lat"]), float(flood["lon"]), float(w["lat"]), float(w["lon"]))
+            <= SECONDARY_NEARBY_WIND_DISTANCE_M
+            and int(w["severity"]) >= SECONDARY_WIND_SEVERITY_THRESHOLD
         ]
-        if not close_wind:
+        if not close_wind and int(flood["severity"]) < 50:
             continue
-        if rnd.random() > 0.72:
+        if _event_step_random(flood, step_index, "secondary-inert").random() < NODE_INERT_PROBABILITY * 0.5:
+            continue
+        secondary_probability = SECONDARY_DAMAGE_PROBABILITY if close_wind else max(0.72, SECONDARY_DAMAGE_PROBABILITY - 0.10)
+        if rnd.random() > secondary_probability:
             continue
 
-        impact_type = "structure_damage" if rnd.random() < 0.35 else "debris"
+        impact_type = "structure_damage" if close_wind and rnd.random() < 0.42 else "debris"
         angle = rnd.uniform(0, 2 * math.pi)
         dist = rnd.uniform(120, 380)
         lat, lon = _offset_lat_lon(float(flood["lat"]), float(flood["lon"]), dist * math.cos(angle), dist * math.sin(angle))
         refs = [str(flood.get("node_id", ""))] + [str(w.get("node_id", "")) for w in close_wind[:2]]
+        wind_pressure = sum(int(w["severity"]) for w in close_wind[:2]) if close_wind else int(flood["severity"]) * 0.55
         events.append(
             emit_event(
                 lat=lat,
                 lon=lon,
                 impact_type=impact_type,
-                severity=int(int(flood["severity"]) + rnd.randint(-8, 8)),
-                radius_m=int(int(flood["radius_m"]) * rnd.uniform(0.65, 1.0)),
+                severity=int(
+                    (int(flood["severity"]) + 0.22 * wind_pressure + rnd.randint(-6, 8))
+                    * SECONDARY_DAMAGE_SEVERITY_RETENTION
+                    * _child_decay(progress, intensity, seed_lineage=False)
+                ),
+                radius_m=int(int(flood["radius_m"]) * rnd.uniform(0.60, 0.92) * _child_radius_decay(progress, intensity)),
                 status="new" if rnd.random() < 0.5 else "worsening",
                 source_kind="derived_damage",
                 source_refs=[r for r in refs if r],
@@ -831,7 +1036,9 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
 
     # 5) Powerline failure requires structural/debris damage.
     for src in secondary:
-        if rnd.random() > 0.82:
+        if _event_step_random(src, step_index, "powerline-inert").random() < NODE_INERT_PROBABILITY * 0.5:
+            continue
+        if rnd.random() > POWERLINE_GENERATION_PROBABILITY:
             continue
         angle = rnd.uniform(0, 2 * math.pi)
         dist = rnd.uniform(90, 260)
@@ -842,8 +1049,12 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
                 lat=lat,
                 lon=lon,
                 impact_type="powerline_failure",
-                severity=int(int(src["severity"]) + rnd.randint(-10, 7)),
-                radius_m=int(int(src["radius_m"]) * rnd.uniform(0.62, 0.95)),
+                severity=int(
+                    (int(src["severity"]) + rnd.randint(-8, 6))
+                    * POWERLINE_SEVERITY_RETENTION
+                    * _child_decay(progress, intensity, seed_lineage=False)
+                ),
+                radius_m=int(int(src["radius_m"]) * rnd.uniform(0.58, 0.88) * _child_radius_decay(progress, intensity)),
                 status="worsening",
                 source_kind="derived_powerline",
                 source_refs=[r for r in refs if r],
@@ -852,10 +1063,10 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
 
     # 6) Road closures from high flooding (and optionally debris/structure spillover).
     # These are always high danger and should be rendered with a clear red impact area.
-    closure_sources = [e for e in events if e["impact_type"] == "flooding" and int(e["severity"]) >= 76]
+    closure_sources = [e for e in events if e["impact_type"] == "flooding" and int(e["severity"]) >= ROAD_CLOSURE_FLOOD_THRESHOLD]
     closure_sources.extend([e for e in events if e["impact_type"] in {"debris", "structure_damage"}])
     for src in closure_sources:
-        chance = 0.45 if src["impact_type"] == "flooding" else 0.22
+        chance = ROAD_CLOSURE_FROM_FLOOD_PROBABILITY if src["impact_type"] == "flooding" else ROAD_CLOSURE_FROM_DAMAGE_PROBABILITY
         if rnd.random() > chance:
             continue
         angle = rnd.uniform(0, 2 * math.pi)
@@ -867,8 +1078,15 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
                 lat=lat,
                 lon=lon,
                 impact_type="road_closure",
-                severity=max(70, int(int(src["severity"]) + rnd.randint(-8, 10))),
-                radius_m=int(int(src["radius_m"]) * rnd.uniform(0.75, 1.2)),
+                severity=max(
+                    70,
+                    int(
+                        (int(src["severity"]) + rnd.randint(-6, 8))
+                        * ROAD_CLOSURE_SEVERITY_RETENTION
+                        * _child_decay(progress, intensity, seed_lineage=False)
+                    ),
+                ),
+                radius_m=int(int(src["radius_m"]) * rnd.uniform(0.70, 1.05) * _child_radius_decay(progress, intensity)),
                 status="new" if rnd.random() < 0.4 else "worsening",
                 source_kind="derived_road_closure",
                 source_refs=[r for r in refs if r],
@@ -889,10 +1107,12 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
     events = _ensure_spatial_separation(events, rnd, min_distance_m=95)
     max_events = 12 + int(5 * intensity)
     if preserve_coast_seeds:
-        protected = [e for e in events if _is_protected_seed(e)]
+        protected = [e for e in events if _is_protected_seed(e)][:MAX_PROTECTED_FRONTIER_EVENTS]
         others = [e for e in events if not _is_protected_seed(e)]
+        others.sort(key=lambda event: (_impact_priority(str(event.get("impact_type", ""))), int(event.get("severity", 0))), reverse=True)
         city_state["affected_areas"] = protected + others[:max_events]
     else:
+        events.sort(key=lambda event: (_impact_priority(str(event.get("impact_type", ""))), int(event.get("severity", 0))), reverse=True)
         city_state["affected_areas"] = events[:max_events]
 
     _recompute_metadata(
