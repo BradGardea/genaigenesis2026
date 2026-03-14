@@ -1,0 +1,32 @@
+{
+  "name": "crisisnet-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "web": "expo start --web",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "lint": "eslint . --ext .ts,.tsx"
+  },
+  "dependencies": {
+    "@expo/metro-runtime": "~5.0.5",
+    "expo": "^53.0.0",
+    "expo-status-bar": "~2.2.3",
+    "nativewind": "^4.1.23",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "react-native": "0.79.6",
+    "react-native-safe-area-context": "5.4.0",
+    "react-native-web": "^0.20.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.0.10",
+    "@types/react-native": "^0.73.0",
+    "eslint": "^9.22.0",
+    "eslint-config-expo": "^9.2.0",
+    "tailwindcss": "^3.4.17",
+    "typescript": "~5.8.2"
+  }
+}
