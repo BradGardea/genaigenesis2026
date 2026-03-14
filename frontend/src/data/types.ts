@@ -100,6 +100,45 @@ export interface WeatherStepResponse {
   raw: Record<string, unknown>;
 }
 
+export type AlertUrgency =
+  | "notification"
+  | "caution"
+  | "warning"
+  | "urgent warning"
+  | "alert"
+  | "urgent alert"
+  | "extreme urgency alert";
+
+export interface CityStateAlertPayload {
+  id: string;
+  title: string;
+  details: string;
+  urgency: AlertUrgency;
+  category: string;
+  occurredAt: string;
+  updatedAt: string;
+  area: string;
+  source: string;
+  rawData?: Record<string, unknown>;
+}
+
+export interface CityStateCardPayload {
+  id: string;
+  headline: string;
+  details: string;
+  severity: "low" | "medium" | "high" | "extreme";
+  updatedAt: string;
+  rawData?: Record<string, unknown>;
+}
+
+export interface CityStateStepResponse {
+  metadata: WeatherDatasetMetadata;
+  step: WeatherStepMeta;
+  beautified: CityStateCardPayload[];
+  alerts: CityStateAlertPayload[];
+  raw: Record<string, unknown>;
+}
+
 export interface MapIncidentPoint {
   id: string;
   label: string;

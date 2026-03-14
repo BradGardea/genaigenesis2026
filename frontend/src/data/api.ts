@@ -1,4 +1,5 @@
 import {
+  CityStateStepResponse,
   ConnectionCreatePayload,
   EvacuationPlan,
   InfoBubble,
@@ -60,5 +61,15 @@ export async function fetchWeatherCurrentStep(step: number): Promise<WeatherStep
 export async function fetchWeatherNextStep(currStep: number): Promise<WeatherStepResponse> {
   return fetchJson<WeatherStepResponse>(
     `/information/weather/next-step?curr_step=${currStep}`
+  );
+}
+
+export async function fetchCityStateCurrentStep(step: number): Promise<CityStateStepResponse> {
+  return fetchJson<CityStateStepResponse>(`/information/city-state/current-step?step=${step}`);
+}
+
+export async function fetchCityStateNextStep(currStep: number): Promise<CityStateStepResponse> {
+  return fetchJson<CityStateStepResponse>(
+    `/information/city-state/next-step?curr_step=${currStep}`
   );
 }
