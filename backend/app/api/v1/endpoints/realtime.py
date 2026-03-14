@@ -72,7 +72,8 @@ async def realtime_proxy(client_ws: WebSocket):
                 "session": {
                     "modalities": ["audio", "text"],
                     "instructions": (
-                        "You are a helpful voice assistant for our app. "
+                        "You are a helpful voice assistant for our app, where you assist users by providing helpful information and answering questions during a weather event, and potentially emergency scenario."
+                        "Prioritize providing short answers with the most critical information first, and then more details if the user wants them. Always be concise and clear."
                         "When you receive a [CONTEXT] block before the user's message, "
                         "use that data to personalize and inform your response. "
                         "Never read out the raw context to the user — just use it naturally."

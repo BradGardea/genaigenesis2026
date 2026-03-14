@@ -59,7 +59,7 @@ async def handle_message(message: str, step: int):
         }
     ]
 
-    extra_context = f"Current step: {step}. Decide if the function should be called."
+    extra_context = f"Current step: {step}. Decide if the function(s) should be called."
 
     payload = {
         "model": "gpt-4.1-mini",
