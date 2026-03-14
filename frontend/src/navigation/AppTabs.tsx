@@ -24,7 +24,7 @@ export function AppTabs() {
   const [fullName, setFullName] = useState(userProfileMock.fullName);
   const [phoneNumber, setPhoneNumber] = useState(userProfileMock.phoneNumber);
   const [homeArea, setHomeArea] = useState(userProfileMock.homeArea);
-  const { currentStepIndex, totalSteps, isFinalStep, stepDisaster, latestHighRiskAlert } = useDisasterDemo();
+  const { currentStepIndex, totalSteps, isFinalStep, isStepping, stepDisaster, latestHighRiskAlert } = useDisasterDemo();
   const [visibleAlertBanner, setVisibleAlertBanner] = useState<{
     id: string;
     title: string;
@@ -99,7 +99,7 @@ export function AppTabs() {
       <View className="flex-1">{activeScreen}</View>
       <Pressable
         className={`absolute left-4 rounded-xl border px-4 py-2 ${
-          isFinalStep
+          isFinalStep || isStepping
             ? isDark
               ? "border-slate-700 bg-slate-800"
               : "border-slate-300 bg-slate-200"
@@ -108,12 +108,14 @@ export function AppTabs() {
               : "border-rose-300 bg-rose-50"
         }`}
         style={{ bottom: Math.max(insets.bottom, 6) + 64 }}
-        disabled={isFinalStep}
-        onPress={stepDisaster}
+        disabled={isFinalStep || isStepping}
+        onPress={() => {
+          void stepDisaster();
+        }}
       >
         <Text
           className={`text-xs font-semibold ${
-            isFinalStep
+            isFinalStep || isStepping
               ? isDark
                 ? "text-slate-300"
                 : "text-slate-600"
@@ -122,7 +124,9 @@ export function AppTabs() {
                 : "text-rose-700"
           }`}
         >
-          {isFinalStep
+          {isStepping
+            ? "Stepping..."
+            : isFinalStep
             ? `Final Step (${totalSteps}/${totalSteps})`
             : `Step Disaster (${currentStepIndex + 1}/${totalSteps})`}
         </Text>

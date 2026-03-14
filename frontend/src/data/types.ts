@@ -73,6 +73,31 @@ export interface WeatherUpdate {
   details: string;
   severity: string;
   updatedAt: string;
+  rawData?: Record<string, unknown>;
+}
+
+export interface WeatherDatasetMetadata {
+  dataset_name: string;
+  version: string;
+  generated_at: string;
+  scenario_note: string;
+  location: Record<string, unknown>;
+  schema_alignment: Record<string, unknown>;
+}
+
+export interface WeatherStepMeta {
+  step_index: number;
+  step_time: string;
+  total_steps: number;
+  has_next: boolean;
+  next_step_index: number | null;
+}
+
+export interface WeatherStepResponse {
+  metadata: WeatherDatasetMetadata;
+  step: WeatherStepMeta;
+  beautified: WeatherUpdate[];
+  raw: Record<string, unknown>;
 }
 
 export interface MapIncidentPoint {
