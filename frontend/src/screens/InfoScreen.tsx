@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { FlatList, Modal, Pressable, Text, View } from "react-native";
+import { FlatList, Image, Modal, Pressable, Text, View } from "react-native";
 import {
   DISASTER_STEP_INTERVAL_MINUTES,
   EvacuationPlan,
@@ -11,6 +11,7 @@ import {
 import { useDisasterDemo } from "../state/DisasterDemoContext";
 import { AppTheme } from "../types/theme";
 import VoiceWidget from "@/components/Audio";
+import logoGreenBlue from "../assets/logos/crisis-net-logo-green-blue.png";
 
 type InfoSection =
   | "alerts"
@@ -84,6 +85,19 @@ function toSectionUpdatedAtKey(section: InfoSection): keyof (typeof disasterStep
   return section;
 }
 
+const urgencyToken = (urgency: string): string => {
+  switch (urgency) {
+    case "urgent warning":
+      return "urgentWarning";
+    case "urgent alert":
+      return "urgentAlert";
+    case "extreme urgency alert":
+      return "extremeUrgency";
+    default:
+      return urgency.replace(/\s+/g, "");
+  }
+};
+
 export function InfoScreen({ theme }: InfoScreenProps) {
   const isDark = theme === "dark";
   const {
@@ -100,8 +114,8 @@ export function InfoScreen({ theme }: InfoScreenProps) {
   const latestStep = stepHistory[stepHistory.length - 1]?.step ?? disasterStepsMock[0];
   const referenceNowMs = new Date(latestStep.simulatedAt).getTime();
 
-  const commonCardClass = `mb-3 rounded-2xl border p-4 ${
-    isDark ? "border-slate-700 bg-slate-900" : "border-slate-300 bg-white"
+  const commonCardClass = `mb-3 rounded-xl border p-4 ${
+    isDark ? "border-slate-700 bg-slate-900" : "border-brand-border bg-brand-card shadow-soft"
   }`;
 
   const getFreshnessColor = (isoTime: string): string => {
@@ -148,13 +162,14 @@ export function InfoScreen({ theme }: InfoScreenProps) {
               Step {stepIndex + 1} | fetched {formatTime(step.sectionUpdatedAt.alerts)}
             </Text>
             {sortedAlerts.map((item) => {
-              const colorSet = URGENCY_CARD_COLORS[item.urgency][theme];
+              const token = urgencyToken(item.urgency);
+              const bgClass = `bg-urgency-${token}-${isDark ? "darkBg" : "lightBg"}`;
+              const borderClass = `border-urgency-${token}-${isDark ? "darkBorder" : "lightBorder"}`;
 
               return (
                 <View
                   key={`alerts-step-${stepIndex}-${item.id}`}
-                  className="mb-3 mt-3 rounded-2xl border p-4"
-                  style={{ backgroundColor: colorSet.backgroundColor, borderColor: colorSet.borderColor }}
+                  className={`mb-3 mt-3 rounded-xl border p-4 ${bgClass} ${borderClass} shadow-soft`}
                 >
                   <View className="mb-2 self-start rounded-full border border-black/10 bg-white/55 px-3 py-1">
                     <Text
@@ -397,7 +412,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
   return (
     <>
       <FlatList
-        className={`flex-1 ${isDark ? "bg-slate-950" : "bg-slate-100"}`}
+        className={`flex-1 ${isDark ? "bg-slate-950" : "bg-brand-surface"}`}
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 18 }}
         data={[section]}
         keyExtractor={(item) => item}
@@ -425,7 +440,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
             <View className="flex-row items-center">
               <Pressable
                 className={`relative h-10 w-10 items-center justify-center rounded-xl border ${
-                  isDark ? "border-slate-700 bg-slate-900" : "border-slate-300 bg-white"
+                  isDark ? "border-slate-700 bg-slate-900" : "border-brand-border bg-brand-card shadow-soft"
                 }`}
                 onPress={() => {
                   setMenuOpen(true);
@@ -434,21 +449,25 @@ export function InfoScreen({ theme }: InfoScreenProps) {
                 <Text className={`text-xl ${isDark ? "text-slate-100" : "text-slate-900"}`}>&#9776;</Text>
                 {unreadUpdates > 0 ? (
                   <View className="absolute -right-3 -top-2 rounded-full bg-red-600 px-2 py-0.5">
-                    <Text className="text-[10px] font-semibold text-white">{unreadUpdates} new</Text>
-                  </View>
-                ) : null}
+            <Text className="text-[10px] font-semibold text-white">{unreadUpdates} new</Text>
+          </View>
+        ) : null}
               </Pressable>
-               <VoiceWidget/>
 
-              <Text className={`ml-3 text-2xl font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
+              <Text className={`ml-3 text-2xl font-semibold ${isDark ? "text-slate-100" : "text-brand-ink"}`}>
                 {toSectionTitle(section)}
               </Text>
+
+              <View style={{ flex: 1 }} />
+
+              <Image source={logoGreenBlue} style={{ width: 40, height: 40, resizeMode: "contain", marginRight: 6 }} />
+              <VoiceWidget/>
             </View>
 
-            <Text className={`mt-2 text-xs ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+            <Text className={`mt-2 text-xs ${isDark ? "text-slate-400" : "text-brand-muted"}`}>
               Step {currentStepIndex + 1}/{totalSteps} | T+{currentStepIndex * DISASTER_STEP_INTERVAL_MINUTES}m
             </Text>
-            <Text className={`mt-1 text-xs ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+            <Text className={`mt-1 text-xs ${isDark ? "text-slate-400" : "text-brand-muted"}`}>
               {toSectionTitle(section)} updated:{" "}
               <Text style={{ color: getFreshnessColor(latestStep.sectionUpdatedAt[toSectionUpdatedAtKey(section)]) }}>
                 {formatTime(latestStep.sectionUpdatedAt[toSectionUpdatedAtKey(section)])}
