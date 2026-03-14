@@ -64,8 +64,9 @@ async def realtime_proxy(client_ws: WebSocket):
         ) as openai_ws:
             print("Connected to OpenAI Realtime API")
 
-            suppress_responses = False
+            suppress_responses = True
             waiting_for_new_response = False
+            expected_response_id = None
 
             session_config = {
                 "type": "session.update",
@@ -73,7 +74,8 @@ async def realtime_proxy(client_ws: WebSocket):
                     "modalities": ["audio", "text"],
                     "instructions": (
                         "You are a helpful voice assistant for our app, where you assist users by providing helpful information and answering questions during a weather event, and potentially emergency scenario."
-                        "Prioritize providing short answers with the most critical information first, and then more details if the user wants them. Always be concise and clear."
+                        "Prioritize providing short answers with the most critical information"
+                        "These responses are meant for users who may be in stressful situations, so clarity and brevity are important. You do not need to emphasize numberical metrics unless they are common knowledge."
                         "When you receive a [CONTEXT] block before the user's message, "
                         "use that data to personalize and inform your response. "
                         "Never read out the raw context to the user — just use it naturally."
@@ -116,6 +118,7 @@ async def realtime_proxy(client_ws: WebSocket):
 
                             # Stop forwarding any in-flight response content until context is injected
                             suppress_responses = True
+                            expected_response_id = None
 
                             context = await get_context_for_user(user_id, transcript, step_index)
                             context_str = json.dumps(context, indent=2)
@@ -149,11 +152,20 @@ async def realtime_proxy(client_ws: WebSocket):
                         else:
                             # Skip any premature response frames until the contextual response is started
                             msg_type = msg.get("type", "")
-                            if suppress_responses and msg_type.startswith("response."):
-                                if msg_type == "response.created" and waiting_for_new_response:
-                                    suppress_responses = False
-                                    waiting_for_new_response = False
-                                continue
+                            if msg_type.startswith("response."):
+                                # Capture the response id when created
+                                if msg_type == "response.created":
+                                    expected_response_id = msg.get("response_id")
+                                    if waiting_for_new_response:
+                                        suppress_responses = False
+                                        waiting_for_new_response = False
+
+                                if suppress_responses:
+                                    continue
+
+                                # If the response id does not match the expected contextual response, drop it
+                                if expected_response_id and msg.get("response_id") not in (expected_response_id, None):
+                                    continue
 
                             await client_ws.send_text(raw_message)
 
