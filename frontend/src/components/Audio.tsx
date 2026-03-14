@@ -114,6 +114,7 @@ export default function VoiceWidget({ wsUrl = WS_URL, userId = USER_ID }: VoiceW
   const [lastAIText, setLastAIText] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [level, setLevel] = useState(0);
+  const [isRecording, setIsRecording] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -125,6 +126,7 @@ export default function VoiceWidget({ wsUrl = WS_URL, userId = USER_ID }: VoiceW
   const isPlayingRef = useRef<boolean>(false);
   const audioQueueRef = useRef<AudioBuffer[]>([]);
   const aiTextRef = useRef<string>("");
+  const recordingRef = useRef(false)
 
   const getCtx = (): AudioContext => {
     if (!audioCtxRef.current) {
@@ -225,13 +227,20 @@ export default function VoiceWidget({ wsUrl = WS_URL, userId = USER_ID }: VoiceW
       processor.connect(ctx.destination);
 
       processor.onaudioprocess = (e: AudioProcessingEvent): void => {
-        if (wsRef.current?.readyState !== WebSocket.OPEN) return;
-        const raw = e.inputBuffer.getChannelData(0);
-        const resampled = resampleTo24k(raw, ctx.sampleRate);
-        const pcm = encodeAudioToPCM16(resampled);
-        const b64 = btoa(String.fromCharCode(...new Uint8Array(pcm)));
-        wsRef.current.send(JSON.stringify({ type: "input_audio_buffer.append", audio: b64 }));
-      };
+  if (!recordingRef.current) return
+
+  if (wsRef.current?.readyState !== WebSocket.OPEN) return
+
+  const raw = e.inputBuffer.getChannelData(0)
+  const resampled = resampleTo24k(raw, ctx.sampleRate)
+  const pcm = encodeAudioToPCM16(resampled)
+  const b64 = btoa(String.fromCharCode(...new Uint8Array(pcm)))
+
+  wsRef.current.send(JSON.stringify({
+    type: "input_audio_buffer.append",
+    audio: b64
+  }))
+}
 
       const tick = (): void => {
         if (!analyserRef.current) return;
@@ -297,15 +306,35 @@ export default function VoiceWidget({ wsUrl = WS_URL, userId = USER_ID }: VoiceW
     aiTextRef.current = "";
   }, [stopMic]);
 
+  const stopTalking = () => {
+  recordingRef.current = false
+  setIsRecording(false)
+  setPhase("ready")
+
+  wsRef.current?.send(JSON.stringify({
+    type: "input_audio_buffer.commit"
+  }))
+}
+
+  const startTalking = () => {
+  recordingRef.current = true
+  setIsRecording(true)
+  setPhase("listening")
+
+  wsRef.current?.send(JSON.stringify({
+    type: "response.cancel"
+  }))
+}
+
   useEffect(() => () => disconnect(), [disconnect]);
 
   // ── Derived ──────────────────────────────────────────────────────────────────
   const isConnected = (["ready", "listening", "speaking"] as Phase[]).includes(phase);
 
   const statusLabel: Record<Phase, string> = {
-    idle: "Tap to start",
+    idle: "Click to connect",
     connecting: "Connecting…",
-    ready: "Listening",
+    ready: "Hold to talk",
     listening: "Listening",
     speaking: "Speaking",
     error: errorMsg || "Error",
@@ -334,30 +363,41 @@ export default function VoiceWidget({ wsUrl = WS_URL, userId = USER_ID }: VoiceW
           <span style={s.statusText}>{statusLabel[phase]}</span>
         </div>
 
-        <div style={s.waveWrap}>
-          <WaveSVG active={phase === "listening"} level={level} />
-        </div>
-
         <button
-          onClick={isConnected ? disconnect : connect}
+          onClick={!isConnected ? connect : undefined}
+          onMouseDown={isConnected ? startTalking : undefined}
+          onMouseUp={isConnected ? stopTalking : undefined}
+          onMouseLeave={isConnected ? stopTalking : undefined}
+          onTouchStart={isConnected ? startTalking : undefined}
+          onTouchEnd={isConnected ? stopTalking : undefined}
           disabled={phase === "connecting"}
           style={{
             ...s.actionBtn,
-            background: isConnected ? "var(--color-background-danger)" : "var(--color-background-info)",
-            color: isConnected ? "var(--color-text-danger)" : "var(--color-text-info)",
-            borderColor: isConnected ? "var(--color-border-danger)" : "var(--color-border-info)",
+            background: "#f7f8fb",
+            color: "#1f1f1f",
+            borderColor: "#1f1f1f",
             opacity: phase === "connecting" ? 0.55 : 1,
+            position: "relative",
           }}
         >
-          {isConnected ? (
-            <>
-              <StopSVG size={12} color="currentColor" /> End
-            </>
-          ) : (
-            <>
-              <MicSVG size={12} color="currentColor" /> Start
-            </>
+          {!isRecording && <MicSVG size={14} color="currentColor" />}
+          {isRecording && (
+            <div style={s.waveOverlay}>
+              <WaveSVG active={isRecording} level={level} />
+            </div>
           )}
+        </button>
+
+        <button
+          onClick={disconnect}
+          disabled={phase === "idle" || phase === "connecting"}
+          aria-label="Disconnect"
+          style={{
+            ...s.iconBtn,
+            opacity: phase === "idle" || phase === "connecting" ? 0.45 : 1,
+          }}
+        >
+          <StopSVG size={12} color="currentColor" />
         </button>
       </div>
 
@@ -420,26 +460,44 @@ const s: Record<string, CSSProperties> = {
     color: "var(--color-text-secondary)",
     fontWeight: 500,
   },
-  waveWrap: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 36,
-    height: 20,
-  },
   actionBtn: {
     display: "flex",
     alignItems: "center",
-    gap: 5,
-    padding: "5px 12px",
-    borderRadius: "var(--border-radius-md)",
-    border: "0.5px solid",
-    fontSize: 12,
-    fontWeight: 500,
+    justifyContent: "center",
+    gap: 0,
+    padding: "6px 12px",
+    borderRadius: 10,
+    border: "1px solid",
+    fontSize: 13,
+    fontWeight: 600,
     cursor: "pointer",
     flexShrink: 0,
-    transition: "opacity 0.15s",
+    transition: "opacity 0.15s, box-shadow 0.2s",
     lineHeight: 1,
+    minWidth: 46,
+    minHeight: 34,
+    position: "relative",
+  },
+  iconBtn: {
+    width: 32,
+    height: 32,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 10,
+    border: "1px solid #c44141",
+    background: "#fdeaea",
+    color: "#c44141",
+    cursor: "pointer",
+    transition: "opacity 0.15s, background 0.2s, border-color 0.2s",
+  },
+  waveOverlay: {
+    position: "absolute",
+    inset: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    pointerEvents: "none",
   },
   transcript: {
     borderTop: "0.5px solid var(--color-border-tertiary)",
