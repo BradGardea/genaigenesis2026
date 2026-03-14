@@ -110,7 +110,7 @@ export function AppTabs() {
         }}
       >
         <Text
-          className={`text-xs font-semibold ${
+          className={`text-xs font-semibold select-none ${
             isFinalStep || isStepping
               ? isDark
                 ? "text-slate-300"

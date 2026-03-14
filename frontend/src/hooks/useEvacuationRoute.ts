@@ -42,40 +42,53 @@ export function useEvacuationRoute(
   const tripActiveRef = useRef(false);
   const currentPosRef = useRef<Coordinate | null>(null);
 
+  // ---------------------------------------------------------------------------
+  // SSE subscription helper stored in a ref so it can recursively re-subscribe
+  // when a reroute produces a new route_id.
+  // ---------------------------------------------------------------------------
+  const setupSSERef = useRef<(routeId: string) => void>();
+
+  setupSSERef.current = (routeId: string) => {
+    esRef.current?.close();
+
+    const es = subscribeToRouteUpdates(routeId, async (event) => {
+      if (event.type === "reroute") {
+        setState((s) => ({ ...s, rerouting: true }));
+        try {
+          // Always reroute from the user's current position when available
+          const rerouteOrigin = currentPosRef.current ?? origin;
+          if (!rerouteOrigin || !destination) return;
+
+          const newRoute = await requestRoute(rerouteOrigin, destination, profile);
+          setState((s) => ({ ...s, route: newRoute, loading: false, error: null, rerouting: false }));
+
+          // Re-subscribe SSE to the NEW route's stream
+          setupSSERef.current?.(newRoute.route_id);
+        } catch (err) {
+          setState((s) => ({
+            ...s,
+            rerouting: false,
+            error: err instanceof Error ? err.message : "Reroute failed",
+          }));
+        }
+      }
+    });
+    esRef.current = es;
+  };
+
   const fetchRoute = useCallback(async () => {
     if (!origin || !destination) return;
 
     setState((s) => ({ ...s, loading: true, error: null }));
     try {
-      const routeOrigin =
-        tripActiveRef.current && currentPosRef.current
-          ? currentPosRef.current
-          : origin;
+      // Always use current position as origin when available (disaster demo or
+      // active trip), falling back to the fixed origin for the initial request.
+      const routeOrigin = currentPosRef.current ?? origin;
       const route = await requestRoute(routeOrigin, destination, profile);
       setState((s) => ({ ...s, route, loading: false, error: null, rerouting: false }));
 
-      esRef.current?.close();
-
-      const es = subscribeToRouteUpdates(route.route_id, async (event) => {
-        if (event.type === "reroute") {
-          setState((s) => ({ ...s, rerouting: true }));
-          try {
-            const rerouteOrigin =
-              tripActiveRef.current && currentPosRef.current
-                ? currentPosRef.current
-                : origin;
-            const newRoute = await requestRoute(rerouteOrigin, destination, profile);
-            setState((s) => ({ ...s, route: newRoute, loading: false, error: null, rerouting: false }));
-          } catch (err) {
-            setState((s) => ({
-              ...s,
-              rerouting: false,
-              error: err instanceof Error ? err.message : "Reroute failed",
-            }));
-          }
-        }
-      });
-      esRef.current = es;
+      // Subscribe to SSE for this route (closes any previous subscription)
+      setupSSERef.current?.(route.route_id);
     } catch (err) {
       setState((s) => ({
         ...s,

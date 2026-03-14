@@ -14,6 +14,16 @@ ROUTE_DESTINATION = (-1.632659, 29.248804)  # (lat, lon)
 CITY_CENTER = (-1.679, 29.222)
 BASE_SEED = 20260314
 STORM_WEAKEN_RANGE_M = 160_934  # ~100 miles
+PROTECT_SEED_STEPS = 15
+COASTLINE_ANCHORS: list[tuple[float, float]] = [
+    (-1.6652, 29.1682),
+    (-1.6698, 29.1785),
+    (-1.6752, 29.1918),
+    (-1.6818, 29.2068),
+    (-1.6896, 29.2228),
+    (-1.6984, 29.2388),
+    (-1.7068, 29.2515),
+]
 
 # Low-frequency route hazard injection controls.
 ROUTE_HAZARD_PROBABILITY = 0.05
@@ -36,6 +46,42 @@ def _distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     dy = (lat2 - lat1) * 111_320.0
     dx = (lon2 - lon1) * 111_320.0 * math.cos(math.radians((lat1 + lat2) / 2))
     return math.hypot(dx, dy)
+
+
+def _distance_point_to_segment_m(
+    lat: float, lon: float, a_lat: float, a_lon: float, b_lat: float, b_lon: float
+) -> float:
+    lat_scale = 111_320.0
+    lon_scale = 111_320.0 * math.cos(math.radians((a_lat + b_lat + lat) / 3))
+
+    px = lon * lon_scale
+    py = lat * lat_scale
+    ax = a_lon * lon_scale
+    ay = a_lat * lat_scale
+    bx = b_lon * lon_scale
+    by = b_lat * lat_scale
+
+    abx = bx - ax
+    aby = by - ay
+    ab2 = abx * abx + aby * aby
+    if ab2 <= 1e-9:
+        return math.hypot(px - ax, py - ay)
+    t = ((px - ax) * abx + (py - ay) * aby) / ab2
+    t = _clamp(t, 0.0, 1.0)
+    cx = ax + t * abx
+    cy = ay + t * aby
+    return math.hypot(px - cx, py - cy)
+
+
+def _is_near_coast(lat: float, lon: float, threshold_m: float = 1_350) -> bool:
+    best = float("inf")
+    for i in range(len(COASTLINE_ANCHORS) - 1):
+        a_lat, a_lon = COASTLINE_ANCHORS[i]
+        b_lat, b_lon = COASTLINE_ANCHORS[i + 1]
+        d = _distance_point_to_segment_m(lat, lon, a_lat, a_lon, b_lat, b_lon)
+        if d < best:
+            best = d
+    return best <= threshold_m
 
 
 def _origin_decay_factor(lat: float, lon: float) -> float:
@@ -109,9 +155,13 @@ def _event(
     severity: int,
     radius_m: int,
     status: str,
+    source_kind: str = "generated",
+    source_refs: list[str] | None = None,
+    node_id: str | None = None,
 ) -> dict[str, Any]:
     sev = int(_clamp(severity, 5, 100))
     return {
+        "node_id": node_id,
         "lat": lat,
         "lon": lon,
         "impact_type": impact_type,
@@ -119,6 +169,8 @@ def _event(
         "danger_to_remain": _danger_from_severity(sev),
         "status": status,
         "radius_m": int(_clamp(radius_m, 50, 1800)),
+        "source_kind": source_kind,
+        "source_refs": source_refs or [],
     }
 
 
@@ -127,13 +179,22 @@ def _is_low_danger(area: dict[str, Any]) -> bool:
     return danger not in {"high", "extreme"}
 
 
+def _is_protected_seed(area: dict[str, Any]) -> bool:
+    return str(area.get("source_kind", "")) == "seed_coast_protected"
+
+
 def _cluster_dense_overlaps(
     events: list[dict[str, Any]],
     *,
     impact_type: str,
     min_cluster_size: int = 6,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    candidates = [e for e in events if e.get("impact_type") == impact_type and _is_low_danger(e)]
+    protected = [e for e in events if _is_protected_seed(e)]
+    candidates = [
+        e
+        for e in events
+        if e.get("impact_type") == impact_type and _is_low_danger(e) and not _is_protected_seed(e)
+    ]
     if len(candidates) < min_cluster_size:
         return events, []
 
@@ -179,6 +240,14 @@ def _cluster_dense_overlaps(
         max_radius = max(float(g["radius_m"]) for g in group)
         max_severity = max(int(g["severity"]) for g in group)
 
+        refs = []
+        for g in group:
+            refs.extend([str(r) for r in g.get("source_refs", [])])
+            node = g.get("node_id")
+            if node:
+                refs.append(str(node))
+        refs = sorted(set(refs))[:16]
+
         radius_cap = 1200 if impact_type in {"flooding", "high_wind", "rain"} else 1700
         merged_events.append(
             _event(
@@ -188,10 +257,14 @@ def _cluster_dense_overlaps(
                 severity=int(_clamp(max_severity + 6, 42, 86)),
                 radius_m=int(_clamp(max_radius + math.sqrt(len(group)) * 95, 220, radius_cap)),
                 status="merged_cluster",
+                source_kind="merged_cluster",
+                source_refs=refs,
+                node_id=f"merge-{impact_type}-{abs(int(center_lat*1e6))}-{abs(int(center_lon*1e6))}",
             )
         )
 
     kept = [e for e in events if id(e) not in to_remove_ids]
+    kept.extend(protected)
     kept.extend(merged_events)
     return kept, merged_events
 
@@ -221,14 +294,29 @@ def _place_southeast_point(rnd: random.Random, intensity: float) -> tuple[float,
     base_lat, base_lon = _offset_lat_lon(
         CITY_CENTER[0],
         CITY_CENTER[1],
-        rnd.uniform(1200, 4200),
-        rnd.uniform(-3200, -700),
+        rnd.uniform(1800, 6200),
+        rnd.uniform(-5400, -900),
     )
     return _offset_lat_lon(
         base_lat,
         base_lon,
-        rnd.uniform(-600, 600) * (0.6 + 0.4 * intensity),
-        rnd.uniform(-600, 600) * (0.6 + 0.4 * intensity),
+        rnd.uniform(-750, 750) * (0.6 + 0.4 * intensity),
+        rnd.uniform(-750, 750) * (0.6 + 0.4 * intensity),
+    )
+
+
+def _place_far_southeast_point(rnd: random.Random, intensity: float) -> tuple[float, float]:
+    base_lat, base_lon = _offset_lat_lon(
+        CITY_CENTER[0],
+        CITY_CENTER[1],
+        rnd.uniform(2800, 8600),
+        rnd.uniform(-7600, -2200),
+    )
+    return _offset_lat_lon(
+        base_lat,
+        base_lon,
+        rnd.uniform(-850, 850) * (0.65 + 0.35 * intensity),
+        rnd.uniform(-850, 850) * (0.65 + 0.35 * intensity),
     )
 
 
@@ -260,7 +348,9 @@ def _compress_into_high_danger(events: list[dict[str, Any]], impact_type: str) -
     lows = [
         e
         for e in events
-        if e.get("impact_type") == impact_type and str(e.get("danger_to_remain", "")).lower() not in {"high", "extreme"}
+        if e.get("impact_type") == impact_type
+        and str(e.get("danger_to_remain", "")).lower() not in {"high", "extreme"}
+        and not _is_protected_seed(e)
     ]
     absorbed_ids: set[int] = set()
     for high in highs:
@@ -285,8 +375,10 @@ def _compress_into_high_danger(events: list[dict[str, Any]], impact_type: str) -
 
 
 def _collapse_nearby_nodes(events: list[dict[str, Any]], merge_distance_m: float = 220) -> list[dict[str, Any]]:
+    protected = [e for e in events if _is_protected_seed(e)]
+    mutable_events = [e for e in events if not _is_protected_seed(e)]
     grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
-    for event in events:
+    for event in mutable_events:
         danger = str(event.get("danger_to_remain", "low")).lower()
         bucket = "high" if danger in {"high", "extreme"} else "low"
         key = (str(event.get("impact_type", "other")), bucket)
@@ -324,6 +416,13 @@ def _collapse_nearby_nodes(events: list[dict[str, Any]], merge_distance_m: float
             max_radius = max(float(c["radius_m"]) for c in cluster)
             max_severity = max(int(c["severity"]) for c in cluster)
             radius_cap = 1200 if impact_type in {"flooding", "high_wind", "rain"} else 1800
+            refs = []
+            for c in cluster:
+                refs.extend([str(r) for r in c.get("source_refs", [])])
+                node = c.get("node_id")
+                if node:
+                    refs.append(str(node))
+            refs = sorted(set(refs))[:20]
             collapsed.append(
                 _event(
                     lat=center_lat,
@@ -332,9 +431,13 @@ def _collapse_nearby_nodes(events: list[dict[str, Any]], merge_distance_m: float
                     severity=int(_clamp(max_severity + min(6, len(cluster)), 12, 100)),
                     radius_m=int(_clamp(max_radius + math.sqrt(len(cluster)) * 85, 90, radius_cap)),
                     status="merged_cluster",
+                    source_kind="collapsed_cluster",
+                    source_refs=refs,
+                    node_id=f"collapse-{impact_type}-{abs(int(center_lat*1e6))}-{abs(int(center_lon*1e6))}",
                 )
             )
 
+    collapsed.extend(protected)
     return collapsed
 
 
@@ -343,6 +446,9 @@ def _ensure_spatial_separation(
 ) -> list[dict[str, Any]]:
     accepted: list[dict[str, Any]] = []
     for area in areas:
+        if _is_protected_seed(area):
+            accepted.append(area)
+            continue
         lat = float(area["lat"])
         lon = float(area["lon"])
         impact = str(area.get("impact_type", "other"))
@@ -465,38 +571,127 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
     forward, lateral = _route_unit_vectors()
 
     # Keep a few seed anchors as spatial hints only.
-    anchors: list[tuple[float, float]] = []
-    for item in raw_areas:
+    anchors: list[tuple[str, float, float]] = []
+    coastal_seed_nodes: list[tuple[str, dict[str, Any]]] = []
+    for idx, item in enumerate(raw_areas):
         if isinstance(item, dict):
             try:
-                anchors.append((float(item["lat"]), float(item["lon"])) )
+                lat = float(item["lat"])
+                lon = float(item["lon"])
+                seed_ref = f"seed:{idx}"
+                anchors.append((seed_ref, lat, lon))
+                impact = str(item.get("impact_type", ""))
+                if impact in {"rain", "high_wind"} and _is_near_coast(lat, lon):
+                    coastal_seed_nodes.append((seed_ref, item))
             except (KeyError, TypeError, ValueError):
                 continue
 
     events: list[dict[str, Any]] = []
+    event_seq = 0
+
+    def emit_event(
+        *,
+        lat: float,
+        lon: float,
+        impact_type: str,
+        severity: int,
+        radius_m: int,
+        status: str,
+        source_kind: str = "generated",
+        source_refs: list[str] | None = None,
+    ) -> dict[str, Any]:
+        nonlocal event_seq
+        event_seq += 1
+        return _event(
+            lat=lat,
+            lon=lon,
+            impact_type=impact_type,
+            severity=severity,
+            radius_m=radius_m,
+            status=status,
+            source_kind=source_kind,
+            source_refs=source_refs,
+            node_id=f"step{step_index}-n{event_seq}",
+        )
+
+    preserve_coast_seeds = step_index <= PROTECT_SEED_STEPS
+    for seed_ref, raw_seed in coastal_seed_nodes:
+        lat = float(raw_seed.get("lat", ROUTE_ORIGIN[0]))
+        lon = float(raw_seed.get("lon", ROUTE_ORIGIN[1]))
+        severity = int(raw_seed.get("severity", 50))
+        radius = int(raw_seed.get("radius_m", 180))
+        impact_type = str(raw_seed.get("impact_type", "rain"))
+        events.append(
+            emit_event(
+                lat=lat,
+                lon=lon,
+                impact_type=impact_type,
+                severity=int(_clamp(severity, 28, 76)),
+                radius_m=int(_clamp(radius, 100, 460)),
+                status=str(raw_seed.get("status", "persistent")),
+                source_kind="seed_coast_protected" if preserve_coast_seeds else "seed_coast",
+                source_refs=[seed_ref],
+            )
+        )
+
+    # Explicit seed drift: children from coastal seeds move north/northeast over time.
+    for event in [e for e in events if str(e.get("source_kind", "")).startswith("seed_coast")]:
+        if rnd.random() > (0.18 + 0.16 * intensity):
+            continue
+        mean_angle = 1.00 + 0.24 * progress  # NE -> NNE
+        angle = rnd.normalvariate(mean_angle, 0.20)
+        dist = rnd.uniform(240, 980)
+        lat, lon = _offset_lat_lon(float(event["lat"]), float(event["lon"]), dist * math.cos(angle), dist * math.sin(angle))
+        decay = _origin_decay_factor(lat, lon)
+        events.append(
+            emit_event(
+                lat=lat,
+                lon=lon,
+                impact_type=str(event["impact_type"]),
+                severity=int(int(event["severity"]) * rnd.uniform(0.74, 0.90) * decay),
+                radius_m=int(int(event["radius_m"]) * rnd.uniform(0.70, 0.92)),
+                status="worsening",
+                source_kind="propagated_seed_drift",
+                source_refs=[str(event.get("node_id", ""))],
+            )
+        )
 
     # 1) Base layer: high wind pockets.
     wind_count = 3 + int(2 * intensity)
     for _ in range(wind_count):
         selector = rnd.random()
-        if selector < 0.22:
+        if selector < 0.18:
             lat, lon = _place_southeast_point(rnd, intensity)
+            refs: list[str] = ["placement:southeast"]
+            source_kind = "generated_southeast"
+        elif selector < 0.34:
+            lat, lon = _place_far_southeast_point(rnd, intensity)
+            refs = ["placement:far_southeast"]
+            source_kind = "generated_far_southeast"
         elif selector < 0.52:
             lat, lon = _place_east_point(rnd, intensity)
+            refs = ["placement:east"]
+            source_kind = "generated_east"
         elif anchors and rnd.random() < 0.42:
-            base_lat, base_lon = rnd.choice(anchors)
+            seed_ref, base_lat, base_lon = rnd.choice(anchors)
             lat, lon = _offset_lat_lon(base_lat, base_lon, rnd.uniform(-700, 700), rnd.uniform(-700, 700))
+            refs = [seed_ref]
+            source_kind = "seeded_generated"
         else:
             lat, lon = _place_corridor_point(progress, intensity, forward, lateral, rnd, ahead_bias=0.03)
+            refs = ["placement:corridor"]
+            source_kind = "generated_corridor"
         decay = _origin_decay_factor(lat, lon)
         events.append(
-            _event(
+            emit_event(
                 lat=lat,
                 lon=lon,
                 impact_type="high_wind",
                 severity=int((50 + 22 * intensity + rnd.randint(-8, 8)) * decay),
                 radius_m=int((180 + 210 * intensity + rnd.randint(-35, 85)) * (0.9 + 0.2 * decay)),
                 status=_status_label(progress, rnd),
+                source_kind=source_kind,
+                source_refs=refs,
             )
         )
 
@@ -504,21 +699,33 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
     rain_count = 3 + int(3 * intensity)
     for _ in range(rain_count):
         selector = rnd.random()
-        if selector < 0.2:
+        if selector < 0.16:
             lat, lon = _place_southeast_point(rnd, intensity)
-        elif selector < 0.5:
+            refs = ["placement:southeast"]
+            source_kind = "generated_southeast"
+        elif selector < 0.32:
+            lat, lon = _place_far_southeast_point(rnd, intensity)
+            refs = ["placement:far_southeast"]
+            source_kind = "generated_far_southeast"
+        elif selector < 0.56:
             lat, lon = _place_east_point(rnd, intensity)
+            refs = ["placement:east"]
+            source_kind = "generated_east"
         else:
             lat, lon = _place_corridor_point(progress, intensity, forward, lateral, rnd)
+            refs = ["placement:corridor"]
+            source_kind = "generated_corridor"
         decay = _origin_decay_factor(lat, lon)
         events.append(
-            _event(
+            emit_event(
                 lat=lat,
                 lon=lon,
                 impact_type="rain",
                 severity=int((52 + 20 * intensity + rnd.randint(-9, 10)) * decay),
                 radius_m=int((170 + 230 * intensity + rnd.randint(-25, 90)) * (0.9 + 0.2 * decay)),
                 status=_status_label(progress, rnd),
+                source_kind=source_kind,
+                source_refs=refs,
             )
         )
 
@@ -530,18 +737,28 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
     for src in propagation_sources:
         if rnd.random() > (0.18 + 0.32 * intensity):
             continue
-        angle = rnd.uniform(0, 2 * math.pi)
-        dist = rnd.uniform(180, 820)
+        source_kind = str(src.get("source_kind", ""))
+        if source_kind in {"seed_coast_protected", "seed_coast"}:
+            # Make seeded coastal growth drift north/northeast over time.
+            mean_angle = 1.02 + 0.22 * progress  # ~58deg to ~71deg from east axis
+            angle = rnd.normalvariate(mean_angle, 0.22)
+            dist = rnd.uniform(220, 980)
+        else:
+            angle = rnd.uniform(0, 2 * math.pi)
+            dist = rnd.uniform(180, 820)
         lat, lon = _offset_lat_lon(float(src["lat"]), float(src["lon"]), dist * math.cos(angle), dist * math.sin(angle))
         decay = _origin_decay_factor(lat, lon)
+        refs = [str(src.get("node_id", ""))] + [str(r) for r in src.get("source_refs", [])]
         events.append(
-            _event(
+            emit_event(
                 lat=lat,
                 lon=lon,
                 impact_type=str(src["impact_type"]),
                 severity=int(int(src["severity"]) * rnd.uniform(0.76, 0.92) * decay),
                 radius_m=int(int(src["radius_m"]) * rnd.uniform(0.72, 0.95)),
                 status="worsening",
+                source_kind="propagated",
+                source_refs=[r for r in refs if r],
             )
         )
 
@@ -564,14 +781,17 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
         lon = float(rain["lon"])
         decay = _origin_decay_factor(lat, lon)
         flood_sev = int((0.6 * int(rain["severity"]) + 0.45 * mean_wind_sev + rnd.randint(-6, 8)) * decay)
+        refs = [str(rain.get("node_id", ""))] + [str(w.get("node_id", "")) for w in nearby_wind[:3]]
         events.append(
-            _event(
+            emit_event(
                 lat=lat,
                 lon=lon,
                 impact_type="flooding",
                 severity=flood_sev,
                 radius_m=int(int(rain["radius_m"]) * rnd.uniform(0.85, 1.25)),
                 status="new" if rnd.random() < 0.5 else "worsening",
+                source_kind="derived_flood_from_rain_wind",
+                source_refs=[r for r in refs if r],
             )
         )
 
@@ -593,14 +813,17 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
         angle = rnd.uniform(0, 2 * math.pi)
         dist = rnd.uniform(120, 380)
         lat, lon = _offset_lat_lon(float(flood["lat"]), float(flood["lon"]), dist * math.cos(angle), dist * math.sin(angle))
+        refs = [str(flood.get("node_id", ""))] + [str(w.get("node_id", "")) for w in close_wind[:2]]
         events.append(
-            _event(
+            emit_event(
                 lat=lat,
                 lon=lon,
                 impact_type=impact_type,
                 severity=int(int(flood["severity"]) + rnd.randint(-8, 8)),
                 radius_m=int(int(flood["radius_m"]) * rnd.uniform(0.65, 1.0)),
                 status="new" if rnd.random() < 0.5 else "worsening",
+                source_kind="derived_damage",
+                source_refs=[r for r in refs if r],
             )
         )
 
@@ -613,14 +836,17 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
         angle = rnd.uniform(0, 2 * math.pi)
         dist = rnd.uniform(90, 260)
         lat, lon = _offset_lat_lon(float(src["lat"]), float(src["lon"]), dist * math.cos(angle), dist * math.sin(angle))
+        refs = [str(src.get("node_id", ""))] + [str(r) for r in src.get("source_refs", [])]
         events.append(
-            _event(
+            emit_event(
                 lat=lat,
                 lon=lon,
                 impact_type="powerline_failure",
                 severity=int(int(src["severity"]) + rnd.randint(-10, 7)),
                 radius_m=int(int(src["radius_m"]) * rnd.uniform(0.62, 0.95)),
                 status="worsening",
+                source_kind="derived_powerline",
+                source_refs=[r for r in refs if r],
             )
         )
 
@@ -635,14 +861,17 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
         angle = rnd.uniform(0, 2 * math.pi)
         dist = rnd.uniform(140, 520)
         lat, lon = _offset_lat_lon(float(src["lat"]), float(src["lon"]), dist * math.cos(angle), dist * math.sin(angle))
+        refs = [str(src.get("node_id", ""))] + [str(r) for r in src.get("source_refs", [])]
         events.append(
-            _event(
+            emit_event(
                 lat=lat,
                 lon=lon,
                 impact_type="road_closure",
                 severity=max(70, int(int(src["severity"]) + rnd.randint(-8, 10))),
                 radius_m=int(int(src["radius_m"]) * rnd.uniform(0.75, 1.2)),
                 status="new" if rnd.random() < 0.4 else "worsening",
+                source_kind="derived_road_closure",
+                source_refs=[r for r in refs if r],
             )
         )
 
@@ -659,7 +888,12 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
     events = _collapse_nearby_nodes(events, merge_distance_m=240)
     events = _ensure_spatial_separation(events, rnd, min_distance_m=95)
     max_events = 12 + int(5 * intensity)
-    city_state["affected_areas"] = events[:max_events]
+    if preserve_coast_seeds:
+        protected = [e for e in events if _is_protected_seed(e)]
+        others = [e for e in events if not _is_protected_seed(e)]
+        city_state["affected_areas"] = protected + others[:max_events]
+    else:
+        city_state["affected_areas"] = events[:max_events]
 
     _recompute_metadata(
         city_state,
