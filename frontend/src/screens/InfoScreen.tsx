@@ -132,51 +132,58 @@ export function InfoScreen({ theme }: InfoScreenProps) {
             </Text>
             {sortedAlerts.map((item) => {
               const token = urgencyToken(item.urgency);
-              const bgClass = `bg-urgency-${token}-${isDark ? "darkBg" : "lightBg"}`;
-              const borderClass = `border-urgency-${token}-${isDark ? "darkBorder" : "lightBorder"}`;
+              const accentBg = `bg-urgency-${token}-${isDark ? "darkBg" : "lightBg"}`;
+              const accentBorder = `bg-urgency-${token}-${isDark ? "darkBorder" : "lightBorder"}`;
+              const pillText = URGENCY_PILL_TEXT_COLOR[item.urgency][theme];
 
               return (
-                <View
-                  key={`alerts-step-${stepIndex}-${item.id}`}
-                  className={`mb-3 mt-3 rounded-xl border p-4 ${bgClass} ${borderClass} shadow-soft`}
-                >
-                  <View className="mb-2 self-start rounded-full border border-black/10 bg-white/55 px-3 py-1">
-                    <Text
-                      className="text-[11px] font-semibold uppercase"
-                      style={{ color: URGENCY_PILL_TEXT_COLOR[item.urgency][theme] }}
-                    >
-                      {item.urgency}
-                    </Text>
-                  </View>
-                  <Text className={`text-base font-semibold ${isDark ? "text-slate-50" : "text-slate-900"}`}>
-                    {item.title}
-                  </Text>
-                  <Text
-                    className={`mb-3 mt-1 text-xs uppercase tracking-wide ${
-                      isDark ? "text-slate-200" : "text-slate-700"
+                <View key={`alerts-step-${stepIndex}-${item.id}`} className="relative mt-3">
+                  <View className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-full ${accentBorder}`} />
+                  <View
+                    className={`ml-2 rounded-xl border px-4 pb-4 pt-3 ${
+                      isDark
+                        ? "border-brand-darkBorder bg-brand-darkCard shadow-panel"
+                        : "border-brand-border bg-brand-card shadow-soft"
                     }`}
                   >
-                    {item.category}
-                  </Text>
-                  <Text className={`mb-3 text-sm ${isDark ? "text-slate-100" : "text-slate-900"}`}>
-                    {item.details}
-                  </Text>
-                  <View
-                    className="rounded-xl p-3"
-                    style={{ backgroundColor: isDark ? "rgba(15,23,42,0.35)" : "rgba(255,255,255,0.65)" }}
-                  >
-                    <Text className={`text-xs ${isDark ? "text-slate-200" : "text-slate-700"}`}>
-                      Area: {item.area}
+                    <View className="mb-3 flex-row items-center justify-between">
+                      <View className={`rounded-pill px-3 py-1 ${accentBg}`}>
+                        <Text className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: pillText }}>
+                          {item.urgency}
+                        </Text>
+                      </View>
+                      <Text className={`text-xs font-semibold ${isDark ? "text-brand-darkMuted" : "text-brand-muted"}`}>
+                        {item.category}
+                      </Text>
+                    </View>
+
+                    <Text className={`text-base font-semibold ${isDark ? "text-brand-darkInk" : "text-brand-ink"}`}>
+                      {item.title}
                     </Text>
-                    <Text className={`mt-1 text-xs ${getFreshnessColor(item.occurredAt)}`}>
-                      Occurred: {formatTime(item.occurredAt)}
+                    <Text className={`mb-3 mt-1 text-sm leading-6 ${isDark ? "text-brand-darkInk" : "text-brand-ink"}`}>
+                      {item.details}
                     </Text>
-                    <Text className={`mt-1 text-xs ${getFreshnessColor(item.updatedAt)}`}>
-                      Updated: {formatTime(item.updatedAt)}
-                    </Text>
-                    <Text className={`mt-1 text-xs ${isDark ? "text-slate-200" : "text-slate-700"}`}>
-                      Source: {item.source}
-                    </Text>
+
+                    <View
+                      className={`rounded-lg border px-3 py-3 ${
+                        isDark
+                          ? "border-brand-darkBorder bg-brand-darkSurface"
+                          : "border-brand-border bg-brand-surface"
+                      }`}
+                    >
+                      <Text className={`text-xs ${isDark ? "text-brand-darkMuted" : "text-brand-muted"}`}>
+                        Area: {item.area}
+                      </Text>
+                      <Text className={`mt-1 text-xs ${getFreshnessColor(item.occurredAt)}`}>
+                        Occurred: {formatTime(item.occurredAt)}
+                      </Text>
+                      <Text className={`mt-1 text-xs ${getFreshnessColor(item.updatedAt)}`}>
+                        Updated: {formatTime(item.updatedAt)}
+                      </Text>
+                      <Text className={`mt-1 text-xs ${isDark ? "text-brand-darkMuted" : "text-brand-muted"}`}>
+                        Source: {item.source}
+                      </Text>
+                    </View>
                   </View>
                 </View>
               );
