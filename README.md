@@ -84,5 +84,6 @@ It is not exactly the same as native iOS/Android behavior. Differences show up i
 Recommended workflow:
 
 1. Build UI and non-native logic first with `npm run web`.
-2. Validate frequently on real device/emulator with `npm run android` / `npm run ios` once native features start.
+2. npx expo run:android
+
 3. Gate native-only functionality behind adapters/interfaces so web mocks stay productive.
