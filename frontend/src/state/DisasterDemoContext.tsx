@@ -26,6 +26,7 @@ export interface StormState {
   focusPoints: { name: string; lat: number; lon: number }[];
   movement: { direction_deg: number; speed_kmh: number } | null;
   radiusOfMaxWindKm: number;
+  forecastNext: { lat: number; lon: number }[];
 }
 
 export interface AffectedArea {
@@ -304,6 +305,9 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
       focusPoints: Array.isArray(ss.focus_points) ? ss.focus_points : [],
       movement: ss.movement ?? null,
       radiusOfMaxWindKm: ss.radius_of_maximum_wind_km ?? 0,
+      forecastNext: Object.values(ss.forecast_next ?? {})
+        .map((f: any) => f?.storm_center)
+        .filter((c: any) => c?.lat !== undefined && c?.lon !== undefined) as { lat: number; lon: number }[],
     };
   }, [currentStepRaw]);
 

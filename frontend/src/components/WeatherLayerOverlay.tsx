@@ -13,7 +13,8 @@ import { fetchAlertSignals, AlertSignalFeature } from "../services/api";
 
 // Kept for backward-compat with MapScreen imports
 export type WeatherLayerMode = "wind" | "alerts" | "route-weather" | null;
-
+const STORM_FOOTPRINT_SOURCE = "storm-footprint";
+const STORM_FOOTPRINT_LAYER = "storm-footprint-layer";
 // ── Layer identifiers ────────────────────────────────────────────────────────
 const HEATMAP_SOURCE = "disaster-heatmap";
 const HEATMAP_LAYER = "disaster-heatmap-layer";
@@ -182,6 +183,22 @@ type FeatureCollection = {
   features: GeoJSONPoint[];
 };
 
+interface GeoJSONPolygonFeature {
+  type: "Feature";
+  geometry: {
+    type: "Polygon";
+    coordinates: number[][][];
+  };
+  properties: {
+    severity: number;
+  };
+}
+
+type PolygonFeatureCollection = {
+  type: "FeatureCollection";
+  features: GeoJSONPolygonFeature[];
+};
+
 /**
  * Generates a cyclone-shaped storm heatmap using:
  * - A compact Gaussian core cloud concentrated near the center
@@ -196,21 +213,21 @@ function buildStormGeoJSON(storm: StormState): FeatureCollection {
   const KM_PER_LAT = 111;
   const KM_PER_LON = 111 * Math.cos((center.lat * Math.PI) / 180);
 
-  const r34 = windRadiiKm.r34;
-  const r50 = windRadiiKm.r50;
+  const r34 = Math.max(8, windRadiiKm.r34 || 0);
+  const r50 = Math.max(4, windRadiiKm.r50 || 0);
   const rmw =
-    radiusOfMaxWindKm > 0 ? radiusOfMaxWindKm : r50 > 0 ? r50 * 0.28 : 0;
+    radiusOfMaxWindKm > 0
+      ? radiusOfMaxWindKm
+      : r50 > 0
+        ? r50 * 0.32
+        : r34 * 0.22;
 
-  // Core reference radius — kept tight so the center looks clustered
-  const coreKm = r50 > 0 ? r50 * 0.4 : r34 > 0 ? r34 * 0.18 : 8;
-  // Outer boundary for spiral arms
-  const outerKm = r34 > 0 ? r34 : r50 > 0 ? r50 * 1.8 : coreKm * 4;
+  const movementAngle = movement
+    ? ((90 - movement.direction_deg) * Math.PI) / 180
+    : 0;
 
-  // Scale all point budgets with storm area so density stays constant as it grows.
-  // Clamp between 0.5× and 4× to avoid extremes.
-  const BASELINE_KM = 56; // same reference as heatmap radius
-  const areaSacle = Math.min(4, Math.max(0.5, (outerKm / BASELINE_KM) ** 2));
-  const scalePts = (n: number) => Math.round(n * areaSacle);
+  const headingX = Math.cos(movementAngle);
+  const headingY = Math.sin(movementAngle);
 
   const features: GeoJSONPoint[] = [];
 
@@ -224,113 +241,294 @@ function buildStormGeoJSON(storm: StormState): FeatureCollection {
           center.lat + dyKm / KM_PER_LAT,
         ],
       },
-      properties: { weight: Math.max(0.01, Math.min(1, weight)) },
+      properties: {
+        weight: Math.max(0.01, Math.min(1, weight)),
+      },
     });
   }
 
-  // ── 1. Center-peaked core ────────────────────────────────────────
-  // Sample radius from an exponential distribution (peaks at r=0, decays
-  // outward) to avoid the annular density artifact of Cartesian Gaussian sampling.
-  const sigmaKm = coreKm * 0.5;
-  const speedFactor = movement ? Math.min(1.4, 1 + movement.speed_kmh / 80) : 1;
-  const movAngle = movement
-    ? ((90 - movement.direction_deg) * Math.PI) / 180
-    : 0;
-  const cosA = Math.cos(movAngle);
-  const sinA = Math.sin(movAngle);
+  const areaScale = Math.min(
+    2.3,
+    Math.max(0.85, (r34 / BASELINE_R34_KM) ** 0.9),
+  );
+  const scalePts = (n: number) => Math.round(n * areaScale);
 
-  const N = scalePts(1200);
-  for (let i = 0; i < N; i++) {
+  // --------------------------------------------------------------------------
+  // 1) Smaller asymmetric core
+  // --------------------------------------------------------------------------
+  const coreSigmaKm = Math.max(2, rmw * 0.42);
+
+  for (let i = 0; i < scalePts(280); i++) {
     const angle = Math.random() * 2 * Math.PI;
-    // Exponential radius: -ln(U) gives Exp(1); scale to sigmaKm
-    const r = -sigmaKm * Math.log(Math.random() + 1e-9) * 0.55;
-    // Slight directional elongation along movement
-    const stretch = 1 + (speedFactor - 1) * Math.abs(Math.cos(angle - movAngle)) * 0.5;
-    const dxKm = r * stretch * Math.cos(angle);
-    const dyKm = r * Math.sin(angle);
-    const weight = Math.exp(-r / sigmaKm) * 0.85 + 0.05;
-    push(dxKm * cosA - dyKm * sinA, dxKm * sinA + dyKm * cosA, weight);
+    const r = -coreSigmaKm * Math.log(Math.random() + 1e-9) * 0.7;
+
+    const directionalBoost =
+      1 + 0.45 * Math.max(0, Math.cos(angle - movementAngle));
+
+    const dxKm = r * Math.cos(angle) * directionalBoost;
+    const dyKm = r * Math.sin(angle) * (0.9 + Math.random() * 0.2);
+
+    const weight = 0.22 + Math.exp(-r / coreSigmaKm) * 0.33;
+    push(dxKm, dyKm, weight);
   }
 
-  // ── 2. Eyewall — scattered annular cloud, not a ring ─────────────
-  // Use random angle + wide radial spread so it reads as a bright inner
-  // region rather than a distinct circle.
-  if (rmw > 1) {
-    const count = scalePts(300);
-    for (let i = 0; i < count; i++) {
-      const angle = Math.random() * 2 * Math.PI;
-      // Wide annular band: ±40% of rmw so it blends with the core
-      const r = rmw * (0.6 + Math.random() * 0.8);
-      const weight = Math.exp(-Math.abs(r - rmw) / (rmw * 0.3)) * 0.9;
-      push(r * Math.cos(angle), r * Math.sin(angle), weight);
+  // --------------------------------------------------------------------------
+  // 2) Broken asymmetric eyewall
+  // --------------------------------------------------------------------------
+  for (let i = 0; i < scalePts(220); i++) {
+    const angle = Math.random() * 2 * Math.PI;
+
+    const frontBias = 1 + 0.28 * Math.max(0, Math.cos(angle - movementAngle));
+    const localR = rmw * (0.78 + Math.random() * 0.55) * frontBias;
+
+    const dxKm = localR * Math.cos(angle);
+    const dyKm = localR * Math.sin(angle);
+
+    const weight =
+      0.42 + 0.33 * Math.exp(-Math.abs(localR - rmw) / Math.max(1, rmw * 0.3));
+
+    push(dxKm, dyKm, weight);
+  }
+
+  // --------------------------------------------------------------------------
+  // 3) Main spiral rainbands with more noise / broken structure
+  // --------------------------------------------------------------------------
+  const numBands = 7 + Math.floor(Math.random() * 4);
+
+  type BandSeed = {
+    baseOffset: number;
+    startR: number;
+    endR: number;
+    curl: number;
+    wobbleFreq1: number;
+    wobbleAmp1: number;
+    wobbleFreq2: number;
+    wobbleAmp2: number;
+    phase1: number;
+    phase2: number;
+  };
+
+  const bandSeeds: BandSeed[] = [];
+
+  for (let band = 0; band < numBands; band++) {
+    bandSeeds.push({
+      baseOffset: (2 * Math.PI * band) / numBands + (Math.random() - 0.5) * 0.7,
+      startR: Math.max(rmw * 1.1, r34 * (0.28 + Math.random() * 0.08)),
+      endR: r34 * (0.72 + Math.random() * 0.35),
+      curl: 1.0 + Math.random() * 0.9,
+      wobbleFreq1: 2 + Math.random() * 3,
+      wobbleAmp1: 0.04 + Math.random() * 0.06,
+      wobbleFreq2: 0.8 + Math.random() * 1.6,
+      wobbleAmp2: 0.02 + Math.random() * 0.04,
+      phase1: Math.random() * 2 * Math.PI,
+      phase2: Math.random() * 2 * Math.PI,
+    });
+  }
+
+  for (const seed of bandSeeds) {
+    const steps = scalePts(95 + Math.floor(Math.random() * 35));
+
+    // Create clumpy strength regions along each band
+    const clumpPhase = Math.random() * 2 * Math.PI;
+    const clumpFreq = 2 + Math.random() * 2.5;
+
+    for (let j = 0; j < steps; j++) {
+      const t = j / Math.max(1, steps - 1);
+      const r = seed.startR + (seed.endR - seed.startR) * t;
+
+      // Make the band itself less smooth
+      const thetaBase = seed.baseOffset + t * Math.PI * seed.curl;
+      const thetaNoise =
+        Math.sin(t * seed.wobbleFreq1 * Math.PI + seed.phase1) *
+          seed.wobbleAmp1 +
+        Math.sin(t * seed.wobbleFreq2 * Math.PI + seed.phase2) *
+          seed.wobbleAmp2 +
+        randn() * 0.03;
+
+      const theta = thetaBase + thetaNoise;
+
+      // Increase perpendicular spread with radius
+      const perpAngle = theta + Math.PI / 2;
+      const jitter =
+        randn() * (0.035 * r) +
+        Math.sin(t * 5 * Math.PI + seed.phase1) * 0.02 * r;
+
+      const radialNoise = randn() * r * 0.05;
+
+      const px = (r + radialNoise) * Math.cos(theta);
+      const py = (r + radialNoise) * Math.sin(theta);
+
+      const dxKm = px + jitter * Math.cos(perpAngle);
+      const dyKm = py + jitter * Math.sin(perpAngle);
+
+      const projected = (dxKm * headingX + dyKm * headingY) / Math.max(1, r34);
+      const directional = 1 + Math.max(0, projected) * 0.45;
+
+      // Patchy clumps + random holes
+      const clumpFactor =
+        0.7 +
+        0.35 * Math.max(0, Math.sin(t * clumpFreq * 2 * Math.PI + clumpPhase));
+
+      const dropoutChance = 0.12 + 0.08 * t;
+      if (Math.random() < dropoutChance && clumpFactor < 0.82) continue;
+
+      const weight =
+        (0.62 - t * 0.24) *
+        directional *
+        clumpFactor *
+        (0.72 + Math.random() * 0.22);
+
+      push(dxKm, dyKm, weight);
     }
   }
 
-  // ── 3. Noisy spiral rainbands ─────────────────────────────────────
-  const numArms = 15;
-  const spiralStartR = rmw > 1 ? rmw * (0.8 + Math.random() * 0.6) : coreKm * 0.5;
-  const spiralMaxR = spiralStartR + (outerKm - spiralStartR) * 0.2;
+  // --------------------------------------------------------------------------
+  // 4) Inter-band filler precipitation
+  // --------------------------------------------------------------------------
+  const sortedSeeds = [...bandSeeds].sort(
+    (a, b) => a.baseOffset - b.baseOffset,
+  );
 
-  for (let arm = 0; arm < numArms; arm++) {
-    // Each arm gets a unique random offset and length so they're not evenly spaced
-    const armOffset = (2 * Math.PI * arm) / numArms + (Math.random() - 0.5) * 0.9;
-    // Vary arm length per arm (60%–100% of max)
-    const armLength = spiralMaxR * (0.6 + Math.random() * 0.4);
-    const armEnd = spiralStartR + (armLength - spiralStartR);
-    // Scale point count with storm size so arms stay dense as storm grows
-    const pts = scalePts(60 + Math.floor(Math.random() * 80));
-    // Per-arm curl variation so not all arms sweep the same angle
-    const curlFactor = 0.6 + Math.random() * 0.8;
-    // Random "wobble" frequency for this arm — makes each arm undulate differently
-    const wobbleFreq = 2 + Math.random() * 4;
-    const wobbleAmp = 0.03 + Math.random() * 0.07;
+  for (let i = 0; i < sortedSeeds.length; i++) {
+    const a = sortedSeeds[i];
+    const b =
+      i === sortedSeeds.length - 1
+        ? {
+            ...sortedSeeds[0],
+            baseOffset: sortedSeeds[0].baseOffset + 2 * Math.PI,
+          }
+        : sortedSeeds[i + 1];
 
-    for (let j = 0; j < pts; j++) {
-      const t = j / (pts - 1); // 0 → 1
-      const r = spiralStartR + (armEnd - spiralStartR) * t;
-      const spiralAngle = armOffset + t * Math.PI * curlFactor;
+    const fillerPoints = scalePts(70 + Math.floor(Math.random() * 35));
 
-      // Perpendicular jitter: narrow base + sinusoidal wobble along the arm
-      const sinWobble = Math.sin(t * wobbleFreq * Math.PI) * wobbleAmp;
-      const jitter = (randn() * 0.025 + sinWobble) * r;
-      const perpAngle = spiralAngle + Math.PI / 2;
+    for (let j = 0; j < fillerPoints; j++) {
+      const t = Math.random();
 
-      // Radial scatter: small random push in/out so the band isn't a perfect curve
-      const radialNoise = randn() * r * 0.03;
-      const rx = (r + radialNoise) * Math.cos(spiralAngle) + jitter * Math.cos(perpAngle);
-      const ry = (r + radialNoise) * Math.sin(spiralAngle) + jitter * Math.sin(perpAngle);
+      const rA = a.startR + (a.endR - a.startR) * t;
+      const rB = b.startR + (b.endR - b.startR) * t;
+      const rMid = (rA + rB) * 0.5;
 
-      // Weight: decays outward with extra noise so intensity is patchy, not smooth
-      const weight = (0.85 - t * 0.55) * (0.65 + Math.random() * 0.35);
-      push(rx, ry, weight);
+      const thetaA = a.baseOffset + t * Math.PI * a.curl;
+      const thetaB = b.baseOffset + t * Math.PI * b.curl;
+
+      let diff = thetaB - thetaA;
+      while (diff > Math.PI) diff -= 2 * Math.PI;
+      while (diff < -Math.PI) diff += 2 * Math.PI;
+
+      const gapMid = thetaA + diff * 0.5;
+
+      // Scatter around the middle of the gap
+      const theta =
+        gapMid +
+        randn() * Math.max(0.05, Math.abs(diff) * 0.18) +
+        Math.sin(t * 3 * Math.PI + i) * 0.05;
+
+      const r =
+        rMid * (0.9 + Math.random() * 0.18) +
+        randn() * Math.max(1.2, rMid * 0.04);
+
+      const dxKm = r * Math.cos(theta) + randn() * 1.5;
+      const dyKm = r * Math.sin(theta) + randn() * 1.5;
+
+      const projected = (dxKm * headingX + dyKm * headingY) / Math.max(1, r34);
+      const directional = 1 + Math.max(0, projected) * 0.25;
+
+      const weight =
+        (0.22 + Math.random() * 0.16) *
+        directional *
+        (0.8 + Math.random() * 0.3);
+
+      push(dxKm, dyKm, weight);
     }
   }
 
-  // ── 4. Focus-point clusters (convective cores / rain bands) ──────
-  const outerBoundKm = r34 > 0 ? r34 : r50 * 2;
+  // --------------------------------------------------------------------------
+  // 5) Diffuse background precipitation field
+  // --------------------------------------------------------------------------
+  const bgCount = scalePts(220);
+  const forwardStretch = movement
+    ? Math.min(1.8, 1 + movement.speed_kmh / 70)
+    : 1.15;
+
+  for (let i = 0; i < bgCount; i++) {
+    const angle = Math.random() * 2 * Math.PI;
+
+    // Uniform-ish distribution over an ellipse
+    const rr = Math.sqrt(Math.random());
+    const baseR = r34 * (0.35 + rr * 0.55);
+
+    const along = Math.cos(angle);
+    const across = Math.sin(angle);
+
+    const ellipseX = baseR * along * forwardStretch;
+    const ellipseY = baseR * across * 0.82;
+
+    const dxKm = ellipseX * headingX - ellipseY * headingY + randn() * 2.2;
+
+    const dyKm = ellipseX * headingY + ellipseY * headingX + randn() * 2.2;
+
+    const distance = Math.sqrt(dxKm * dxKm + dyKm * dyKm);
+    const fade = Math.max(0, 1 - distance / (r34 * 1.15));
+
+    const projected = (dxKm * headingX + dyKm * headingY) / Math.max(1, r34);
+
+    const directional = 1 + Math.max(0, projected) * 0.22;
+
+    const weight = (0.08 + Math.random() * 0.1) * fade * directional;
+
+    push(dxKm, dyKm, weight);
+  }
+
+  // --------------------------------------------------------------------------
+  // 6) Outer feeder clouds
+  // --------------------------------------------------------------------------
+  for (let i = 0; i < scalePts(180); i++) {
+    const angle =
+      movementAngle +
+      (Math.random() - 0.5) * 1.8 +
+      (Math.PI / 3) * (Math.random() > 0.5 ? 1 : -1);
+
+    const r = r34 * (0.45 + Math.random() * 0.55);
+    const dxKm = r * Math.cos(angle) + randn() * 2.8;
+    const dyKm = r * Math.sin(angle) + randn() * 2.8;
+
+    const weight = 0.16 + Math.random() * 0.18;
+    push(dxKm, dyKm, weight);
+  }
+
+  // --------------------------------------------------------------------------
+  // 7) Focus-point clusters
+  // --------------------------------------------------------------------------
+  const outerBoundKm = r34;
   focusPoints.forEach((fp) => {
     const fpDxKm = (fp.lon - center.lon) * KM_PER_LON;
     const fpDyKm = (fp.lat - center.lat) * KM_PER_LAT;
     const fpDistKm = Math.sqrt(fpDxKm ** 2 + fpDyKm ** 2);
     if (fpDistKm > outerBoundKm) return;
 
-    const clusterSigmaKm = Math.max(0.5, coreKm * 0.12);
-    for (let i = 0; i < 60; i++) {
-      const dx = randn() * clusterSigmaKm;
-      const dy = randn() * clusterSigmaKm;
+    const sigmaKm = Math.max(0.6, rmw * 0.12);
+    for (let i = 0; i < 32; i++) {
+      const dx = randn() * sigmaKm;
+      const dy = randn() * sigmaKm;
       features.push({
         type: "Feature",
         geometry: {
           type: "Point",
           coordinates: [fp.lon + dx / KM_PER_LON, fp.lat + dy / KM_PER_LAT],
         },
-        properties: { weight: 0.88 + Math.random() * 0.12 },
+        properties: {
+          weight: 0.72 + Math.random() * 0.18,
+        },
       });
     }
   });
 
-  return { type: "FeatureCollection", features };
+  return {
+    type: "FeatureCollection",
+    features,
+  };
 }
+
 
 /**
  * Generates a dense, uniformly-filled flood heatmap.
@@ -620,19 +818,23 @@ const BASELINE_R34_KM = 56;
  * visually distinct; density/overlap creates the intensity gradient.
  */
 function stormHeatmapRadius(r34Km: number) {
-  // Use a power >1 so radius grows faster than linearly as the storm expands,
-  // keeping points overlapping and the heatmap dense at larger scales.
-  const scale = r34Km > 0 ? Math.pow(r34Km / BASELINE_R34_KM, 1.4) : 1;
+  const scale =
+    r34Km > 0
+      ? Math.min(1.45, Math.max(0.8, Math.pow(r34Km / BASELINE_R34_KM, 0.7)))
+      : 1;
+
   return [
     "interpolate",
     ["linear"],
     ["zoom"],
-    0,
-    Math.max(3, Math.round(6 * scale)),
+    4,
+    Math.round(4 * scale),
     5,
-    Math.max(10, Math.round(22 * scale)),
+    Math.round(7 * scale),
+    7,
+    Math.round(12 * scale),
     9,
-    Math.max(16, Math.round(40 * scale)),
+    Math.round(18 * scale),
   ];
 }
 
@@ -647,9 +849,33 @@ function buildStormPaint(r34Km: number) {
       1,
       1,
     ],
-    "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 1, 9, 2],
+    "heatmap-intensity": [
+      "interpolate",
+      ["linear"],
+      ["zoom"],
+      4,
+      0.55,
+      6,
+      0.9,
+      8,
+      1.35,
+      9,
+      1.7,
+    ],
     "heatmap-radius": stormHeatmapRadius(r34Km),
-    "heatmap-opacity": 0.8,
+    "heatmap-opacity": [
+      "interpolate",
+      ["linear"],
+      ["zoom"],
+      4,
+      0.25,
+      5,
+      0.45,
+      7,
+      0.68,
+      9,
+      0.82,
+    ],
   };
 }
 
