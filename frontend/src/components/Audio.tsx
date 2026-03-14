@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect, CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { useDisasterDemo } from "../state/DisasterDemoContext";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -117,6 +118,46 @@ export default function VoiceWidget({ wsUrl = WS_URL, userId = USER_ID }: VoiceW
   const [level, setLevel] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const { currentStepIndex } = useDisasterDemo();
+  const [isMinimized, setIsMinimized] = useState(false);
+  const [portalEl, setPortalEl] = useState<HTMLElement | null>(null);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 640) {
+      setIsMinimized(true);
+    }
+
+    if (typeof document === "undefined") return;
+    const el = document.createElement("div");
+    el.style.position = "fixed";
+    el.style.inset = "auto";
+    el.style.zIndex = "9999";
+    document.body.appendChild(el);
+    setPortalEl(el);
+    requestAnimationFrame(() => setIsVisible(true));
+    return () => {
+      document.body.removeChild(el);
+      setPortalEl(null);
+    };
+  }, []);
+
+  const handleMinimize = () => {
+    setIsVisible(false);
+    setIsMinimized(true);
+  };
+
+  const handleExpand = () => {
+    setIsMinimized(false);
+    requestAnimationFrame(() => setIsVisible(true));
+  };
+
+  useEffect(() => {
+    if (!isMinimized) {
+      requestAnimationFrame(() => setIsVisible(true));
+    } else {
+      setIsVisible(false);
+    }
+  }, [isMinimized]);
 
   const wsRef = useRef<WebSocket | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -351,8 +392,8 @@ export default function VoiceWidget({ wsUrl = WS_URL, userId = USER_ID }: VoiceW
     error: "#E24B4A",
   };
 
-  return (
-    <div style={s.card}>
+  const expanded = (
+    <div style={{ ...s.card, ...(isVisible ? s.cardShow : {}) }}>
       <div style={s.topRow}>
         <div style={s.statusGroup}>
           <span
@@ -382,12 +423,8 @@ export default function VoiceWidget({ wsUrl = WS_URL, userId = USER_ID }: VoiceW
             position: "relative",
           }}
         >
-          {!isRecording && <MicSVG size={14} color="currentColor" />}
-          {isRecording && (
-            <div style={s.waveOverlay}>
-              <WaveSVG active={isRecording} level={level} />
-            </div>
-          )}
+          {!isRecording && <MicSVG size={12} color="currentColor" />}
+          {isRecording && <WaveSVG active={isRecording} level={level} />}
         </button>
 
         <button
@@ -400,6 +437,19 @@ export default function VoiceWidget({ wsUrl = WS_URL, userId = USER_ID }: VoiceW
           }}
         >
           <StopSVG size={12} color="currentColor" />
+        </button>
+
+        <button
+          onClick={handleMinimize}
+          aria-label="Minimize voice controls"
+          style={{
+            ...s.iconBtn,
+            borderColor: "var(--color-border-secondary)",
+            background: "var(--color-background-primary)",
+            color: "var(--color-text-secondary)",
+          }}
+        >
+          ▾
         </button>
       </div>
 
@@ -423,25 +473,79 @@ export default function VoiceWidget({ wsUrl = WS_URL, userId = USER_ID }: VoiceW
       {phase === "error" && <p style={s.errorText}>{errorMsg}</p>}
     </div>
   );
+
+  const minimized = (
+    <button onClick={handleExpand} aria-label="Expand voice controls" style={s.minFab}>
+      <span style={{ fontSize: 14, lineHeight: 1, marginRight: 4 }}>▸</span>
+      <MicSVG size={14} color="currentColor" />
+    </button>
+  );
+  const widget = isMinimized ? minimized : expanded;
+
+  if (portalEl) {
+    return createPortal(widget, portalEl);
+  }
+
+  return widget;
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const s: Record<string, CSSProperties> = {
   card: {
+    position: "fixed",
+    left: "auto",
+    right: 16,
+    bottom: 64,
+    zIndex: 9999,
     border: "0.5px solid var(--color-border-tertiary)",
-    borderRadius: "var(--border-radius-lg)",
-    background: "var(--color-background-primary)",
+    borderRadius: 18,
+    background: "#ffffff",
     padding: "12px 14px",
     display: "flex",
     flexDirection: "column",
     gap: 10,
-    maxWidth: 420,
+    maxWidth: 260,
+    width: "min(260px, calc(100vw - 32px))",
+    boxShadow: "0 12px 32px rgba(0,0,0,0.14)",
     fontFamily: "var(--font-sans)",
+    opacity: 0,
+    transform: "translateY(8px)",
+    transition: "opacity 0.18s ease, transform 0.18s ease",
+  },
+  cardShow: {
+    opacity: 1,
+    transform: "translateY(0)",
+  },
+  cardMinimized: {
+    padding: "8px 10px",
+    width: 68,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  minFab: {
+    position: "fixed",
+    right: 16,
+    bottom: 64,
+    zIndex: 9999,
+    width: 54,
+    height: 42,
+    borderRadius: 16,
+    border: "1px solid var(--color-border-info)",
+    background: "#ffffff",
+    color: "#1f1f1f",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    boxShadow: "0 10px 28px rgba(0,0,0,0.16)",
+    cursor: "pointer",
+    gap: 6,
+    transition: "opacity 0.15s ease, transform 0.18s ease",
   },
   topRow: {
     display: "flex",
     alignItems: "center",
-    gap: 10,
+    gap: 8,
   },
   statusGroup: {
     display: "flex",
@@ -531,3 +635,6 @@ const s: Record<string, CSSProperties> = {
     color: "var(--color-text-danger)",
   },
 };
+
+
+
