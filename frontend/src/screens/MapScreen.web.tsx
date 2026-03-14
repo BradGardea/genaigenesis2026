@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { Pressable, Text, TextInput, View } from "react-native";
@@ -14,6 +14,8 @@ import {
   reportHazard,
 } from "../services/api";
 import { ReportHazardModal } from "../components/ReportHazardModal";
+import { SimulationPanel, type DisasterBbox } from "../components/SimulationPanel";
+import { useSimulation } from "../hooks/useSimulation";
 import { useDisasterDemo } from "../state/DisasterDemoContext";
 
 interface MapScreenProps {
@@ -35,6 +37,11 @@ const WEATHER_ALERT_OUTLINE = "weather-alerts-outline";
 const CITY_STATE_SOURCE = "city-state-impacts";
 const CITY_STATE_LAYER = "city-state-impacts-circle";
 const CITY_STATE_LABEL_LAYER = "city-state-impacts-label";
+const SIM_ROUTES_SOURCE = "sim-routes";
+const SIM_ROUTES_LAYER = "sim-routes-line";
+const SIM_AGENTS_SOURCE = "sim-agents";
+const SIM_AGENTS_LAYER = "sim-agents-circle";
+const SIM_AGENTS_LABEL_LAYER = "sim-agents-label";
 
 const DEFAULT_CENTER: [number, number] = [29.222, -1.679];
 const DEFAULT_ROUTE_ORIGIN: Coordinate = { lat: -1.661392, lng: 29.174324 };
@@ -298,6 +305,40 @@ export function MapScreen({ theme }: MapScreenProps) {
 
   const [followCamera, setFollowCamera] = useState(true);
   const routeRef = useRef<RouteResponse | null>(null);
+
+  // ── Simulation ─────────────────────────────────────────────────────────────
+  const {
+    simState,
+    agents: simAgents,
+    metrics: simMetrics,
+    currentTick: simTick,
+    maxTicks: simMaxTicks,
+    createAndStart: simCreateAndStart,
+    stop: simStop,
+    error: simError,
+  } = useSimulation();
+
+  // Derive bbox from current disaster step's city-state impact areas
+  const disasterBbox = useMemo(() => {
+    const areas = extractCityStateAreas(currentStep.cityStateRaw);
+    if (areas.length === 0) return null;
+    let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+    for (const a of areas) {
+      minLat = Math.min(minLat, a.lat);
+      maxLat = Math.max(maxLat, a.lat);
+      minLng = Math.min(minLng, a.lon);
+      maxLng = Math.max(maxLng, a.lon);
+    }
+    // Pad by ~500m so agents don't spawn exactly on the edge
+    const PAD = 0.005;
+    return {
+      minLat: minLat - PAD,
+      maxLat: maxLat + PAD,
+      minLng: minLng - PAD,
+      maxLng: maxLng + PAD,
+    };
+  }, [currentStep.cityStateRaw]);
+
   useEffect(() => {
     routeRef.current = route;
   }, [route]);
@@ -344,6 +385,55 @@ export function MapScreen({ theme }: MapScreenProps) {
     const interval = setInterval(fetchHazards, 10_000);
     return () => clearInterval(interval);
   }, [fetchHazards]);
+
+  // ── Simulation agent layer update ─────────────────────────────────────────
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const source = map.getSource(SIM_AGENTS_SOURCE) as mapboxgl.GeoJSONSource | undefined;
+    if (!source) return;
+    const features = simAgents.map((agent) => ({
+      type: "Feature" as const,
+      geometry: { type: "Point" as const, coordinates: [agent.lng, agent.lat] },
+      properties: {
+        agent_id: agent.agent_id,
+        state: agent.state,
+        progress: agent.progress,
+        family_size: agent.family_size,
+        vehicles: agent.vehicles,
+        last_action: agent.last_decision?.action ?? null,
+        label: agent.agent_id.replace("agent-", "#"),
+      },
+    }));
+    source.setData({ type: "FeatureCollection", features });
+  }, [simAgents, mapReadyVersion]);
+
+  // ── Simulation agent route polylines update ─────────────────────────────
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const source = map.getSource(SIM_ROUTES_SOURCE) as mapboxgl.GeoJSONSource | undefined;
+    if (!source) return;
+    const features = simAgents
+      .filter((a) => a.route_geometry && a.route_geometry.length >= 2)
+      .map((agent) => ({
+        type: "Feature" as const,
+        geometry: { type: "LineString" as const, coordinates: agent.route_geometry! },
+        properties: { agent_id: agent.agent_id, state: agent.state },
+      }));
+    source.setData({ type: "FeatureCollection", features });
+  }, [simAgents, mapReadyVersion]);
+
+  // Fly to simulation area when simulation starts
+  useEffect(() => {
+    if (simState !== "running") return;
+    const map = mapRef.current;
+    if (!map) return;
+    const center: [number, number] = disasterBbox
+      ? [(disasterBbox.minLng + disasterBbox.maxLng) / 2, (disasterBbox.minLat + disasterBbox.maxLat) / 2]
+      : [-118.275, 34.05];
+    map.flyTo({ center, zoom: 11, duration: 1500 });
+  }, [simState, disasterBbox]);
 
   // â”€â”€ Map init â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
@@ -591,6 +681,99 @@ export function MapScreen({ theme }: MapScreenProps) {
           } as any,
           layout: { visibility: "none" },
         } as any);
+
+        // ── Simulation agent route polylines ─────────────────────
+        map.addSource(SIM_ROUTES_SOURCE, {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+        map.addLayer({
+          id: SIM_ROUTES_LAYER,
+          type: "line",
+          source: SIM_ROUTES_SOURCE,
+          paint: {
+            "line-color": [
+              "match", ["get", "state"],
+              "evacuating", "#60A5FA",
+              "planning",   "#FBBF24",
+              "arrived",    "#34D399",
+              "sheltering", "#FB923C",
+              "#94A3B8",
+            ],
+            "line-width": 3,
+            "line-opacity": 0.7,
+          },
+          layout: {
+            "line-cap": "round",
+            "line-join": "round",
+          },
+        });
+
+        // ── Simulation agents layer ────────────────────────────
+        map.addSource(SIM_AGENTS_SOURCE, {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+        map.addLayer({
+          id: SIM_AGENTS_LAYER,
+          type: "circle",
+          source: SIM_AGENTS_SOURCE,
+          paint: {
+            "circle-radius": [
+              "interpolate", ["linear"], ["zoom"],
+              8, 5,
+              14, 10,
+            ],
+            "circle-color": [
+              "match", ["get", "state"],
+              "idle",       "#94A3B8",
+              "planning",   "#FBBF24",
+              "evacuating", "#60A5FA",
+              "arrived",    "#34D399",
+              "sheltering", "#FB923C",
+              "#94A3B8",
+            ],
+            "circle-stroke-color": "#0f172a",
+            "circle-stroke-width": 1.5,
+            "circle-opacity": 0.95,
+          },
+        });
+        map.addLayer({
+          id: SIM_AGENTS_LABEL_LAYER,
+          type: "symbol",
+          source: SIM_AGENTS_SOURCE,
+          layout: {
+            "text-field": ["get", "label"],
+            "text-size": 9,
+            "text-offset": [0, 1.4],
+            "text-allow-overlap": false,
+            "text-ignore-placement": false,
+          },
+          paint: {
+            "text-color": "#f8fafc",
+            "text-halo-color": "#0f172a",
+            "text-halo-width": 1,
+          },
+        });
+        map.on("click", SIM_AGENTS_LAYER, (e) => {
+          if (!e.features?.length) return;
+          const p = e.features[0].properties ?? {};
+          const html = [
+            '<div style="font-family:system-ui;font-size:12px;line-height:1.5;">',
+            `<strong>${p.agent_id ?? "Agent"}</strong><br/>`,
+            `State: <span style="text-transform:capitalize;">${p.state ?? "?"}</span><br/>`,
+            `Progress: ${Math.round((p.progress ?? 0) * 100)}%<br/>`,
+            `Family: ${p.family_size ?? 1} · Vehicles: ${p.vehicles ?? 1}`,
+            p.last_decision ? `<br/>Decision: <em>${p.last_action ?? ""}</em>` : "",
+            "</div>",
+          ].join("");
+          new mapboxgl.Popup({ offset: 10, maxWidth: "220px" })
+            .setLngLat(e.lngLat)
+            .setHTML(html)
+            .addTo(map);
+        });
+        map.on("mouseenter", SIM_AGENTS_LAYER, () => { map.getCanvas().style.cursor = "pointer"; });
+        map.on("mouseleave", SIM_AGENTS_LAYER, () => { map.getCanvas().style.cursor = ""; });
 
         // Click handler for weather alert popups
         map.on("click", WEATHER_ALERT_FILL, (e) => {
@@ -1319,7 +1502,7 @@ export function MapScreen({ theme }: MapScreenProps) {
         ) : null}
 
         {/* â”€â”€ Map container â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-        <View className="flex-1" style={{ minHeight: 400, position: "relative" as any }}>
+        <View className="flex-1" style={{ minHeight: 400, position: "relative" as any, display: "flex" as any, flexDirection: "column" as any }}>
           <View
             style={{
               position: "absolute" as any,
@@ -1391,6 +1574,30 @@ export function MapScreen({ theme }: MapScreenProps) {
               </View>
             </View>
           )}
+          {/* Simulation panel — bottom-left */}
+          {MAPBOX_PUBLIC_TOKEN && !mapError && (
+            <View
+              style={{
+                position: "absolute" as any,
+                bottom: 32,
+                left: 10,
+                zIndex: 11,
+              }}
+            >
+              <SimulationPanel
+                theme={theme}
+                simState={simState as any}
+                agents={simAgents}
+                metrics={simMetrics}
+                currentTick={simTick}
+                maxTicks={simMaxTicks}
+                error={simError}
+                onStart={simCreateAndStart}
+                onStop={simStop}
+                disasterBbox={disasterBbox}
+              />
+            </View>
+          )}
           {mapError ? (
             <View className={`flex-1 items-center justify-center px-4 ${isDark ? "bg-slate-800" : "bg-slate-50"}`}>
               <Text className={`mb-2 text-center text-sm font-medium ${isDark ? "text-red-400" : "text-red-600"}`}>
@@ -1404,8 +1611,11 @@ export function MapScreen({ theme }: MapScreenProps) {
             <div
               ref={containerRef}
               style={{
-                width: "100%",
-                height: "100%",
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
                 minHeight: 400,
                 cursor: mapClickMode ? "crosshair" : undefined,
               }}
