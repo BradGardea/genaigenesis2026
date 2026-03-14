@@ -208,6 +208,57 @@ def _place_corridor_point(
     )
 
 
+def _place_southeast_point(rnd: random.Random, intensity: float) -> tuple[float, float]:
+    base_lat, base_lon = _offset_lat_lon(
+        CITY_CENTER[0],
+        CITY_CENTER[1],
+        rnd.uniform(1200, 4200),
+        rnd.uniform(-3200, -700),
+    )
+    return _offset_lat_lon(
+        base_lat,
+        base_lon,
+        rnd.uniform(-600, 600) * (0.6 + 0.4 * intensity),
+        rnd.uniform(-600, 600) * (0.6 + 0.4 * intensity),
+    )
+
+
+def _compress_into_high_danger(events: list[dict[str, Any]], impact_type: str) -> list[dict[str, Any]]:
+    highs = [
+        e
+        for e in events
+        if e.get("impact_type") == impact_type and str(e.get("danger_to_remain", "")).lower() in {"high", "extreme"}
+    ]
+    if not highs:
+        return events
+
+    lows = [
+        e
+        for e in events
+        if e.get("impact_type") == impact_type and str(e.get("danger_to_remain", "")).lower() not in {"high", "extreme"}
+    ]
+    absorbed_ids: set[int] = set()
+    for high in highs:
+        center_lat = float(high["lat"])
+        center_lon = float(high["lon"])
+        radius_m = float(high["radius_m"])
+        absorbed = 0
+        for low in lows:
+            low_id = id(low)
+            if low_id in absorbed_ids:
+                continue
+            if _distance_m(center_lat, center_lon, float(low["lat"]), float(low["lon"])) <= radius_m:
+                absorbed_ids.add(low_id)
+                absorbed += 1
+        if absorbed > 0:
+            high["radius_m"] = int(_clamp(radius_m + math.sqrt(absorbed) * 70, 100, 1800))
+            high["severity"] = int(_clamp(int(high["severity"]) + min(absorbed, 8), 5, 100))
+            high["danger_to_remain"] = _danger_from_severity(int(high["severity"]))
+            high["status"] = "merged_cluster"
+
+    return [e for e in events if id(e) not in absorbed_ids]
+
+
 def _ensure_spatial_separation(
     areas: list[dict[str, Any]], rnd: random.Random, min_distance_m: float = 90
 ) -> list[dict[str, Any]]:
@@ -344,9 +395,11 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
     events: list[dict[str, Any]] = []
 
     # 1) Base layer: high wind pockets.
-    wind_count = 3 + int(3 * intensity)
+    wind_count = 2 + int(2 * intensity)
     for _ in range(wind_count):
-        if anchors and rnd.random() < 0.5:
+        if rnd.random() < 0.28:
+            lat, lon = _place_southeast_point(rnd, intensity)
+        elif anchors and rnd.random() < 0.45:
             base_lat, base_lon = rnd.choice(anchors)
             lat, lon = _offset_lat_lon(base_lat, base_lon, rnd.uniform(-700, 700), rnd.uniform(-700, 700))
         else:
@@ -356,16 +409,19 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
                 lat=lat,
                 lon=lon,
                 impact_type="high_wind",
-                severity=int(52 + 30 * intensity + rnd.randint(-8, 10)),
-                radius_m=int(220 + 260 * intensity + rnd.randint(-40, 90)),
+                severity=int(50 + 24 * intensity + rnd.randint(-8, 8)),
+                radius_m=int(190 + 220 * intensity + rnd.randint(-35, 85)),
                 status=_status_label(progress, rnd),
             )
         )
 
     # 2) Base layer: flooding from sustained rainfall + runoff.
-    flood_count = 2 + int(4 * intensity)
+    flood_count = 2 + int(2 * intensity)
     for _ in range(flood_count):
-        lat, lon = _place_corridor_point(progress, intensity, forward, lateral, rnd)
+        if rnd.random() < 0.3:
+            lat, lon = _place_southeast_point(rnd, intensity)
+        else:
+            lat, lon = _place_corridor_point(progress, intensity, forward, lateral, rnd)
         near_wind = min(
             (
                 _distance_m(lat, lon, float(w["lat"]), float(w["lon"]))
@@ -380,8 +436,8 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
                 lat=lat,
                 lon=lon,
                 impact_type="flooding",
-                severity=int(48 + 26 * intensity + flood_boost + rnd.randint(-8, 12)),
-                radius_m=int(200 + 320 * intensity + rnd.randint(-30, 120)),
+                severity=int(46 + 21 * intensity + flood_boost + rnd.randint(-8, 10)),
+                radius_m=int(180 + 250 * intensity + rnd.randint(-25, 110)),
                 status=_status_label(progress, rnd),
             )
         )
@@ -398,7 +454,7 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
         ]
         if not close_wind:
             continue
-        if rnd.random() > 0.58:
+        if rnd.random() > 0.72:
             continue
 
         impact_type = "structure_damage" if rnd.random() < 0.35 else "debris"
@@ -418,9 +474,9 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
 
     secondary = [e for e in events if e["impact_type"] in {"debris", "structure_damage"}]
 
-    # 4) Powerline failure requires structural/debris damage (or exceptional wind).
+    # 4) Powerline failure requires structural/debris damage.
     for src in secondary:
-        if rnd.random() > 0.72:
+        if rnd.random() > 0.82:
             continue
         angle = rnd.uniform(0, 2 * math.pi)
         dist = rnd.uniform(90, 260)
@@ -441,7 +497,7 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
     closure_sources = [e for e in events if e["impact_type"] == "flooding" and int(e["severity"]) >= 76]
     closure_sources.extend([e for e in events if e["impact_type"] in {"debris", "structure_damage"}])
     for src in closure_sources:
-        chance = 0.62 if src["impact_type"] == "flooding" else 0.35
+        chance = 0.45 if src["impact_type"] == "flooding" else 0.22
         if rnd.random() > chance:
             continue
         angle = rnd.uniform(0, 2 * math.pi)
@@ -458,13 +514,17 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
             )
         )
 
+    events = _compress_into_high_danger(events, "flooding")
+    events = _compress_into_high_danger(events, "high_wind")
+    events = _compress_into_high_danger(events, "road_closure")
+
     # 6) Merge dense, overlapping low-danger flood/wind pockets into larger cohesive hazards.
     events, merged_floods = _cluster_dense_overlaps(events, impact_type="flooding", min_cluster_size=10)
     events, merged_winds = _cluster_dense_overlaps(events, impact_type="high_wind", min_cluster_size=10)
 
     # Keep the simulation difficult but solvable.
     events = _ensure_spatial_separation(events, rnd, min_distance_m=95)
-    max_events = 16 + int(8 * intensity)
+    max_events = 12 + int(5 * intensity)
     city_state["affected_areas"] = events[:max_events]
 
     _recompute_metadata(

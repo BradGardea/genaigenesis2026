@@ -80,6 +80,7 @@ interface CityStateArea {
 function toHazardType(impactType: string, severity: number): string | null {
   if (impactType === "road_closure") return "roadblock";
   if (impactType === "flooding" && severity >= 74) return "flood";
+  if (impactType === "high_wind" && severity >= 82) return "wind";
   if (impactType === "structure_damage" && severity >= 88) return "roadblock";
   return null;
 }
@@ -116,6 +117,51 @@ function extractCityStateAreas(raw: Record<string, unknown> | undefined): CitySt
       );
     })
     .slice(0, 200);
+}
+
+function isHighDanger(area: CityStateArea): boolean {
+  return (
+    area.impact_type === "road_closure" ||
+    area.danger_to_remain === "high" ||
+    area.danger_to_remain === "extreme"
+  );
+}
+
+function approxDistanceMeters(a: CityStateArea, b: CityStateArea): number {
+  const dy = (a.lat - b.lat) * 111_320;
+  const dx = (a.lon - b.lon) * 111_320 * Math.cos(((a.lat + b.lat) / 2) * Math.PI / 180);
+  return Math.hypot(dx, dy);
+}
+
+function compressIntoHighDangerZones(areas: CityStateArea[]): CityStateArea[] {
+  const cloned = areas.map((a) => ({ ...a }));
+  const absorbed = new Set<number>();
+
+  for (let i = 0; i < cloned.length; i++) {
+    const high = cloned[i];
+    if (!isHighDanger(high)) continue;
+    let mergedCount = 0;
+
+    for (let j = 0; j < cloned.length; j++) {
+      if (i === j || absorbed.has(j)) continue;
+      const low = cloned[j];
+      if (high.impact_type !== low.impact_type) continue;
+      if (isHighDanger(low)) continue;
+      if (approxDistanceMeters(high, low) > high.radius_m) continue;
+
+      absorbed.add(j);
+      mergedCount += 1;
+    }
+
+    if (mergedCount > 0) {
+      high.radius_m = Math.min(2500, Math.round(high.radius_m + Math.sqrt(mergedCount) * 80));
+      high.severity = Math.min(100, high.severity + Math.min(mergedCount, 8));
+      high.danger_to_remain = "high";
+      high.status = "merged_cluster";
+    }
+  }
+
+  return cloned.filter((_, idx) => !absorbed.has(idx));
 }
 
 const CAR_MARKER_CSS_ID = "crisisnet-car-marker-css";
@@ -289,13 +335,40 @@ export function MapScreen({ theme }: MapScreenProps) {
           id: HAZARD_FILL_LAYER,
           type: "fill",
           source: HAZARD_SOURCE,
-          paint: { "fill-color": "#ef4444", "fill-opacity": 0.25 },
+          paint: {
+            "fill-color": [
+              "match",
+              ["get", "hazard_type"],
+              "flood",
+              "#2563eb",
+              "wind",
+              "#6b7280",
+              "roadblock",
+              "#ef4444",
+              "#ef4444",
+            ],
+            "fill-opacity": 0.25,
+          },
         });
         map.addLayer({
           id: HAZARD_OUTLINE_LAYER,
           type: "line",
           source: HAZARD_SOURCE,
-          paint: { "line-color": "#ef4444", "line-width": 2, "line-dasharray": [2, 2] },
+          paint: {
+            "line-color": [
+              "match",
+              ["get", "hazard_type"],
+              "flood",
+              "#2563eb",
+              "wind",
+              "#6b7280",
+              "roadblock",
+              "#ef4444",
+              "#ef4444",
+            ],
+            "line-width": 2,
+            "line-dasharray": [2, 2],
+          },
         });
 
         map.addSource(CITY_STATE_SOURCE, {
@@ -713,6 +786,9 @@ export function MapScreen({ theme }: MapScreenProps) {
   }, [mapReadyVersion, stepHistory]);
 
   const lastSyncedStepRef = useRef<number | null>(null);
+  const syncedHazardsRef = useRef<
+    Map<string, { hazardId: string; lastSeenStep: number; persistent: boolean }>
+  >(new Map());
   useEffect(() => {
     if (lastSyncedStepRef.current === currentStepIndex) {
       return;
@@ -722,13 +798,15 @@ export function MapScreen({ theme }: MapScreenProps) {
     let cancelled = false;
 
     async function syncCityStateHazards() {
-      const stepAreas = extractCityStateAreas(currentStep.cityStateRaw);
+      const stepAreas = compressIntoHighDangerZones(extractCityStateAreas(currentStep.cityStateRaw));
+      const PERSIST_STEPS = 7;
+      const keyFor = (hazardType: string, lat: number, lon: number) =>
+        `${hazardType}:${Math.round(lat * 350) / 350}:${Math.round(lon * 350) / 350}`;
 
       try {
-        const active = await getActiveHazards();
-        await Promise.all(
-          active.map((hazard) => deactivateHazard(hazard.hazard_id).catch(() => undefined))
-        );
+        const tracked = syncedHazardsRef.current;
+        const desired = new Set<string>();
+        let changed = false;
 
         for (const area of stepAreas) {
           if (cancelled) return;
@@ -736,16 +814,44 @@ export function MapScreen({ theme }: MapScreenProps) {
           if (!hazardType) {
             continue;
           }
-          await reportHazard(
+          const key = keyFor(hazardType, area.lat, area.lon);
+          desired.add(key);
+          const persistent = isHighDanger(area);
+          const existing = tracked.get(key);
+          if (existing) {
+            existing.lastSeenStep = currentStepIndex;
+            existing.persistent = existing.persistent || persistent;
+            continue;
+          }
+          const created = await reportHazard(
             hazardType,
             { lat: area.lat, lng: area.lon },
             "step " + (currentStepIndex + 1) + ": " + area.impact_type,
-            Math.max(30, area.radius_m)
+            Math.max(40, area.radius_m)
           );
+          tracked.set(key, {
+            hazardId: created.hazard_id,
+            lastSeenStep: currentStepIndex,
+            persistent,
+          });
+          changed = true;
         }
 
-        await fetchHazards();
-        if (!cancelled && routeRef.current) {
+        for (const [key, entry] of Array.from(tracked.entries())) {
+          if (cancelled) return;
+          if (desired.has(key)) continue;
+          if (entry.persistent && (currentStepIndex - entry.lastSeenStep) <= PERSIST_STEPS) {
+            continue;
+          }
+          await deactivateHazard(entry.hazardId).catch(() => undefined);
+          tracked.delete(key);
+          changed = true;
+        }
+
+        if (changed) {
+          await fetchHazards();
+        }
+        if (!cancelled && changed && routeRef.current) {
           refetch();
         }
       } catch {
