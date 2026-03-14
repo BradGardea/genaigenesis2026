@@ -4,6 +4,7 @@ import {
   InfoBubble,
   SavedInformation,
   UserConnection,
+  WeatherStepResponse,
   WeatherUpdate
 } from "./types";
 
@@ -50,4 +51,14 @@ export async function fetchSavedInformation(): Promise<SavedInformation[]> {
 
 export async function fetchWeatherUpdates(): Promise<WeatherUpdate[]> {
   return fetchJson<WeatherUpdate[]>("/information/weather");
+}
+
+export async function fetchWeatherCurrentStep(step: number): Promise<WeatherStepResponse> {
+  return fetchJson<WeatherStepResponse>(`/information/weather/current-step?step=${step}`);
+}
+
+export async function fetchWeatherNextStep(currStep: number): Promise<WeatherStepResponse> {
+  return fetchJson<WeatherStepResponse>(
+    `/information/weather/next-step?curr_step=${currStep}`
+  );
 }

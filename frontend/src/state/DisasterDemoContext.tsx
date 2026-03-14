@@ -1,6 +1,10 @@
-import { createContext, ReactNode, useContext, useMemo, useState } from "react";
+import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
+import {
+  fetchWeatherCurrentStep,
+  fetchWeatherNextStep,
+} from "../data/api";
 import { disasterStepsMock } from "../data/mock/disasterSteps";
-import { URGENCY_WEIGHT } from "../data/types";
+import { URGENCY_WEIGHT, WeatherDatasetMetadata, WeatherStepResponse } from "../data/types";
 
 interface DisasterDemoContextValue {
   currentStepIndex: number;
@@ -10,12 +14,34 @@ interface DisasterDemoContextValue {
   unreadBySection: (typeof disasterStepsMock)[number]["updateSummary"];
   unreadUpdates: number;
   isFinalStep: boolean;
+  isStepping: boolean;
+  weatherDatasetMetadata: WeatherDatasetMetadata | null;
   latestHighRiskAlert: { stepIndex: number; title: string; urgency: string } | null;
-  stepDisaster: () => void;
+  stepDisaster: () => Promise<void>;
   markSectionSeen: (section: keyof (typeof disasterStepsMock)[number]["updateSummary"]) => void;
 }
 
 const DisasterDemoContext = createContext<DisasterDemoContextValue | undefined>(undefined);
+
+function applyWeatherPayloadToStep(
+  step: (typeof disasterStepsMock)[number],
+  weatherPayload: WeatherStepResponse
+): (typeof disasterStepsMock)[number] {
+  const weatherUpdatedAt = weatherPayload.step.step_time;
+  return {
+    ...step,
+    weather: weatherPayload.beautified.map((item) => ({ ...item, updatedAt: weatherUpdatedAt })),
+    sectionUpdatedAt: {
+      ...step.sectionUpdatedAt,
+      weather: weatherUpdatedAt,
+    },
+    updateSummary: {
+      ...step.updateSummary,
+      weather: weatherPayload.beautified.length,
+    },
+    simulatedAt: weatherUpdatedAt,
+  };
+}
 
 export function DisasterDemoProvider({ children }: { children: ReactNode }) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -34,10 +60,42 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
     title: string;
     urgency: string;
   } | null>(null);
-
-  const currentStep = disasterStepsMock[currentStepIndex];
+  const [isStepping, setIsStepping] = useState(false);
+  const [weatherDatasetMetadata, setWeatherDatasetMetadata] = useState<WeatherDatasetMetadata | null>(null);
+  const currentStep = stepHistory[stepHistory.length - 1]?.step ?? disasterStepsMock[0];
   const isFinalStep = currentStepIndex >= disasterStepsMock.length - 1;
   const unreadUpdates = Object.values(unreadBySection).reduce((sum, count) => sum + count, 0);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadInitialWeatherStep() {
+      try {
+        const payload = await fetchWeatherCurrentStep(0);
+        if (cancelled) {
+          return;
+        }
+
+        setWeatherDatasetMetadata(payload.metadata);
+        setStepHistory((previous) => {
+          if (previous.length === 0) {
+            return previous;
+          }
+          const initial = previous[0];
+          const updatedInitialStep = applyWeatherPayloadToStep(initial.step, payload);
+          return [{ stepIndex: 0, step: updatedInitialStep }, ...previous.slice(1)];
+        });
+      } catch {
+        // Keep local weather mock when backend dataset endpoint is unavailable.
+      }
+    }
+
+    void loadInitialWeatherStep();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const value = useMemo<DisasterDemoContextValue>(
     () => ({
@@ -48,50 +106,74 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
       unreadBySection,
       unreadUpdates,
       isFinalStep,
+      isStepping,
+      weatherDatasetMetadata,
       latestHighRiskAlert,
-      stepDisaster: () => {
-        setCurrentStepIndex((previousIndex) => {
-          const nextIndex = Math.min(previousIndex + 1, disasterStepsMock.length - 1);
+      stepDisaster: async () => {
+        if (isStepping) {
+          return;
+        }
 
-          if (nextIndex !== previousIndex) {
-            const nextStep = disasterStepsMock[nextIndex];
-            setStepHistory((previousHistory) => [...previousHistory, { stepIndex: nextIndex, step: nextStep }]);
-            setUnreadBySection((previousUnread) => ({
-              alerts: previousUnread.alerts + nextStep.updateSummary.alerts,
-              evacuationPlans: previousUnread.evacuationPlans + nextStep.updateSummary.evacuationPlans,
-              connections: previousUnread.connections + nextStep.updateSummary.connections,
-              savedInformation: previousUnread.savedInformation + nextStep.updateSummary.savedInformation,
-              weather: previousUnread.weather + nextStep.updateSummary.weather
-            }));
+        const nextIndex = Math.min(currentStepIndex + 1, disasterStepsMock.length - 1);
+        if (nextIndex === currentStepIndex) {
+          return;
+        }
 
-            const topHighRiskAlert = [...nextStep.alerts]
-              .sort((left, right) => URGENCY_WEIGHT[right.urgency] - URGENCY_WEIGHT[left.urgency])
-              .find((alert) => URGENCY_WEIGHT[alert.urgency] > URGENCY_WEIGHT.warning);
+        setIsStepping(true);
+        const baseNextStep = disasterStepsMock[nextIndex];
+        let resolvedNextStep = { ...baseNextStep };
 
-            if (topHighRiskAlert) {
-              setLatestHighRiskAlert({
-                stepIndex: nextIndex,
-                title: topHighRiskAlert.title,
-                urgency: topHighRiskAlert.urgency
-              });
-            }
-          }
+        try {
+          const weatherPayload = await fetchWeatherNextStep(currentStepIndex);
+          setWeatherDatasetMetadata(weatherPayload.metadata);
+          resolvedNextStep = applyWeatherPayloadToStep(baseNextStep, weatherPayload);
+        } catch {
+          resolvedNextStep = { ...baseNextStep };
+        } finally {
+          setIsStepping(false);
+        }
 
-          return nextIndex;
-        });
+        setCurrentStepIndex(nextIndex);
+        setStepHistory((previousHistory) => [
+          ...previousHistory,
+          { stepIndex: nextIndex, step: resolvedNextStep },
+        ]);
+        setUnreadBySection((previousUnread) => ({
+          alerts: previousUnread.alerts + resolvedNextStep.updateSummary.alerts,
+          evacuationPlans:
+            previousUnread.evacuationPlans + resolvedNextStep.updateSummary.evacuationPlans,
+          connections: previousUnread.connections + resolvedNextStep.updateSummary.connections,
+          savedInformation:
+            previousUnread.savedInformation + resolvedNextStep.updateSummary.savedInformation,
+          weather: previousUnread.weather + resolvedNextStep.updateSummary.weather,
+        }));
+
+        const topHighRiskAlert = [...resolvedNextStep.alerts]
+          .sort((left, right) => URGENCY_WEIGHT[right.urgency] - URGENCY_WEIGHT[left.urgency])
+          .find((alert) => URGENCY_WEIGHT[alert.urgency] > URGENCY_WEIGHT.warning);
+
+        if (topHighRiskAlert) {
+          setLatestHighRiskAlert({
+            stepIndex: nextIndex,
+            title: topHighRiskAlert.title,
+            urgency: topHighRiskAlert.urgency,
+          });
+        }
       },
       markSectionSeen: (section) => {
         setUnreadBySection((previousUnread) => ({ ...previousUnread, [section]: 0 }));
-      }
+      },
     }),
     [
       currentStep,
       currentStepIndex,
+      isStepping,
       isFinalStep,
       latestHighRiskAlert,
       stepHistory,
+      weatherDatasetMetadata,
       unreadBySection,
-      unreadUpdates
+      unreadUpdates,
     ]
   );
 
