@@ -1,0 +1,2689 @@
+{
+  "dataset_name": "goma_community_relationships_mock",
+  "version": "2.0",
+  "generated_at": "2026-03-14T23:19:28+00:00",
+  "scenario_note": "Algorithmically generated many-to-many social connections for evacuation and carpool planning near Goma, DR Congo, using American-style names.",
+  "scenario": "Severe storm evacuation support network",
+  "location": {
+    "name": "Goma, DR Congo",
+    "latitude": -1.679,
+    "longitude": 29.222,
+    "timezone": "Africa/Lubumbashi"
+  },
+  "schema_alignment": {
+    "person_schema_base": "PersonWithConnections / PersonConnectionsResponse",
+    "relationship_types": [
+      "dependent",
+      "guardian",
+      "friend",
+      "acquaintance"
+    ],
+    "position_format": "tuple [longitude, latitude] in decimal degrees"
+  },
+  "persons": [
+    {
+      "person_id": "p-001",
+      "name": "Joseph Johnson",
+      "seats_available": 4,
+      "scenario": "Volcanic ash avoidance and mutual aid",
+      "current_position": [
+        29.208161,
+        -1.667176
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-019",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-012",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-052",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-046",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-047",
+          "relationship": "dependent"
+        }
+      ]
+    },
+    {
+      "person_id": "p-002",
+      "name": "Barbara Nguyen",
+      "seats_available": 2,
+      "scenario": "Severe storm evacuation support network",
+      "current_position": [
+        29.201685,
+        -1.692367
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-023",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-019",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-057",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-006",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-051",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-059",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-012",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-013",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-018",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-003",
+      "name": "Patricia Scott",
+      "seats_available": 1,
+      "scenario": "Wildfire smoke relocation carpool",
+      "current_position": [
+        29.217976,
+        -1.68154
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-048",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-052",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-022",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-029",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-040",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-030",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-043",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-004",
+      "name": "Emily Phillips",
+      "seats_available": 5,
+      "scenario": "Volcanic ash avoidance and mutual aid",
+      "current_position": [
+        29.231907,
+        -1.686987
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-048",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-059",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-021",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-042",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-056",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-005",
+      "name": "Karen Wilson",
+      "seats_available": 6,
+      "scenario": "Flooded roads rideshare coordination",
+      "current_position": [
+        29.202111,
+        -1.685004
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-041",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-038",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-021",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-027",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-010",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-015",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-054",
+          "relationship": "dependent"
+        }
+      ]
+    },
+    {
+      "person_id": "p-006",
+      "name": "Melissa Diaz",
+      "seats_available": 2,
+      "scenario": "Flooded roads rideshare coordination",
+      "current_position": [
+        29.237356,
+        -1.667513
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-020",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-034",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-044",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-025",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-032",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-048",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-007",
+      "name": "Jessica Morales",
+      "seats_available": 6,
+      "scenario": "Severe storm evacuation support network",
+      "current_position": [
+        29.224602,
+        -1.66253
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-041",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-056",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-051",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-005",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-031",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-028",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-032",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-034",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-040",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-046",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-008",
+      "name": "George Torres",
+      "seats_available": 1,
+      "scenario": "Severe storm evacuation support network",
+      "current_position": [
+        29.199291,
+        -1.692605
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-037",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-017",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-060",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-028",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-051",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-052",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-009",
+      "name": "Donna Garcia",
+      "seats_available": 5,
+      "scenario": "Severe storm evacuation support network",
+      "current_position": [
+        29.216006,
+        -1.681329
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-029",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-055",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-037",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-030",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-012",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-049",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-032",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-036",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-050",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-010",
+      "name": "George Hernandez",
+      "seats_available": 2,
+      "scenario": "Volcanic ash avoidance and mutual aid",
+      "current_position": [
+        29.230509,
+        -1.668909
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-005",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-028",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-023",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-036",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-016",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-037",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-047",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-048",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-056",
+          "relationship": "guardian"
+        }
+      ]
+    },
+    {
+      "person_id": "p-011",
+      "name": "Elizabeth Hill",
+      "seats_available": 3,
+      "scenario": "Wildfire smoke relocation carpool",
+      "current_position": [
+        29.233456,
+        -1.69583
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-036",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-049",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-059",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-060",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-053",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-040",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-048",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-012",
+      "name": "Timothy Moore",
+      "seats_available": 7,
+      "scenario": "Wildfire smoke relocation carpool",
+      "current_position": [
+        29.207981,
+        -1.687786
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-001",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-009",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-038",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-044",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-002",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-006",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-043",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-029",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-009",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-016",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-017",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-053",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-058",
+          "relationship": "dependent"
+        }
+      ]
+    },
+    {
+      "person_id": "p-013",
+      "name": "Linda Anderson",
+      "seats_available": 5,
+      "scenario": "Flooded roads rideshare coordination",
+      "current_position": [
+        29.217058,
+        -1.700691
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-050",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-002",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-017",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-015",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-019",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-020",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-036",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-060",
+          "relationship": "guardian"
+        }
+      ]
+    },
+    {
+      "person_id": "p-014",
+      "name": "Kenneth Wilson",
+      "seats_available": 3,
+      "scenario": "Power outage welfare checks and pooling",
+      "current_position": [
+        29.241234,
+        -1.671857
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-031",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-046",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-018",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-051",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-017",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-015",
+      "name": "Charles Taylor",
+      "seats_available": 1,
+      "scenario": "Wildfire smoke relocation carpool",
+      "current_position": [
+        29.223949,
+        -1.666649
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-027",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-047",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-013",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-005",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-039",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-046",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-018",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-020",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-022",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-025",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-032",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-037",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-043",
+          "relationship": "dependent"
+        }
+      ]
+    },
+    {
+      "person_id": "p-016",
+      "name": "Ryan Edwards",
+      "seats_available": 3,
+      "scenario": "Flooded roads rideshare coordination",
+      "current_position": [
+        29.207966,
+        -1.654123
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-047",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-010",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-029",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-012",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-048",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-035",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-017",
+      "name": "Shirley Garcia",
+      "seats_available": 4,
+      "scenario": "Severe storm evacuation support network",
+      "current_position": [
+        29.204642,
+        -1.696001
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-012",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-033",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-014",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-024",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-053",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-057",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-018",
+      "name": "Ryan Hill",
+      "seats_available": 1,
+      "scenario": "Power outage welfare checks and pooling",
+      "current_position": [
+        29.226794,
+        -1.680598
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-030",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-052",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-002",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-006",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-020",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-015",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-019",
+      "name": "Steven Morales",
+      "seats_available": 3,
+      "scenario": "Severe storm evacuation support network",
+      "current_position": [
+        29.231014,
+        -1.698272
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-001",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-048",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-013",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-022",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-020",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-029",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-035",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-044",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-051",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-020",
+      "name": "Paul Roberts",
+      "seats_available": 3,
+      "scenario": "Severe storm evacuation support network",
+      "current_position": [
+        29.211675,
+        -1.696092
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-006",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-018",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-040",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-019",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-007",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-055",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-013",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-059",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-015",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-022",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-046",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-049",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-058",
+          "relationship": "guardian"
+        }
+      ]
+    },
+    {
+      "person_id": "p-021",
+      "name": "James Morris",
+      "seats_available": 4,
+      "scenario": "Flooded roads rideshare coordination",
+      "current_position": [
+        29.245594,
+        -1.665902
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-004",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-005",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-057",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-032",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-008",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-054",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-005",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-022",
+      "name": "Susan Parker",
+      "seats_available": 3,
+      "scenario": "Wildfire smoke relocation carpool",
+      "current_position": [
+        29.227449,
+        -1.696358
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-003",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-015",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-051",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-035",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-026",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-030",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-056",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-020",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-023",
+      "name": "Christopher Wright",
+      "seats_available": 6,
+      "scenario": "Wildfire smoke relocation carpool",
+      "current_position": [
+        29.242925,
+        -1.674053
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-010",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-047",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-019",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-046",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-057",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-031",
+          "relationship": "guardian"
+        }
+      ]
+    },
+    {
+      "person_id": "p-024",
+      "name": "Eric Johnson",
+      "seats_available": 1,
+      "scenario": "Flooded roads rideshare coordination",
+      "current_position": [
+        29.240936,
+        -1.662417
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-040",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-049",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-054",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-038",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-060",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-025",
+      "name": "Michelle Thomas",
+      "seats_available": 0,
+      "scenario": "Wildfire smoke relocation carpool",
+      "current_position": [
+        29.244347,
+        -1.699717
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-017",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-002",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-006",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-015",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-045",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-055",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-038",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-033",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-034",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-050",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-057",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-026",
+      "name": "Eric Evans",
+      "seats_available": 1,
+      "scenario": "Wildfire smoke relocation carpool",
+      "current_position": [
+        29.235292,
+        -1.69758
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-022",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-028",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-046",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-033",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-027",
+      "name": "Nicholas Stewart",
+      "seats_available": 3,
+      "scenario": "Flooded roads rideshare coordination",
+      "current_position": [
+        29.223384,
+        -1.67367
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-005",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-015",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-054",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-001",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-044",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-057",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-036",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-031",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-028",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-051",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-059",
+          "relationship": "guardian"
+        }
+      ]
+    },
+    {
+      "person_id": "p-028",
+      "name": "Margaret Reyes",
+      "seats_available": 3,
+      "scenario": "Volcanic ash avoidance and mutual aid",
+      "current_position": [
+        29.232647,
+        -1.68405
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-007",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-010",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-027",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-008",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-043",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-055",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-010",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-033",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-047",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-032",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-029",
+      "name": "Deborah Lewis",
+      "seats_available": 5,
+      "scenario": "Power outage welfare checks and pooling",
+      "current_position": [
+        29.20305,
+        -1.692765
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-003",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-009",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-012",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-018",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-054",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-001",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-019",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-048",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-020",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-039",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-043",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-056",
+          "relationship": "guardian"
+        }
+      ]
+    },
+    {
+      "person_id": "p-030",
+      "name": "Amanda Johnson",
+      "seats_available": 3,
+      "scenario": "Volcanic ash avoidance and mutual aid",
+      "current_position": [
+        29.226422,
+        -1.70364
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-009",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-022",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-003",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-021",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-049",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-032",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-047",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-053",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-044",
+          "relationship": "dependent"
+        }
+      ]
+    },
+    {
+      "person_id": "p-031",
+      "name": "William Edwards",
+      "seats_available": 0,
+      "scenario": "Flooded roads rideshare coordination",
+      "current_position": [
+        29.200543,
+        -1.6921
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-014",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-023",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-027",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-057",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-043",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-010",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-005",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-032",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-052",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-034",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-054",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-032",
+      "name": "Eric Wilson",
+      "seats_available": 3,
+      "scenario": "Wildfire smoke relocation carpool",
+      "current_position": [
+        29.225811,
+        -1.69185
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-021",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-015",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-049",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-006",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-028",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-007",
+          "relationship": "guardian"
+        }
+      ]
+    },
+    {
+      "person_id": "p-033",
+      "name": "Nicholas Phillips",
+      "seats_available": 2,
+      "scenario": "Severe storm evacuation support network",
+      "current_position": [
+        29.201847,
+        -1.682447
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-017",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-026",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-028",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-057",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-025",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-041",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-045",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-016",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-032",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-039",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-044",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-055",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-034",
+      "name": "Ryan Clark",
+      "seats_available": 2,
+      "scenario": "Severe storm evacuation support network",
+      "current_position": [
+        29.230668,
+        -1.654792
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-006",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-025",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-056",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-031",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-007",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-044",
+          "relationship": "guardian"
+        }
+      ]
+    },
+    {
+      "person_id": "p-035",
+      "name": "Richard Brown",
+      "seats_available": 2,
+      "scenario": "Flooded roads rideshare coordination",
+      "current_position": [
+        29.23703,
+        -1.698537
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-016",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-049",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-032",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-055",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-019",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-051",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-053",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-015",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-039",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-040",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-050",
+          "relationship": "dependent"
+        }
+      ]
+    },
+    {
+      "person_id": "p-036",
+      "name": "Matthew Gonzalez",
+      "seats_available": 3,
+      "scenario": "Volcanic ash avoidance and mutual aid",
+      "current_position": [
+        29.218094,
+        -1.690073
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-011",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-027",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-013",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-009",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-052",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-035",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-038",
+          "relationship": "dependent"
+        }
+      ]
+    },
+    {
+      "person_id": "p-037",
+      "name": "Ashley Parker",
+      "seats_available": 6,
+      "scenario": "Power outage welfare checks and pooling",
+      "current_position": [
+        29.237401,
+        -1.661202
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-008",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-005",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-010",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-050",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-015",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-045",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-048",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-038",
+      "name": "Mary Morales",
+      "seats_available": 1,
+      "scenario": "Volcanic ash avoidance and mutual aid",
+      "current_position": [
+        29.205316,
+        -1.679718
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-012",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-024",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-002",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-041",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-058",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-036",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-021",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-059",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-043",
+          "relationship": "dependent"
+        }
+      ]
+    },
+    {
+      "person_id": "p-039",
+      "name": "Margaret Parker",
+      "seats_available": 2,
+      "scenario": "Severe storm evacuation support network",
+      "current_position": [
+        29.205232,
+        -1.703892
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-030",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-024",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-044",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-049",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-046",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-035",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-057",
+          "relationship": "dependent"
+        }
+      ]
+    },
+    {
+      "person_id": "p-040",
+      "name": "Stephanie Taylor",
+      "seats_available": 6,
+      "scenario": "Power outage welfare checks and pooling",
+      "current_position": [
+        29.211262,
+        -1.66917
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-020",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-024",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-007",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-045",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-024",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-035",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-059",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-055",
+          "relationship": "dependent"
+        }
+      ]
+    },
+    {
+      "person_id": "p-041",
+      "name": "Eric Martinez",
+      "seats_available": 1,
+      "scenario": "Volcanic ash avoidance and mutual aid",
+      "current_position": [
+        29.245435,
+        -1.675041
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-005",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-014",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-005",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-055",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-050",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-036",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-060",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-038",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-052",
+          "relationship": "guardian"
+        }
+      ]
+    },
+    {
+      "person_id": "p-042",
+      "name": "Linda Mitchell",
+      "seats_available": 2,
+      "scenario": "Severe storm evacuation support network",
+      "current_position": [
+        29.226209,
+        -1.678857
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-012",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-017",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-004",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-043",
+      "name": "Christopher Brown",
+      "seats_available": 6,
+      "scenario": "Severe storm evacuation support network",
+      "current_position": [
+        29.239567,
+        -1.700574
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-012",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-038",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-007",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-029",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-033",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-015",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-040",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-003",
+          "relationship": "dependent"
+        }
+      ]
+    },
+    {
+      "person_id": "p-044",
+      "name": "William Baker",
+      "seats_available": 5,
+      "scenario": "Power outage welfare checks and pooling",
+      "current_position": [
+        29.202994,
+        -1.659486
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-006",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-012",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-027",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-039",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-034",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-019",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-030",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-033",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-060",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-057",
+          "relationship": "guardian"
+        }
+      ]
+    },
+    {
+      "person_id": "p-045",
+      "name": "Ashley Nguyen",
+      "seats_available": 3,
+      "scenario": "Wildfire smoke relocation carpool",
+      "current_position": [
+        29.201099,
+        -1.671131
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-033",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-005",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-006",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-055",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-059",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-057",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-028",
+          "relationship": "dependent"
+        }
+      ]
+    },
+    {
+      "person_id": "p-046",
+      "name": "Kenneth Reyes",
+      "seats_available": 2,
+      "scenario": "Flooded roads rideshare coordination",
+      "current_position": [
+        29.208934,
+        -1.684211
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-001",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-015",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-023",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-026",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-039",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-020",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-023",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-007",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-037",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-033",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-014",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-010",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-047",
+      "name": "Joshua Robinson",
+      "seats_available": 2,
+      "scenario": "Severe storm evacuation support network",
+      "current_position": [
+        29.197466,
+        -1.672942
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-030",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-001",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-012",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-057",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-010",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-037",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-059",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-048",
+      "name": "Richard Jones",
+      "seats_available": 3,
+      "scenario": "Wildfire smoke relocation carpool",
+      "current_position": [
+        29.21026,
+        -1.657337
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-003",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-037",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-039",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-006",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-058",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-004",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-010",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-011",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-050",
+          "relationship": "dependent"
+        }
+      ]
+    },
+    {
+      "person_id": "p-049",
+      "name": "William Cruz",
+      "seats_available": 1,
+      "scenario": "Flooded roads rideshare coordination",
+      "current_position": [
+        29.204887,
+        -1.662313
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-009",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-011",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-030",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-032",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-035",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-014",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-020",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-051",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-050",
+      "name": "Joshua Flores",
+      "seats_available": 7,
+      "scenario": "Wildfire smoke relocation carpool",
+      "current_position": [
+        29.197391,
+        -1.663145
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-037",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-041",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-048",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-009",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-025",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-035",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-046",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-058",
+          "relationship": "guardian"
+        }
+      ]
+    },
+    {
+      "person_id": "p-051",
+      "name": "Joshua Reyes",
+      "seats_available": 3,
+      "scenario": "Volcanic ash avoidance and mutual aid",
+      "current_position": [
+        29.210223,
+        -1.659514
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-002",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-026",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-046",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-041",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-027",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-019",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-008",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-060",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-052",
+      "name": "Karen Moore",
+      "seats_available": 2,
+      "scenario": "Volcanic ash avoidance and mutual aid",
+      "current_position": [
+        29.232881,
+        -1.69382
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-001",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-003",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-033",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-041",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-008",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-056",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-053",
+      "name": "Kimberly Allen",
+      "seats_available": 3,
+      "scenario": "Severe storm evacuation support network",
+      "current_position": [
+        29.201615,
+        -1.682821
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-035",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-012",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-039",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-010",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-049",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-060",
+          "relationship": "guardian"
+        }
+      ]
+    },
+    {
+      "person_id": "p-054",
+      "name": "Emily Williams",
+      "seats_available": 0,
+      "scenario": "Volcanic ash avoidance and mutual aid",
+      "current_position": [
+        29.228856,
+        -1.690902
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-024",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-027",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-029",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-010",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-029",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-005",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-031",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-041",
+          "relationship": "dependent"
+        }
+      ]
+    },
+    {
+      "person_id": "p-055",
+      "name": "Jacob Scott",
+      "seats_available": 4,
+      "scenario": "Wildfire smoke relocation carpool",
+      "current_position": [
+        29.197483,
+        -1.700238
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-025",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-028",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-041",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-040",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-039",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-033",
+          "relationship": "guardian"
+        }
+      ]
+    },
+    {
+      "person_id": "p-056",
+      "name": "Karen Wright",
+      "seats_available": 0,
+      "scenario": "Flooded roads rideshare coordination",
+      "current_position": [
+        29.226125,
+        -1.696595
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-007",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-022",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-010",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-004",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-029",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-007",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-052",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-054",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-022",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-057",
+      "name": "Thomas Williams",
+      "seats_available": 2,
+      "scenario": "Severe storm evacuation support network",
+      "current_position": [
+        29.241946,
+        -1.693496
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-021",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-027",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-031",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-033",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-045",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-047",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-044",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-025",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-019",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-017",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-047",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-043",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-039",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-058",
+      "name": "Ashley Nelson",
+      "seats_available": 1,
+      "scenario": "Wildfire smoke relocation carpool",
+      "current_position": [
+        29.241207,
+        -1.683681
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-020",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-012",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-014",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-022",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-050",
+          "relationship": "guardian"
+        }
+      ]
+    },
+    {
+      "person_id": "p-059",
+      "name": "Karen Reyes",
+      "seats_available": 6,
+      "scenario": "Volcanic ash avoidance and mutual aid",
+      "current_position": [
+        29.24581,
+        -1.663461
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-002",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-004",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-020",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-038",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-003",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-027",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-024",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-044",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-047",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-016",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-060",
+      "name": "Jeffrey Johnson",
+      "seats_available": 1,
+      "scenario": "Flooded roads rideshare coordination",
+      "current_position": [
+        29.236119,
+        -1.683414
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-041",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-051",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-033",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-034",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-027",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-011",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-053",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-013",
+          "relationship": "friend"
+        }
+      ]
+    }
+  ]
+}

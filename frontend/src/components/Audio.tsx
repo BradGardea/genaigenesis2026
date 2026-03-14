@@ -100,7 +100,7 @@ function WaveSVG({ active, level = 0 }: WaveSVGProps) {
             width="4"
             height={h}
             rx="2"
-            fill="var(--color-text-secondary)"
+            fill="white"
             opacity={active ? 0.9 : 0.35}
           />
         );
@@ -438,14 +438,14 @@ export default function VoiceWidget({ wsUrl = WS_URL, userId = USER_ID }: VoiceW
             style={{
               ...s.actionBtn,
               ...s.mainActionBtn,
-              background: "#f7f8fb",
-              color: "#1f1f1f",
-              borderColor: "#1f1f1f",
+              background: "linear-gradient(to top right, #0379d1, #0cba75)",
+              color: "#ffffff",
+              borderColor: "transparent",
               opacity: phase === "connecting" ? 0.55 : 1,
               position: "relative",
             }}
           >
-            {!isRecording && <MicSVG size={18} color="currentColor" />}
+            {!isRecording && <MicSVG size={30} color="#ffffff" />}
             {isRecording && <WaveSVG active={isRecording} level={level} />}
           </button>
 
