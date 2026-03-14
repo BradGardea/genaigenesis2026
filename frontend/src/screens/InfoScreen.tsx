@@ -139,7 +139,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
         });
 
         return (
-          <View key={`alerts-${step.id}`} className={`${commonCardClass} relative overflow-hidden`}>
+          <View key={`alerts-step-${stepIndex}`} className={`${commonCardClass} relative overflow-hidden`}>
             <Text
               className="text-xs font-semibold uppercase"
               style={{ color: getFreshnessColor(step.sectionUpdatedAt.alerts) }}
@@ -151,7 +151,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
 
               return (
                 <View
-                  key={`${step.id}-${item.id}`}
+                  key={`alerts-step-${stepIndex}-${item.id}`}
                   className="mb-3 mt-3 rounded-2xl border p-4"
                   style={{ backgroundColor: colorSet.backgroundColor, borderColor: colorSet.borderColor }}
                 >
@@ -218,7 +218,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
         );
 
         return (
-          <View key={`plans-${step.id}`} className={`${commonCardClass} relative overflow-hidden`}>
+          <View key={`plans-step-${stepIndex}`} className={`${commonCardClass} relative overflow-hidden`}>
             <Text
               className="text-xs font-semibold uppercase"
               style={{ color: getFreshnessColor(step.sectionUpdatedAt.evacuationPlans) }}
@@ -226,7 +226,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
               Step {stepIndex + 1} | fetched {formatTime(step.sectionUpdatedAt.evacuationPlans)}
             </Text>
             {sortedPlans.map((item) => (
-              <View key={`${step.id}-${item.id}`} className={`mt-3 rounded-xl p-3 ${isDark ? "bg-slate-800" : "bg-slate-100"}`}>
+              <View key={`plans-step-${stepIndex}-${item.id}`} className={`mt-3 rounded-xl p-3 ${isDark ? "bg-slate-800" : "bg-slate-100"}`}>
                 <View className="mb-2 flex-row items-center justify-between">
                   <Text className={`mr-3 flex-1 text-base font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
                     {item.title}
@@ -243,7 +243,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
                 </Text>
                 {item.steps.map((planStep, index) => (
                   <Text
-                    key={`${step.id}-${item.id}-step-${index + 1}`}
+                    key={`plans-step-${stepIndex}-${item.id}-step-${index + 1}`}
                     className={`mb-1 text-sm ${isDark ? "text-slate-200" : "text-slate-800"}`}
                   >
                     {index + 1}. {planStep}
@@ -254,7 +254,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
                 </Text>
                 {item.packingList.map((entry, index) => (
                   <Text
-                    key={`${step.id}-${item.id}-pack-${index + 1}`}
+                    key={`plans-step-${stepIndex}-${item.id}-pack-${index + 1}`}
                     className={`mb-1 text-sm ${isDark ? "text-slate-200" : "text-slate-800"}`}
                   >
                     - {entry}
@@ -283,7 +283,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
   const renderConnections = () => (
     <View>
       {stepHistoryNewestFirst.map(({ step, stepIndex }) => (
-        <View key={`connections-${step.id}`} className={`${commonCardClass} relative overflow-hidden`}>
+        <View key={`connections-step-${stepIndex}`} className={`${commonCardClass} relative overflow-hidden`}>
           <Text
             className="text-xs font-semibold uppercase"
             style={{ color: getFreshnessColor(step.sectionUpdatedAt.connections) }}
@@ -294,7 +294,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
             <Text className={`mt-3 ${isDark ? "text-slate-300" : "text-slate-700"}`}>No connections yet. Add one from Profile.</Text>
           ) : (
             step.connections.map((item) => (
-              <View key={`${step.id}-${item.id}`} className={`mt-3 rounded-xl p-3 ${isDark ? "bg-slate-800" : "bg-slate-100"}`}>
+              <View key={`connections-step-${stepIndex}-${item.id}`} className={`mt-3 rounded-xl p-3 ${isDark ? "bg-slate-800" : "bg-slate-100"}`}>
                 <Text className={`text-base font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
                   {item.contactPhone}
                 </Text>
@@ -325,7 +325,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
   const renderSavedInformation = () => (
     <View>
       {stepHistoryNewestFirst.map(({ step, stepIndex }) => (
-        <View key={`saved-${step.id}`} className={`${commonCardClass} relative overflow-hidden`}>
+        <View key={`saved-step-${stepIndex}`} className={`${commonCardClass} relative overflow-hidden`}>
           <Text
             className="text-xs font-semibold uppercase"
             style={{ color: getFreshnessColor(step.sectionUpdatedAt.savedInformation) }}
@@ -333,7 +333,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
             Step {stepIndex + 1} | fetched {formatTime(step.sectionUpdatedAt.savedInformation)}
           </Text>
           {step.savedInformation.map((item) => (
-            <View key={`${step.id}-${item.id}`} className={`mt-3 rounded-xl p-3 ${isDark ? "bg-slate-800" : "bg-slate-100"}`}>
+            <View key={`saved-step-${stepIndex}-${item.id}`} className={`mt-3 rounded-xl p-3 ${isDark ? "bg-slate-800" : "bg-slate-100"}`}>
               <Text className={`text-base font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
                 {item.title}
               </Text>
@@ -358,7 +358,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
   const renderWeather = () => (
     <View>
       {stepHistoryNewestFirst.map(({ step, stepIndex }) => (
-        <View key={`weather-${step.id}`} className={`${commonCardClass} relative overflow-hidden`}>
+        <View key={`weather-step-${stepIndex}`} className={`${commonCardClass} relative overflow-hidden`}>
           <Text
             className="text-xs font-semibold uppercase"
             style={{ color: getFreshnessColor(step.sectionUpdatedAt.weather) }}
@@ -366,7 +366,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
             Step {stepIndex + 1} | fetched {formatTime(step.sectionUpdatedAt.weather)}
           </Text>
           {step.weather.map((item) => (
-            <View key={`${step.id}-${item.id}`} className={`mt-3 rounded-xl p-3 ${isDark ? "bg-slate-800" : "bg-slate-100"}`}>
+            <View key={`weather-step-${stepIndex}-${item.id}`} className={`mt-3 rounded-xl p-3 ${isDark ? "bg-slate-800" : "bg-slate-100"}`}>
               <View className="flex-row items-center justify-between">
                 <Text className={`mr-2 flex-1 text-base font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
                   {item.headline}
