@@ -39,22 +39,22 @@ class SimulationConfig(BaseModel):
     """Configuration for a simulation run."""
 
     num_evacuees: int = Field(ge=1, le=100, default=5)
-    # Bounding box: agents start within this region
-    bbox_min_lat: float = Field(default=33.9)
-    bbox_max_lat: float = Field(default=34.1)
-    bbox_min_lng: float = Field(default=-118.4)
-    bbox_max_lng: float = Field(default=-118.2)
-    # Shared destination for all evacuees
-    destination_lat: float = Field(default=34.05)
-    destination_lng: float = Field(default=-118.15)
+    # Bounding box: agents start within this region (default: Goma, DR Congo)
+    bbox_min_lat: float = Field(default=-1.710)
+    bbox_max_lat: float = Field(default=-1.624)
+    bbox_min_lng: float = Field(default=29.171)
+    bbox_max_lng: float = Field(default=29.256)
+    # Shared destination for all evacuees (default: east toward Gisenyi)
+    destination_lat: float = Field(default=-1.670)
+    destination_lng: float = Field(default=29.330)
     # Tick configuration
     tick_interval_seconds: float = Field(ge=0.1, default=2.0, description="Real-world sleep between ticks (seconds)")
-    virtual_seconds_per_tick: float = Field(ge=1.0, default=120.0, description="Simulated travel time per tick (seconds)")
+    virtual_seconds_per_tick: float = Field(ge=1.0, default=600.0, description="Simulated travel time per tick (seconds)")
     max_ticks: int = Field(ge=1, le=1000, default=30)
     # Scheduled hazards
     hazard_schedule: list[ScheduledHazard] = Field(default_factory=list)
     # watsonx model override
-    watsonx_model_id: str = "ibm/granite-3.1-8b-instruct"
+    watsonx_model_id: str = "meta-llama/llama-3-3-70b-instruct"
 
 
 class AgentDecision(BaseModel):

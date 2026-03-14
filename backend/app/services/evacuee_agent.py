@@ -32,7 +32,7 @@ class EvacueeAgent:
         dest_lat: float,
         dest_lng: float,
         profile: EvacuationProfileInput | None = None,
-        watsonx_model_id: str = "ibm/granite-3.1-8b-instruct",
+        watsonx_model_id: str = "meta-llama/llama-3-3-70b-instruct",
     ) -> None:
         self.agent_id = agent_id
         self.lat = lat
@@ -52,6 +52,7 @@ class EvacueeAgent:
         self.congestion: float = 0.0
         self.rerouted_this_tick: bool = False
         self._situation_hash: str = ""
+        self._last_decision_tick: int = -999
 
     @property
     def origin(self) -> Coordinate:
@@ -102,16 +103,23 @@ class EvacueeAgent:
             tick=tick,
         )
 
+    _RE_EVAL_INTERVAL = 3  # force re-evaluation every N ticks for non-moving agents
+
     def _situation_changed(self, situation: AgentSituation) -> bool:
         """Check if the situation materially changed since last decision.
 
-        Only re-triggers on meaningful changes: state transition, hazard count
-        change, or congestion crossing a 0.25-wide threshold band.
+        Re-triggers on state transition, hazard count change, congestion band
+        shift, or if the agent has been sitting in the same state for
+        ``_RE_EVAL_INTERVAL`` ticks (prevents permanent stalls).
         """
         congestion_band = int(situation.congestion_level / 0.25)
         h = f"{situation.state}:{len(situation.nearby_hazards)}:{congestion_band}"
         if h != self._situation_hash:
             self._situation_hash = h
+            self._last_decision_tick = situation.tick
+            return True
+        if situation.tick - self._last_decision_tick >= self._RE_EVAL_INTERVAL:
+            self._last_decision_tick = situation.tick
             return True
         return False
 
@@ -165,6 +173,10 @@ class EvacueeAgent:
     ) -> None:
         """Compute a route and transition to evacuating."""
         try:
+            logger.info(
+                "Agent %s planning route: origin=(%.5f,%.5f) dest=(%.5f,%.5f)",
+                self.agent_id, self.lat, self.lng, self.dest_lat, self.dest_lng,
+            )
             route = await compute_route_fn(
                 self.origin, self.destination, hazard_polygons, crisis_traffic_factor
             )
@@ -175,15 +187,16 @@ class EvacueeAgent:
             self.progress = 0.0
             self.state = AgentState.evacuating
             logger.info(
-                "Agent %s route planned: %d coords, %.0fm",
+                "Agent %s route planned OK: %d coords, %.0fm, %.0fs",
                 self.agent_id,
                 len(route["geometry"]["coordinates"]),
                 self.route_distance_m,
+                self.route_duration_s,
             )
         except Exception:
             logger.exception("Route planning failed for agent %s", self.agent_id)
-            # Stay idle on failure so we can retry next tick
             self.state = AgentState.idle
+            self._situation_hash = ""  # allow retry next tick
 
     def advance_position(self, tick_interval_seconds: float) -> None:
         """Move agent along route geometry based on elapsed time."""

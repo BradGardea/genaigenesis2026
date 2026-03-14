@@ -46,7 +46,7 @@ export function useSimulation(): SimulationControls {
         setSimState(status.state);
         if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
       }
-    } catch { /* non-critical */ }
+    } catch (err) { console.warn("[useSimulation] poll failed:", err); }
   }, []);
 
   const startPolling = useCallback((id: string) => {

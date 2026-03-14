@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import type { AgentSnapshot, SimulationConfig, TickMetrics } from "../services/simulationApi";
 import type { AppTheme } from "../types/theme";
@@ -41,17 +41,17 @@ const AGENT_STATE_ICONS: Record<string, string> = {
   sheltering: "⌂",
 };
 
-// Default LA bounding box
+// Default Goma / DR Congo bounding box (matches disaster dataset)
 const DEFAULT_CONFIG: SimulationConfig = {
   num_evacuees: 8,
-  bbox_min_lat: 34.0,
-  bbox_max_lat: 34.1,
-  bbox_min_lng: -118.35,
-  bbox_max_lng: -118.20,
-  destination_lat: 34.05,
-  destination_lng: -118.10,
+  bbox_min_lat: -1.710,
+  bbox_max_lat: -1.624,
+  bbox_min_lng: 29.171,
+  bbox_max_lng: 29.256,
+  destination_lat: -1.670,
+  destination_lng: 29.330,
   tick_interval_seconds: 2.0,
-  virtual_seconds_per_tick: 120.0,
+  virtual_seconds_per_tick: 600.0,
   max_ticks: 20,
 };
 
@@ -73,6 +73,17 @@ export function SimulationPanel({
   const [maxTicksInput, setMaxTicksInput] = useState(String(DEFAULT_CONFIG.max_ticks));
   const [destLat, setDestLat] = useState(String(DEFAULT_CONFIG.destination_lat));
   const [destLng, setDestLng] = useState(String(DEFAULT_CONFIG.destination_lng));
+
+  // When disaster bbox changes, place the destination just outside the bbox
+  // so agents evacuate away from the disaster area rather than cross-continent.
+  useEffect(() => {
+    if (!disasterBbox) return;
+    const centerLat = (disasterBbox.minLat + disasterBbox.maxLat) / 2;
+    const spanLng = disasterBbox.maxLng - disasterBbox.minLng;
+    const offsetLng = Math.max(0.05, spanLng * 0.8);
+    setDestLat(String(Number(centerLat.toFixed(5))));
+    setDestLng(String(Number((disasterBbox.maxLng + offsetLng).toFixed(5))));
+  }, [disasterBbox]);
 
   const hasDisaster = !!disasterBbox;
 
@@ -339,6 +350,7 @@ export function SimulationPanel({
               )}
 
               <Pressable
+                accessibilityRole="button"
                 onPress={handleStart}
                 style={{ backgroundColor: "#2563eb", borderRadius: 6, paddingVertical: 7, alignItems: "center" }}
               >

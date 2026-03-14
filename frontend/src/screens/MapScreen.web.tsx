@@ -272,7 +272,7 @@ function createCarMarkerElement(): HTMLDivElement {
 
 export function MapScreen({ theme }: MapScreenProps) {
   const isDark = theme === "dark";
-  const { currentStep, currentStepIndex, totalSteps, stepHistory } = useDisasterDemo();
+  const { currentStep, currentStepIndex, totalSteps, stepHistory, stepDisaster, isStepping, isFinalStep } = useDisasterDemo();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const originMarkerRef = useRef<mapboxgl.Marker | null>(null);
@@ -338,6 +338,19 @@ export function MapScreen({ theme }: MapScreenProps) {
       maxLng: maxLng + PAD,
     };
   }, [currentStep.cityStateRaw]);
+
+  // Auto-advance disaster step on each simulation tick
+  const prevSimTickRef = useRef(0);
+  useEffect(() => {
+    if (simState !== "running") {
+      prevSimTickRef.current = 0;
+      return;
+    }
+    if (simTick > prevSimTickRef.current && !isStepping && !isFinalStep) {
+      prevSimTickRef.current = simTick;
+      void stepDisaster({ beautify: false });
+    }
+  }, [simTick, simState, isStepping, isFinalStep, stepDisaster]);
 
   useEffect(() => {
     routeRef.current = route;
@@ -406,7 +419,7 @@ export function MapScreen({ theme }: MapScreenProps) {
       },
     }));
     source.setData({ type: "FeatureCollection", features });
-  }, [simAgents, mapReadyVersion]);
+  }, [simAgents, simState, mapReadyVersion]);
 
   // ── Simulation agent route polylines update ─────────────────────────────
   useEffect(() => {
@@ -414,15 +427,17 @@ export function MapScreen({ theme }: MapScreenProps) {
     if (!map) return;
     const source = map.getSource(SIM_ROUTES_SOURCE) as mapboxgl.GeoJSONSource | undefined;
     if (!source) return;
-    const features = simAgents
-      .filter((a) => a.route_geometry && a.route_geometry.length >= 2)
-      .map((agent) => ({
-        type: "Feature" as const,
-        geometry: { type: "LineString" as const, coordinates: agent.route_geometry! },
-        properties: { agent_id: agent.agent_id, state: agent.state },
-      }));
+    const withRoutes = simAgents.filter((a) => a.route_geometry && a.route_geometry.length >= 2);
+    if (withRoutes.length > 0) {
+      console.warn(`[SimRoutes] ${withRoutes.length} agents with routes, sample: ${withRoutes[0].agent_id} coords=${withRoutes[0].route_geometry!.length}`);
+    }
+    const features = withRoutes.map((agent) => ({
+      type: "Feature" as const,
+      geometry: { type: "LineString" as const, coordinates: agent.route_geometry! },
+      properties: { agent_id: agent.agent_id, state: agent.state },
+    }));
     source.setData({ type: "FeatureCollection", features });
-  }, [simAgents, mapReadyVersion]);
+  }, [simAgents, simState, mapReadyVersion]);
 
   // Fly to simulation area when simulation starts
   useEffect(() => {
@@ -431,7 +446,7 @@ export function MapScreen({ theme }: MapScreenProps) {
     if (!map) return;
     const center: [number, number] = disasterBbox
       ? [(disasterBbox.minLng + disasterBbox.maxLng) / 2, (disasterBbox.minLat + disasterBbox.maxLat) / 2]
-      : [-118.275, 34.05];
+      : [29.213, -1.667];
     map.flyTo({ center, zoom: 11, duration: 1500 });
   }, [simState, disasterBbox]);
 
@@ -642,50 +657,23 @@ export function MapScreen({ theme }: MapScreenProps) {
         });
 
         // â”€â”€ Wind particle layer (Mapbox native GFS wind data) â”€â”€
-        map.addSource(WIND_SOURCE, {
-          type: "raster-array" as any,
-          url: "mapbox://rasterarrayexamples.gfs-winds",
-          tileSize: 512,
-        });
-        map.addLayer({
-          id: WIND_LAYER,
-          type: "raster-particle" as any,
-          source: WIND_SOURCE,
-          "source-layer": "10winds",
-          paint: {
-            "raster-particle-speed-factor": 0.4,
-            "raster-particle-fade-opacity-factor": 0.9,
-            "raster-particle-reset-rate-factor": 0.4,
-            "raster-particle-count": 4000,
-            "raster-particle-max-speed": 40,
-            "raster-particle-color": [
-              "interpolate",
-              ["linear"],
-              ["raster-particle-speed"],
-              1.5, "rgba(134,163,171,255)",
-              4.12, "rgba(110,143,208,255)",
-              6.17, "rgba(15,147,167,255)",
-              9.26, "rgba(57,163,57,255)",
-              11.83, "rgba(194,134,62,255)",
-              14.92, "rgba(200,66,13,255)",
-              18.0, "rgba(210,0,50,255)",
-              21.6, "rgba(175,80,136,255)",
-              25.21, "rgba(117,74,147,255)",
-              29.32, "rgba(68,105,141,255)",
-              33.44, "rgba(194,251,119,255)",
-              43.72, "rgba(241,255,109,255)",
-              50.41, "rgba(255,255,255,255)",
-              59.16, "rgba(0,255,255,255)",
-              69.44, "rgba(255,37,255,255)",
-            ],
-          } as any,
-          layout: { visibility: "none" },
-        } as any);
+        // Wind particle layer disabled — requires Mapbox GL JS v3+
 
         // ── Simulation agent route polylines ─────────────────────
         map.addSource(SIM_ROUTES_SOURCE, {
           type: "geojson",
           data: { type: "FeatureCollection", features: [] },
+        });
+        map.addLayer({
+          id: SIM_ROUTES_LAYER + "-casing",
+          type: "line",
+          source: SIM_ROUTES_SOURCE,
+          paint: {
+            "line-color": "#0f172a",
+            "line-width": 7,
+            "line-opacity": 0.5,
+          },
+          layout: { "line-cap": "round", "line-join": "round" },
         });
         map.addLayer({
           id: SIM_ROUTES_LAYER,
@@ -694,19 +682,16 @@ export function MapScreen({ theme }: MapScreenProps) {
           paint: {
             "line-color": [
               "match", ["get", "state"],
-              "evacuating", "#60A5FA",
-              "planning",   "#FBBF24",
-              "arrived",    "#34D399",
-              "sheltering", "#FB923C",
+              "evacuating", "#3B82F6",
+              "planning",   "#F59E0B",
+              "arrived",    "#10B981",
+              "sheltering", "#F97316",
               "#94A3B8",
             ],
-            "line-width": 3,
-            "line-opacity": 0.7,
+            "line-width": 4,
+            "line-opacity": 0.9,
           },
-          layout: {
-            "line-cap": "round",
-            "line-join": "round",
-          },
+          layout: { "line-cap": "round", "line-join": "round" },
         });
 
         // ── Simulation agents layer ────────────────────────────

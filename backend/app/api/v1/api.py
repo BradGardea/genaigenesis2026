@@ -10,6 +10,7 @@ from app.api.v1.endpoints import (
     hazards,
     realtime,
     routes,
+    simulation,
     storms,
     weather_steps,
 )
@@ -26,3 +27,4 @@ api_router.include_router(realtime.router)
 api_router.include_router(storms.router)
 api_router.include_router(weather_steps.router)
 api_router.include_router(city_state_steps.router)
+api_router.include_router(simulation.router)
