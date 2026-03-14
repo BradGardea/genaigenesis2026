@@ -4,6 +4,7 @@ from app.api.v1.endpoints import (
     alerts,
     city_state_steps,
     events,
+    forecasts,
     health,
     information,
     hazards,
@@ -17,6 +18,7 @@ api_router = APIRouter()
 api_router.include_router(health.router)
 api_router.include_router(alerts.router)
 api_router.include_router(events.router)
+api_router.include_router(forecasts.router)
 api_router.include_router(routes.router)
 api_router.include_router(hazards.router)
 api_router.include_router(information.router)

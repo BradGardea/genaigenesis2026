@@ -7,7 +7,7 @@ individual provider feeds without the unified aggregation.
 
 from fastapi import APIRouter
 
-from app.schemas.alert_models import AlertSignal
+from app.schemas.alert_models import AlertSignal, GeoFeature, GeoFeatureCollection
 from app.services import events_service
 
 router = APIRouter(prefix="/events", tags=["events"])
@@ -38,3 +38,28 @@ async def weather_events() -> list[AlertSignal]:
 async def gdacs_events() -> list[AlertSignal]:
     """Global disaster events from GDACS (up to 10)."""
     return await events_service.fetch_gdacs_events()
+
+
+@router.get(
+    "/weather-zones",
+    response_model=GeoFeatureCollection,
+    summary="Weather alert zones as GeoJSON",
+    description="Returns active NOAA NWS weather alerts as a GeoJSON "
+    "FeatureCollection suitable for direct use as a Mapbox map source. "
+    "Alerts without polygon geometry are represented as null-geometry features.",
+)
+async def weather_zones() -> GeoFeatureCollection:
+    alerts = await events_service.fetch_weather_events()
+    features = [
+        GeoFeature(
+            geometry=a.geometry,
+            properties={
+                "id": a.id,
+                "event": a.value,
+                "severity": a.severity,
+                "region": a.region or "",
+            },
+        )
+        for a in alerts
+    ]
+    return GeoFeatureCollection(features=features)

@@ -3,12 +3,23 @@ from __future__ import annotations
 import asyncio
 import uuid
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from app.models.routing import RouteRequest, RouteResponse
 from app.services.hazard_store import hazard_store
 from app.services.mapbox_routing import compute_route
+from app.services import forecasts_service
+
+
+class RouteWeatherPoint(BaseModel):
+    lng: float
+    lat: float
+    temperature_c: float | None = None
+    wind_speed_kmh: float | None = None
+    precipitation_probability: int | None = None
+    relative_humidity: int | None = None
 
 router = APIRouter(prefix="/routes", tags=["routes"])
 
@@ -168,3 +179,42 @@ async def stream_route_updates(route_id: str, request: Request) -> StreamingResp
             hazard_store.unregister_route(route_id)
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@router.get(
+    "/{route_id}/weather",
+    response_model=list[RouteWeatherPoint],
+    summary="Weather conditions along a route",
+    description="Samples 3-5 evenly-spaced points along a registered route and "
+    "returns the current hourly forecast at each point from Open-Meteo.",
+)
+async def route_weather(
+    route_id: str,
+    num_points: int = Query(default=4, ge=2, le=8),
+) -> list[RouteWeatherPoint]:
+    sub = hazard_store.get_subscription(route_id)
+    if sub is None:
+        raise HTTPException(status_code=404, detail="Route not found")
+
+    line = sub.geometry
+    points = []
+    for i in range(num_points):
+        frac = i / (num_points - 1)
+        pt = line.interpolate(frac, normalized=True)
+        points.append((pt.y, pt.x))  # (lat, lon)
+
+    results: list[RouteWeatherPoint] = []
+    for lat, lon in points:
+        forecast = await forecasts_service.get_hourly_forecast(lat, lon)
+        hourly = forecast.hourly[0] if forecast.hourly else None
+        results.append(
+            RouteWeatherPoint(
+                lat=lat,
+                lng=lon,
+                temperature_c=hourly.temperature_c if hourly else None,
+                wind_speed_kmh=hourly.wind_speed_kmh if hourly else None,
+                precipitation_probability=hourly.precipitation_probability if hourly else None,
+                relative_humidity=hourly.relative_humidity if hourly else None,
+            )
+        )
+    return results

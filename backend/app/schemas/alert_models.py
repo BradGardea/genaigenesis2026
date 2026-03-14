@@ -11,10 +11,11 @@ class AlertSignal(BaseModel):
     longitude: Optional[float] = None
     region: Optional[str] = None
     timestamp: Optional[str] = None
+    geometry: Optional[dict] = Field(default=None, description="GeoJSON geometry (Polygon) when available")
 
 class GeoFeature(BaseModel):
     type: str = "Feature"
-    geometry: dict = None
+    geometry: Optional[dict] = None
     properties: dict
 
 

@@ -81,3 +81,28 @@ export interface RouteResponse {
   backup_route: GeoJSONLineString | null;
 }
 
+export interface RouteWeatherPoint {
+  lng: number;
+  lat: number;
+  temperature_c: number | null;
+  wind_speed_kmh: number | null;
+  precipitation_probability: number | null;
+  relative_humidity: number | null;
+}
+
+export interface WeatherAlertFeature {
+  type: "Feature";
+  geometry: GeoJSONPolygon | null;
+  properties: {
+    id: string;
+    event: string;
+    severity: string;
+    region: string;
+  };
+}
+
+export interface WeatherAlertCollection {
+  type: "FeatureCollection";
+  features: WeatherAlertFeature[];
+}
+

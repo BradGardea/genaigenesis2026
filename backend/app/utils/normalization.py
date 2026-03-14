@@ -106,6 +106,7 @@ def normalize_weather_alerts(features: list) -> List[AlertSignal]:
                     latitude=lat,
                     longitude=lon,
                     region=props.get("areaDesc"),
+                    geometry=geometry,
                 )
             )
         except (KeyError, TypeError):

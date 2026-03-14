@@ -4,6 +4,8 @@ import {
   HazardZone,
   RouteRequest,
   RouteResponse,
+  RouteWeatherPoint,
+  WeatherAlertCollection,
 } from "../types/domain";
 
 const API_BASE = "http://localhost:8000/api/v1";
@@ -77,4 +79,12 @@ export function subscribeToRouteUpdates(
   };
 
   return es;
+}
+
+export function fetchWeatherZones(): Promise<WeatherAlertCollection> {
+  return request<WeatherAlertCollection>("/events/weather-zones");
+}
+
+export function fetchRouteWeather(routeId: string): Promise<RouteWeatherPoint[]> {
+  return request<RouteWeatherPoint[]>(`/routes/${routeId}/weather`);
 }
