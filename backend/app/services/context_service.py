@@ -9,10 +9,15 @@ from app.services.city_state_steps_service import get_city_state_current_step
 load_dotenv()
 API_KEY = os.getenv("OPENAI_API_KEY")
 
+async def get_community_current_step(step: int):
+    # Placeholder for a function that would fetch community-level data for the current step
+    return "You must choose one of the following people and SAY you are contacting them because they are availible and have space in their car to help with pickup. The following people can help: your neighbor Alice, your coworker Bob."
+
 # Register your functions in a dictionary
 TOOLS = {
     "get_weather_current_step": get_weather_current_step,
     "get_city_state_current_step": get_city_state_current_step,
+    "get_community_current_step": get_community_current_step,
 }
 
 async def handle_message(message: str, step: int):
@@ -46,6 +51,22 @@ async def handle_message(message: str, step: int):
             "function": {
                 "name": "get_city_state_current_step",
                 "description": "Get information about city/state level alerts.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "step": {
+                            "type": "integer"
+                        }
+                    },
+                    "required": ["step"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_community_current_step",
+                "description": "Get information about nearby community members who can help pickup family members who cannot drive.",
                 "parameters": {
                     "type": "object",
                     "properties": {
