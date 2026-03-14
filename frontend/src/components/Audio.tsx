@@ -414,51 +414,54 @@ export default function VoiceWidget({ wsUrl = WS_URL, userId = USER_ID }: VoiceW
         </div>
 
         <div style={s.buttonRow}>
-        <button
-          onClick={!isConnected ? connect : undefined}
-          onMouseDown={isConnected ? startTalking : undefined}
-          onMouseUp={isConnected ? stopTalking : undefined}
-          onMouseLeave={isConnected ? stopTalking : undefined}
-          onTouchStart={isConnected ? startTalking : undefined}
-          onTouchEnd={isConnected ? stopTalking : undefined}
-          disabled={phase === "connecting"}
-          style={{
-            ...s.actionBtn,
-            background: "#f7f8fb",
-            color: "#1f1f1f",
-            borderColor: "#1f1f1f",
-            opacity: phase === "connecting" ? 0.55 : 1,
-            position: "relative",
-          }}
-        >
-          {!isRecording && <MicSVG size={14} color="currentColor" />}
-          {isRecording && <WaveSVG active={isRecording} level={level} />}
-        </button>
+          <button
+            onClick={disconnect}
+            disabled={phase === "idle" || phase === "connecting"}
+            aria-label="Disconnect"
+            style={{
+              ...s.iconBtn,
+              justifySelf: "start",
+              opacity: phase === "idle" || phase === "connecting" ? 0.45 : 1,
+            }}
+          >
+            <StopSVG size={12} color="currentColor" />
+          </button>
 
-        <button
-          onClick={disconnect}
-          disabled={phase === "idle" || phase === "connecting"}
-          aria-label="Disconnect"
-          style={{
-            ...s.iconBtn,
-            opacity: phase === "idle" || phase === "connecting" ? 0.45 : 1,
-          }}
-        >
-          <StopSVG size={12} color="currentColor" />
-        </button>
+          <button
+            onClick={!isConnected ? connect : undefined}
+            onMouseDown={isConnected ? startTalking : undefined}
+            onMouseUp={isConnected ? stopTalking : undefined}
+            onMouseLeave={isConnected ? stopTalking : undefined}
+            onTouchStart={isConnected ? startTalking : undefined}
+            onTouchEnd={isConnected ? stopTalking : undefined}
+            disabled={phase === "connecting"}
+            style={{
+              ...s.actionBtn,
+              ...s.mainActionBtn,
+              background: "#f7f8fb",
+              color: "#1f1f1f",
+              borderColor: "#1f1f1f",
+              opacity: phase === "connecting" ? 0.55 : 1,
+              position: "relative",
+            }}
+          >
+            {!isRecording && <MicSVG size={18} color="currentColor" />}
+            {isRecording && <WaveSVG active={isRecording} level={level} />}
+          </button>
 
-        <button
-          onClick={handleMinimize}
-          aria-label="Minimize voice controls"
-          style={{
-            ...s.iconBtn,
-            borderColor: "var(--color-border-secondary)",
-            background: "var(--color-background-primary)",
-            color: "var(--color-text-secondary)",
-          }}
-        >
-          ▾
-        </button>
+          <button
+            onClick={handleMinimize}
+            aria-label="Minimize voice controls"
+            style={{
+              ...s.iconBtn,
+              justifySelf: "end",
+              borderColor: "var(--color-border-secondary)",
+              background: "var(--color-background-primary)",
+              color: "var(--color-text-secondary)",
+            }}
+          >
+            ▾
+          </button>
         </div>
       </div>
 
@@ -584,10 +587,10 @@ const s: Record<string, CSSProperties> = {
     gap: 7,
   },
   buttonRow: {
-    display: "flex",
+    display: "grid",
+    gridTemplateColumns: "1fr auto 1fr",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
+    gap: 12,
     width: "100%",
   },
   dot: {
@@ -622,6 +625,13 @@ const s: Record<string, CSSProperties> = {
     position: "relative",
     background: "linear-gradient(135deg, #f7f9fc 0%, #ffffff 100%)",
   },
+  mainActionBtn: {
+    width: 74,
+    height: 74,
+    borderRadius: 18,
+    fontSize: 14,
+    boxShadow: "0 10px 26px rgba(0,0,0,0.14)",
+  },
   iconBtn: {
     width: 32,
     height: 32,
@@ -649,6 +659,9 @@ const s: Record<string, CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: 8,
+    maxHeight: "50vh",
+    overflowY: "auto",
+    paddingRight: 2,
   },
   turn: {
     display: "flex",
@@ -673,6 +686,7 @@ const s: Record<string, CSSProperties> = {
     color: "var(--color-text-danger)",
   },
 };
+
 
 
 
