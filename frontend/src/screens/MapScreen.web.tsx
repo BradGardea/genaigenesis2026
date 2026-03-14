@@ -38,7 +38,7 @@ const CITY_STATE_LABEL_LAYER = "city-state-impacts-label";
 
 const DEFAULT_CENTER: [number, number] = [35.321269, -21.992207];
 const DEFAULT_ROUTE_ORIGIN: Coordinate = { lat: -21.992207, lng: 35.321269 };
-const DEFAULT_ROUTE_DESTINATION: Coordinate = { lat: -21.972420, lng: 35.274289 };
+const DEFAULT_ROUTE_DESTINATION: Coordinate = { lat: -22.005956, lng: 35.285656 };
 const PROTECTED_SEED_STEPS = 30;
 
 function coordFromText(text: string): Coordinate | null {
@@ -87,7 +87,7 @@ interface CityStateArea {
 
 function toHazardType(impactType: string, severity: number): string | null {
   if (impactType === "road_closure") return "roadblock";
-  if (impactType === "flooding" && severity >= 74) return "flood";
+  if (impactType === "flooding") return "flood";
   if (impactType === "high_wind" && severity >= 82) return "wind";
   if (impactType === "structure_damage" && severity >= 88) return "roadblock";
   return null;
@@ -1042,17 +1042,7 @@ export function MapScreen({ theme }: MapScreenProps) {
           changed = true;
         }
 
-        for (const [key, entry] of Array.from(tracked.entries())) {
-          if (cancelled) return;
-          if (desired.has(key)) continue;
-          const ttl = persistStepsFor(entry.hazardType);
-          if (entry.persistent && (currentStepIndex - entry.lastSeenStep) <= ttl) {
-            continue;
-          }
-          await deactivateHazard(entry.hazardId).catch(() => undefined);
-          tracked.delete(key);
-          changed = true;
-        }
+        // No decay: once a hazard is added it stays on the map (can only get worse).
 
         if (changed) {
           await fetchHazards();
