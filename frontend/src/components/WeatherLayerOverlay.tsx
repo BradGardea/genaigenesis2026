@@ -899,7 +899,7 @@ export function WeatherLayerOverlay({
     }
 
     // ── Mouse events ──────────────────────────────────────────────────
-    const onEnter = (e: mapboxgl.MapMouseEvent & { features?: mapboxgl.GeoJSONFeature[] }) => {
+    const onEnter = (e: mapboxgl.MapLayerMouseEvent) => {
       map.getCanvas().style.cursor = "pointer";
       const feat = e.features?.[0];
       if (!feat) return;
