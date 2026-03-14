@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { Pressable, Text, TextInput, View } from "react-native";
-import { mapIncidentPointsMock } from "../data";
 import { AppTheme } from "../types/theme";
 import {
   Coordinate,
@@ -14,17 +13,21 @@ import {
 import { useEvacuationRoute } from "../hooks/useEvacuationRoute";
 import { useTripSimulation } from "../hooks/useTripSimulation";
 import {
+  deactivateHazard,
   getActiveHazards,
   fetchWeatherZones,
   fetchRouteWeather,
+  reportHazard,
 } from "../services/api";
 import { ReportHazardModal } from "../components/ReportHazardModal";
 import {
   WeatherLayerOverlay,
   WeatherLayerMode,
 } from "../components/WeatherLayerOverlay";
+import { AlertSignalsLayer } from "../components/AlertSignalsLayer";
 import { runDemo, DemoControls } from "../demo/runDemo";
 import { useDisasterDemo } from "../state/DisasterDemoContext";
+import { mapIncidentPointsMock } from "../data/mock/mapPoints";
 
 interface MapScreenProps {
   theme: AppTheme;
@@ -42,9 +45,16 @@ const WIND_LAYER = "wind-particles";
 const WEATHER_ALERT_SOURCE = "weather-alerts";
 const WEATHER_ALERT_FILL = "weather-alerts-fill";
 const WEATHER_ALERT_OUTLINE = "weather-alerts-outline";
+const CITY_STATE_SOURCE = "city-state-impacts";
+const CITY_STATE_LAYER = "city-state-impacts-heatmap";
+const CITY_STATE_LABEL_LAYER = "city-state-impacts-label";
 
-const DEFAULT_CENTER: [number, number] = [-79.41, 43.706];
-const SESSION_KEY = "crisisnet_route_session";
+const DEFAULT_CENTER: [number, number] = [29.222, -1.679];
+const DEFAULT_ROUTE_ORIGIN: Coordinate = { lat: -1.661392, lng: 29.174324 };
+const DEFAULT_ROUTE_DESTINATION: Coordinate = {
+  lat: -1.632659,
+  lng: 29.248804,
+};
 
 function coordFromText(text: string): Coordinate | null {
   const parts = text.split(",").map((s) => s.trim());
@@ -73,42 +83,195 @@ function formatDistance(meters: number): string {
   return `${(meters / 1000).toFixed(1)} km`;
 }
 
-// ── Session persistence helpers ──────────────────────────────
-interface SessionData {
-  origin: Coordinate;
-  destination: Coordinate;
-  originText: string;
-  destText: string;
-  route: RouteResponse;
+interface CityStateArea {
+  lat: number;
+  lon: number;
+  impact_type: string;
+  severity: number;
+  danger_to_remain: string;
+  status: string;
+  radius_m: number;
 }
 
-function saveSession(data: SessionData) {
-  try {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(data));
-  } catch {
-    /* quota or private browsing */
+function toHazardType(impactType: string, severity: number): string | null {
+  if (impactType === "road_closure") return "roadblock";
+  if (impactType === "flooding" && severity >= 74) return "flood";
+  if (impactType === "high_wind" && severity >= 82) return "wind";
+  if (impactType === "structure_damage" && severity >= 88) return "roadblock";
+  return null;
+}
+
+function toImpactIcon(impactType: string): string {
+  if (impactType === "rain") return "N";
+  if (impactType === "high_wind") return "W";
+  if (impactType === "flooding") return "F";
+  if (impactType === "road_closure") return "R";
+  if (impactType === "powerline_failure") return "P";
+  if (impactType === "structure_damage") return "S";
+  if (impactType === "debris") return "D";
+  return "!";
+}
+
+function extractCityStateAreas(
+  raw: Record<string, unknown> | undefined,
+): CityStateArea[] {
+  if (!raw) return [];
+  const cityState = raw.city_state;
+  if (!cityState || typeof cityState !== "object") return [];
+  const areas = (cityState as { affected_areas?: unknown }).affected_areas;
+  if (!Array.isArray(areas)) return [];
+
+  return areas
+    .filter((item): item is CityStateArea => {
+      if (!item || typeof item !== "object") return false;
+      const value = item as Partial<CityStateArea>;
+      return (
+        typeof value.lat === "number" &&
+        typeof value.lon === "number" &&
+        typeof value.impact_type === "string" &&
+        typeof value.severity === "number" &&
+        typeof value.danger_to_remain === "string" &&
+        typeof value.status === "string" &&
+        typeof value.radius_m === "number"
+      );
+    })
+    .slice(0, 200);
+}
+
+function isHighDanger(area: CityStateArea): boolean {
+  return (
+    area.impact_type === "road_closure" ||
+    area.danger_to_remain === "high" ||
+    area.danger_to_remain === "extreme"
+  );
+}
+
+function approxDistanceMeters(a: CityStateArea, b: CityStateArea): number {
+  const dy = (a.lat - b.lat) * 111_320;
+  const dx =
+    (a.lon - b.lon) *
+    111_320 *
+    Math.cos((((a.lat + b.lat) / 2) * Math.PI) / 180);
+  return Math.hypot(dx, dy);
+}
+
+function compressIntoHighDangerZones(areas: CityStateArea[]): CityStateArea[] {
+  const cloned = areas.map((a) => ({ ...a }));
+  const absorbed = new Set<number>();
+
+  for (let i = 0; i < cloned.length; i++) {
+    const high = cloned[i];
+    if (!isHighDanger(high)) continue;
+    let mergedCount = 0;
+
+    for (let j = 0; j < cloned.length; j++) {
+      if (i === j || absorbed.has(j)) continue;
+      const low = cloned[j];
+      if (high.impact_type !== low.impact_type) continue;
+      if (isHighDanger(low)) continue;
+      if (approxDistanceMeters(high, low) > high.radius_m) continue;
+
+      absorbed.add(j);
+      mergedCount += 1;
+    }
+
+    if (mergedCount > 0) {
+      high.radius_m = Math.min(
+        2500,
+        Math.round(high.radius_m + Math.sqrt(mergedCount) * 80),
+      );
+      high.severity = Math.min(100, high.severity + Math.min(mergedCount, 8));
+      high.danger_to_remain = "high";
+      high.status = "merged_cluster";
+    }
   }
+
+  return cloned.filter((_, idx) => !absorbed.has(idx));
 }
 
-function loadSession(): SessionData | null {
-  try {
-    const raw = sessionStorage.getItem(SESSION_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as SessionData;
-  } catch {
-    return null;
+function collapseNearbyDisplayNodes(
+  areas: CityStateArea[],
+  mergeDistanceM = 230,
+): CityStateArea[] {
+  const grouped = new Map<string, CityStateArea[]>();
+  for (const area of areas) {
+    const bucket = isHighDanger(area) ? "high" : "low";
+    const key = `${area.impact_type}:${bucket}`;
+    const list = grouped.get(key);
+    if (list) list.push({ ...area });
+    else grouped.set(key, [{ ...area }]);
   }
-}
 
-function clearSession() {
-  try {
-    sessionStorage.removeItem(SESSION_KEY);
-  } catch {
-    /* ignore */
+  const collapsed: CityStateArea[] = [];
+  for (const [, group] of grouped) {
+    const pending = [...group];
+    while (pending.length > 0) {
+      const seed = pending.pop()!;
+      const cluster = [seed];
+      let changed = true;
+      while (changed) {
+        changed = false;
+        const keep: CityStateArea[] = [];
+        for (const candidate of pending) {
+          const near = cluster.some(
+            (c) => approxDistanceMeters(c, candidate) <= mergeDistanceM,
+          );
+          if (near) {
+            cluster.push(candidate);
+            changed = true;
+          } else {
+            keep.push(candidate);
+          }
+        }
+        pending.splice(0, pending.length, ...keep);
+      }
+
+      if (cluster.length === 1) {
+        collapsed.push(cluster[0]);
+        continue;
+      }
+
+      const totalWeight = cluster.reduce(
+        (sum, c) => sum + Math.max(c.radius_m, 1),
+        0,
+      );
+      const lat =
+        cluster.reduce((sum, c) => sum + c.lat * Math.max(c.radius_m, 1), 0) /
+        totalWeight;
+      const lon =
+        cluster.reduce((sum, c) => sum + c.lon * Math.max(c.radius_m, 1), 0) /
+        totalWeight;
+      const severity = Math.min(
+        100,
+        Math.max(...cluster.map((c) => c.severity)) +
+          Math.min(cluster.length, 6),
+      );
+      const type = cluster[0].impact_type;
+      const cap =
+        type === "flooding" || type === "high_wind" || type === "rain"
+          ? 1300
+          : 2200;
+      const radius_m = Math.min(
+        cap,
+        Math.round(
+          Math.max(...cluster.map((c) => c.radius_m)) +
+            Math.sqrt(cluster.length) * 80,
+        ),
+      );
+      collapsed.push({
+        lat,
+        lon,
+        impact_type: cluster[0].impact_type,
+        severity,
+        danger_to_remain: severity >= 70 ? "high" : cluster[0].danger_to_remain,
+        status: "merged_cluster",
+        radius_m,
+      });
+    }
   }
+  return collapsed;
 }
 
-// ── Car marker CSS (injected once) ────────────────────────────
 const CAR_MARKER_CSS_ID = "crisisnet-car-marker-css";
 function ensureCarMarkerCSS() {
   if (document.getElementById(CAR_MARKER_CSS_ID)) return;
@@ -148,24 +311,20 @@ function createCarMarkerElement(): HTMLDivElement {
 
 export function MapScreen({ theme }: MapScreenProps) {
   const isDark = theme === "dark";
+  const { currentStep, currentStepIndex, totalSteps, stepHistory } =
+    useDisasterDemo();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
-  const markersRef = useRef<mapboxgl.Marker[]>([]);
   const originMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const destMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const positionMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const markersRef = useRef<mapboxgl.Marker[]>([]);
 
   // ── Hydrate from session ───────────────────────────────────
-  const saved = useMemo(() => loadSession(), []);
-
-  const [originText, setOriginText] = useState(saved?.originText ?? "");
-  const [destText, setDestText] = useState(saved?.destText ?? "");
-  const [origin, setOrigin] = useState<Coordinate | null>(
-    saved?.origin ?? null,
-  );
-  const [destination, setDestination] = useState<Coordinate | null>(
-    saved?.destination ?? null,
-  );
+  const [originText, setOriginText] = useState("");
+  const [destText, setDestText] = useState("");
+  const [origin, setOrigin] = useState<Coordinate | null>(null);
+  const [destination, setDestination] = useState<Coordinate | null>(null);
   const [hazardZones, setHazardZones] = useState<HazardZone[]>([]);
   const [hazardModalVisible, setHazardModalVisible] = useState(false);
   const [mapClickMode, setMapClickMode] = useState<
@@ -174,6 +333,8 @@ export function MapScreen({ theme }: MapScreenProps) {
   const [demoRunning, setDemoRunning] = useState(false);
   const [demoStatus, setDemoStatus] = useState("");
   const [mapError, setMapError] = useState<string | null>(null);
+  const [plannerCollapsed, setPlannerCollapsed] = useState(false);
+  const [mapReadyVersion, setMapReadyVersion] = useState(0);
   const [mapIsLoaded, setMapIsLoaded] = useState(false);
 
   const { weatherZones } = useDisasterDemo();
@@ -207,17 +368,13 @@ export function MapScreen({ theme }: MapScreenProps) {
     setRerouting,
   } = useEvacuationRoute(origin, destination);
 
-  // Restore persisted route on first render
-  useEffect(() => {
-    if (saved?.route && !route) {
-      setRouteDirectly(saved.route);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const [followCamera, setFollowCamera] = useState(true);
+  const routeRef = useRef<RouteResponse | null>(null);
+  useEffect(() => {
+    routeRef.current = route;
+  }, [route]);
 
-  // ── Trip simulation ────────────────────────────────────────
+  // â”€â”€ Trip simulation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const {
     position: simPosition,
     bearing: simBearing,
@@ -231,8 +388,10 @@ export function MapScreen({ theme }: MapScreenProps) {
     rerouting,
   );
 
-  const currentPositionRef = useRef<Coordinate | null>(null);
-  currentPositionRef.current = currentPosition;
+  const currentPositionRef = useRef<typeof currentPosition>(null);
+  useEffect(() => {
+    currentPositionRef.current = currentPosition;
+  }, [currentPosition]);
 
   useEffect(() => {
     if (simPosition && tripActive) {
@@ -246,20 +405,16 @@ export function MapScreen({ theme }: MapScreenProps) {
   }, [route?.route_id, activeWeatherLayer]);
   // ── Persist session when route changes ─────────────────────
   useEffect(() => {
-    if (route && origin && destination) {
-      saveSession({ origin, destination, originText, destText, route });
+    if (origin || destination) {
+      return;
     }
-  }, [route, origin, destination, originText, destText]);
-
-  const initialPoint = useMemo(
-    () =>
-      mapIncidentPointsMock[0] ?? {
-        latitude: DEFAULT_CENTER[1],
-        longitude: DEFAULT_CENTER[0],
-        label: "Default",
-      },
-    [],
-  );
+    const defaultOrigin = DEFAULT_ROUTE_ORIGIN;
+    const defaultDestination = DEFAULT_ROUTE_DESTINATION;
+    setOrigin(defaultOrigin);
+    setDestination(defaultDestination);
+    setOriginText(formatCoord(defaultOrigin));
+    setDestText(formatCoord(defaultDestination));
+  }, [origin, destination]);
 
   const fetchHazards = useCallback(async () => {
     try {
@@ -277,7 +432,7 @@ export function MapScreen({ theme }: MapScreenProps) {
     return () => clearInterval(interval);
   }, [fetchHazards]);
 
-  // ── Map init ──────────────────────────────────────────────
+  // â”€â”€ Map init â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     const container = containerRef.current;
     if (!container || !MAPBOX_PUBLIC_TOKEN) return;
@@ -291,7 +446,7 @@ export function MapScreen({ theme }: MapScreenProps) {
         style: isDark
           ? "mapbox://styles/mapbox/dark-v11"
           : "mapbox://styles/mapbox/streets-v12",
-        center: [initialPoint.longitude, initialPoint.latitude],
+        center: DEFAULT_CENTER,
         zoom: 11,
       });
 
@@ -305,6 +460,7 @@ export function MapScreen({ theme }: MapScreenProps) {
       );
 
       map.on("load", () => {
+        setMapReadyVersion((value) => value + 1);
         map.addSource(ROUTE_SOURCE, {
           type: "geojson",
           data: { type: "FeatureCollection", features: [] },
@@ -330,20 +486,171 @@ export function MapScreen({ theme }: MapScreenProps) {
           id: HAZARD_FILL_LAYER,
           type: "fill",
           source: HAZARD_SOURCE,
-          paint: { "fill-color": "#ef4444", "fill-opacity": 0.25 },
+          paint: {
+            "fill-color": [
+              "match",
+              ["get", "hazard_type"],
+              "flood",
+              "#2563eb",
+              "wind",
+              "#6b7280",
+              "roadblock",
+              "#ef4444",
+              "#ef4444",
+            ],
+            "fill-opacity": 0.25,
+          },
         });
         map.addLayer({
           id: HAZARD_OUTLINE_LAYER,
           type: "line",
           source: HAZARD_SOURCE,
           paint: {
-            "line-color": "#ef4444",
+            "line-color": [
+              "match",
+              ["get", "hazard_type"],
+              "flood",
+              "#2563eb",
+              "wind",
+              "#6b7280",
+              "roadblock",
+              "#ef4444",
+              "#ef4444",
+            ],
             "line-width": 2,
             "line-dasharray": [2, 2],
           },
         });
 
-        // ── Weather alert zones (amber/orange, distinct from red hazards) ──
+        map.addSource(CITY_STATE_SOURCE, {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+        map.addLayer({
+          id: CITY_STATE_LAYER,
+          type: "heatmap",
+          source: CITY_STATE_SOURCE,
+          paint: {
+            // Weight each point by its severity (0–100 → 0–1)
+            "heatmap-weight": [
+              "interpolate",
+              ["linear"],
+              ["get", "severity"],
+              0, 0,
+              100, 1,
+            ],
+            // Increase intensity at higher zoom levels
+            "heatmap-intensity": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              8, 0.6,
+              14, 2,
+            ],
+            // Radius grows with zoom
+            "heatmap-radius": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              8, 18,
+              14, 48,
+            ],
+            // Severity gradient: transparent → blue → cyan → green → yellow → orange → red
+            "heatmap-color": [
+              "interpolate",
+              ["linear"],
+              ["heatmap-density"],
+              0,   "rgba(0,0,255,0)",
+              0.15, "rgba(65,182,196,0.6)",
+              0.35, "rgba(127,205,187,0.75)",
+              0.55, "rgba(255,237,160,0.85)",
+              0.75, "rgba(253,141,60,0.9)",
+              1,   "rgba(215,25,28,1)",
+            ],
+            "heatmap-opacity": 0.85,
+          },
+        });
+        map.addLayer({
+          id: CITY_STATE_LABEL_LAYER,
+          type: "symbol",
+          source: CITY_STATE_SOURCE,
+          layout: {
+            "text-field": ["get", "icon"],
+            "text-size": 12,
+            "text-offset": [0, 0],
+            "text-allow-overlap": true,
+          },
+        });
+        map.on("click", CITY_STATE_LAYER, (e) => {
+          if (!e.features?.length) return;
+          const props = e.features[0].properties ?? {};
+          const impactType = String(props.impact_type ?? "unknown").replace(
+            "_",
+            " ",
+          );
+          const severity = props.severity ?? "unknown";
+          const danger = props.danger_to_remain ?? "unknown";
+          const status = props.status ?? "unknown";
+          const radius = props.radius_m ?? "n/a";
+          const step =
+            props.step_index != null ? Number(props.step_index) + 1 : "n/a";
+          const popupHtml = [
+            '<div style="font-family:system-ui;font-size:13px;line-height:1.4;">',
+            "<strong>Incident: " + impactType + "</strong><br/>",
+            "<span>Severity: " + severity + "</span><br/>",
+            "<span>Danger: " + danger + "</span><br/>",
+            "<span>Status: " + status + "</span><br/>",
+            "<span>Radius: " + radius + " m</span><br/>",
+            '<span style="color:#64748b;">Step ' + step + "</span>",
+            "</div>",
+          ].join("");
+          new mapboxgl.Popup({ offset: 12, maxWidth: "280px" })
+            .setLngLat(e.lngLat)
+            .setHTML(popupHtml)
+            .addTo(map);
+        });
+        map.on("click", CITY_STATE_LABEL_LAYER, (e) => {
+          if (!e.features?.length) return;
+          const props = e.features[0].properties ?? {};
+          const impactType = String(props.impact_type ?? "unknown").replace(
+            "_",
+            " ",
+          );
+          const severity = props.severity ?? "unknown";
+          const danger = props.danger_to_remain ?? "unknown";
+          const status = props.status ?? "unknown";
+          const radius = props.radius_m ?? "n/a";
+          const step =
+            props.step_index != null ? Number(props.step_index) + 1 : "n/a";
+          const popupHtml = [
+            '<div style="font-family:system-ui;font-size:13px;line-height:1.4;">',
+            "<strong>Incident: " + impactType + "</strong><br/>",
+            "<span>Severity: " + severity + "</span><br/>",
+            "<span>Danger: " + danger + "</span><br/>",
+            "<span>Status: " + status + "</span><br/>",
+            "<span>Radius: " + radius + " m</span><br/>",
+            '<span style="color:#64748b;">Step ' + step + "</span>",
+            "</div>",
+          ].join("");
+          new mapboxgl.Popup({ offset: 12, maxWidth: "280px" })
+            .setLngLat(e.lngLat)
+            .setHTML(popupHtml)
+            .addTo(map);
+        });
+        map.on("mouseenter", CITY_STATE_LAYER, () => {
+          map.getCanvas().style.cursor = "pointer";
+        });
+        map.on("mouseleave", CITY_STATE_LAYER, () => {
+          map.getCanvas().style.cursor = "";
+        });
+        map.on("mouseenter", CITY_STATE_LABEL_LAYER, () => {
+          map.getCanvas().style.cursor = "pointer";
+        });
+        map.on("mouseleave", CITY_STATE_LABEL_LAYER, () => {
+          map.getCanvas().style.cursor = "";
+        });
+
+        // â”€â”€ Weather alert zones (amber/orange, distinct from red hazards) â”€â”€
         map.addSource(WEATHER_ALERT_SOURCE, {
           type: "geojson",
           data: { type: "FeatureCollection", features: [] },
@@ -410,6 +717,17 @@ export function MapScreen({ theme }: MapScreenProps) {
         map.on("click", WEATHER_ALERT_FILL, (e) => {
           if (!e.features?.length) return;
           const props = e.features[0].properties ?? {};
+          const popupHtml =
+            '<div style="font-family:system-ui;font-size:13px;">' +
+            "<strong>" +
+            (props.event || "Weather Alert") +
+            "</strong><br/>" +
+            '<span style="text-transform:capitalize;">Severity: ' +
+            (props.severity || "unknown") +
+            "</span><br/>" +
+            '<span style="color:#666;">' +
+            (props.region || "") +
+            "</span></div>";
           new mapboxgl.Popup({ offset: 12, maxWidth: "260px" })
             .setLngLat(e.lngLat)
             .setHTML(
@@ -455,7 +773,6 @@ export function MapScreen({ theme }: MapScreenProps) {
       mapRef.current = map;
 
       return () => {
-        markers.forEach((m) => m.remove());
         map.remove();
         mapRef.current = null;
         setMapIsLoaded(false);
@@ -464,9 +781,25 @@ export function MapScreen({ theme }: MapScreenProps) {
       console.error("Map init failed:", err);
       setMapError(err instanceof Error ? err.message : "Map failed to load");
     }
-  }, [initialPoint.latitude, initialPoint.longitude, isDark]);
+  }, [isDark]);
 
-  // ── Map click listener ────────────────────────────────────
+  useEffect(() => {
+    const map = mapRef.current;
+    const container = containerRef.current;
+    if (!map || !container) return;
+    const observer = new ResizeObserver(() => map.resize());
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [mapIsLoaded]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const t = setTimeout(() => map.resize(), 50);
+    return () => clearTimeout(t);
+  }, [plannerCollapsed]);
+
+  // â”€â”€ Map click listener â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     function handleMapClick(e: Event) {
       const { coord, label } = (e as CustomEvent).detail;
@@ -484,7 +817,7 @@ export function MapScreen({ theme }: MapScreenProps) {
     return () => window.removeEventListener("map-click", handleMapClick);
   }, [mapClickMode]);
 
-  // ── Update route line ─────────────────────────────────────
+  // â”€â”€ Update route line â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const prevRouteIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -537,9 +870,9 @@ export function MapScreen({ theme }: MapScreenProps) {
       prevRouteIdRef.current = null;
       source.setData({ type: "FeatureCollection", features: [] });
     }
-  }, [route, tripActive]);
+  }, [route, tripActive, mapIsLoaded]);
 
-  // ── Update origin/dest markers ────────────────────────────
+  // â”€â”€ Update origin/dest markers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -558,14 +891,14 @@ export function MapScreen({ theme }: MapScreenProps) {
         .setPopup(new mapboxgl.Popup({ offset: 24 }).setText("Destination"))
         .addTo(map);
     }
-  }, [origin, destination]);
+  }, [origin, destination, mapIsLoaded]);
 
-  // ── Update current position marker (car icon) ───────────────
+  // â”€â”€ Update current position marker (car icon) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
-    if (currentPosition && tripActive) {
+    if (currentPosition) {
       ensureCarMarkerCSS();
       if (!positionMarkerRef.current) {
         const el = createCarMarkerElement();
@@ -586,9 +919,9 @@ export function MapScreen({ theme }: MapScreenProps) {
       positionMarkerRef.current?.remove();
       positionMarkerRef.current = null;
     }
-  }, [currentPosition, tripActive, simBearing]);
+  }, [currentPosition, simBearing]);
 
-  // ── Follow-camera: nav-mode tracking during active trip ────
+  // â”€â”€ Follow-camera: nav-mode tracking during active trip â”€â”€â”€â”€
   const prevTripActiveRef = useRef(false);
   const lastCameraUpdateRef = useRef(0);
 
@@ -645,7 +978,7 @@ export function MapScreen({ theme }: MapScreenProps) {
     };
   }, [tripActive]);
 
-  // ── Update hazard polygons ────────────────────────────────
+  // â”€â”€ Update hazard polygons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -666,7 +999,171 @@ export function MapScreen({ theme }: MapScreenProps) {
     source.setData({ type: "FeatureCollection", features });
   }, [hazardZones]);
 
-  // ── Rerouting: pulse route line ───────────────────────────
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const source = map.getSource(CITY_STATE_SOURCE) as
+      | mapboxgl.GeoJSONSource
+      | undefined;
+    if (!source) return;
+
+    const recentHistory = stepHistory.slice(-10);
+    const features = recentHistory.flatMap(({ stepIndex, step }) => {
+      const rawAreas = extractCityStateAreas(step.cityStateRaw);
+      const areas = collapseNearbyDisplayNodes(
+        compressIntoHighDangerZones(rawAreas),
+        260,
+      );
+      return areas.map((area, index) => ({
+        type: "Feature" as const,
+        id: "city-impact-" + stepIndex + "-" + index,
+        properties: {
+          impact_type: area.impact_type,
+          severity: area.severity,
+          danger_to_remain: area.danger_to_remain,
+          status: area.status,
+          radius_m: area.radius_m,
+          step_index: stepIndex,
+          icon: toImpactIcon(area.impact_type),
+        },
+        geometry: {
+          type: "Point" as const,
+          coordinates: [area.lon, area.lat] as [number, number],
+        },
+      }));
+    });
+    source.setData({ type: "FeatureCollection", features });
+  }, [mapReadyVersion, stepHistory]);
+
+  const lastSyncedStepRef = useRef<number | null>(null);
+  const syncedHazardsRef = useRef<
+    Map<
+      string,
+      {
+        hazardId: string;
+        lastSeenStep: number;
+        persistent: boolean;
+        hazardType: string;
+      }
+    >
+  >(new Map());
+  useEffect(() => {
+    if (lastSyncedStepRef.current === currentStepIndex) {
+      return;
+    }
+    lastSyncedStepRef.current = currentStepIndex;
+
+    let cancelled = false;
+
+    async function syncCityStateHazards() {
+      const stepAreas = collapseNearbyDisplayNodes(
+        compressIntoHighDangerZones(
+          extractCityStateAreas(currentStep.cityStateRaw),
+        ),
+        240,
+      );
+      const persistStepsFor = (hazardType: string) => {
+        if (hazardType === "roadblock") return 9;
+        if (hazardType === "flood") return 3;
+        if (hazardType === "wind") return 2;
+        return 4;
+      };
+      const keyFor = (hazardType: string, lat: number, lon: number) =>
+        `${hazardType}:${Math.round(lat * 350) / 350}:${Math.round(lon * 350) / 350}`;
+      const radiusForHazard = (hazardType: string, radius: number) => {
+        if (hazardType === "roadblock")
+          return Math.max(60, Math.min(1400, radius));
+        if (hazardType === "flood") return Math.max(60, Math.min(900, radius));
+        if (hazardType === "wind") return Math.max(60, Math.min(800, radius));
+        return Math.max(60, Math.min(1000, radius));
+      };
+
+      try {
+        const tracked = syncedHazardsRef.current;
+        const desired = new Set<string>();
+        let changed = false;
+
+        for (const area of stepAreas) {
+          if (cancelled) return;
+          const hazardType = toHazardType(area.impact_type, area.severity);
+          if (!hazardType) {
+            continue;
+          }
+          const key = keyFor(hazardType, area.lat, area.lon);
+          desired.add(key);
+          const persistent =
+            area.impact_type === "road_closure" || area.severity >= 86;
+          const existing = tracked.get(key);
+          if (existing) {
+            existing.lastSeenStep = currentStepIndex;
+            existing.persistent = existing.persistent || persistent;
+            continue;
+          }
+          const created = await reportHazard(
+            hazardType,
+            { lat: area.lat, lng: area.lon },
+            "step " + (currentStepIndex + 1) + ": " + area.impact_type,
+            radiusForHazard(hazardType, area.radius_m),
+          );
+          tracked.set(key, {
+            hazardId: created.hazard_id,
+            lastSeenStep: currentStepIndex,
+            persistent,
+            hazardType,
+          });
+          changed = true;
+        }
+
+        for (const [key, entry] of Array.from(tracked.entries())) {
+          if (cancelled) return;
+          if (desired.has(key)) continue;
+          const ttl = persistStepsFor(entry.hazardType);
+          if (
+            entry.persistent &&
+            currentStepIndex - entry.lastSeenStep <= ttl
+          ) {
+            continue;
+          }
+          await deactivateHazard(entry.hazardId).catch(() => undefined);
+          tracked.delete(key);
+          changed = true;
+        }
+
+        if (changed) {
+          await fetchHazards();
+        }
+        if (!cancelled && changed && routeRef.current) {
+          refetch();
+        }
+      } catch {
+        // no-op for demo resilience
+      }
+    }
+
+    void syncCityStateHazards();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentStep.cityStateRaw, currentStepIndex, fetchHazards, refetch]);
+
+  useEffect(() => {
+    if (!route?.geometry?.coordinates?.length || totalSteps <= 1) {
+      return;
+    }
+    const coords = route.geometry.coordinates as [number, number][];
+    const fraction = Math.min(
+      1,
+      Math.max(0, currentStepIndex / (totalSteps - 1)),
+    );
+    const pointIndex = Math.min(
+      coords.length - 1,
+      Math.floor(fraction * (coords.length - 1)),
+    );
+    const [lng, lat] = coords[pointIndex];
+    setCurrentPosition({ lat, lng });
+  }, [currentStepIndex, route?.geometry, setCurrentPosition, totalSteps]);
+
+  // â”€â”€ Rerouting: pulse route line â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.getLayer(ROUTE_LAYER)) return;
@@ -680,7 +1177,7 @@ export function MapScreen({ theme }: MapScreenProps) {
     }
   }, [rerouting]);
 
-  // ── Weather: toggle wind particle layer visibility ──────────
+  // â”€â”€ Weather: toggle wind particle layer visibility â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.getLayer(WIND_LAYER)) return;
@@ -691,7 +1188,7 @@ export function MapScreen({ theme }: MapScreenProps) {
     );
   }, [showWind]);
 
-  // ── Weather: toggle alert zones visibility + fetch data ────
+  // â”€â”€ Weather: toggle alert zones visibility + fetch data â”€â”€â”€â”€
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapIsLoaded) return;
@@ -739,7 +1236,7 @@ export function MapScreen({ theme }: MapScreenProps) {
     source?.setData(weatherZones as any);
   }, [weatherZones, showWeatherAlerts, mapIsLoaded]);
 
-  // ── Weather: fetch route weather when route changes ────────
+  // â”€â”€ Weather: fetch route weather when route changes â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     if (!route?.route_id || !showRouteWeather) {
       setRouteWeatherPoints([]);
@@ -750,7 +1247,7 @@ export function MapScreen({ theme }: MapScreenProps) {
       .catch(() => setRouteWeatherPoints([]));
   }, [route?.route_id, showRouteWeather]);
 
-  // ── Weather: render route weather markers ──────────────────
+  // â”€â”€ Weather: render route weather markers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     const map = mapRef.current;
     weatherMarkersRef.current.forEach((m) => m.remove());
@@ -760,14 +1257,16 @@ export function MapScreen({ theme }: MapScreenProps) {
 
     for (const pt of routeWeatherPoints) {
       const temp =
-        pt.temperature_c != null ? `${Math.round(pt.temperature_c)}°C` : "";
+        pt.temperature_c != null
+          ? String(Math.round(pt.temperature_c)) + "C"
+          : "";
       const wind =
         pt.wind_speed_kmh != null
-          ? `${Math.round(pt.wind_speed_kmh)} km/h`
+          ? String(Math.round(pt.wind_speed_kmh)) + " km/h"
           : "";
       const precip =
         pt.precipitation_probability != null && pt.precipitation_probability > 0
-          ? `${pt.precipitation_probability}%`
+          ? String(pt.precipitation_probability) + "%"
           : "";
 
       const parts = [temp, wind, precip].filter(Boolean);
@@ -793,7 +1292,7 @@ export function MapScreen({ theme }: MapScreenProps) {
     };
   }, [routeWeatherPoints, showRouteWeather]);
 
-  // ── Handlers ──────────────────────────────────────────────
+  // â”€â”€ Handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handlePlanRoute = () => {
     const o = coordFromText(originText);
     const d = coordFromText(destText);
@@ -826,7 +1325,6 @@ export function MapScreen({ theme }: MapScreenProps) {
 
   const handleEndTrip = () => {
     endTrip();
-    clearSession();
   };
 
   const fitMapToRoute = useCallback((r: RouteResponse) => {
@@ -897,342 +1395,356 @@ export function MapScreen({ theme }: MapScreenProps) {
 
   return (
     <View className={`flex-1 ${isDark ? "bg-slate-950" : "bg-slate-100"}`}>
-      {/* ── Rerouting banner ────────────────────────────── */}
+      {/* â”€â”€ Rerouting banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {rerouting && (
         <View className="z-10 bg-amber-500 px-4 py-2">
           <Text className="text-center text-sm font-semibold text-black">
             {tripActive
-              ? "⚠ Rerouting from your current position..."
-              : "⚠ Rerouting — new hazard detected on your path…"}
-          </Text>
-        </View>
-      )}
-
-      {/* ── Demo status banner ──────────────────────────── */}
-      {demoStatus !== "" && (
-        <View
-          className={`z-10 px-4 py-2 ${isDark ? "bg-indigo-900" : "bg-indigo-100"}`}
-        >
-          <Text
-            className={`text-center text-sm font-medium ${isDark ? "text-indigo-200" : "text-indigo-800"}`}
-          >
-            {demoStatus}
+              ? "Warning: rerouting from your current position..."
+              : "Warning: rerouting due to a new hazard on your path..."}
           </Text>
         </View>
       )}
 
       <View className="flex-1 flex-row">
-        {/* ── Sidebar panel ─────────────────────────────── */}
-        <View
-          className={`w-80 border-r p-4 ${isDark ? "border-slate-700 bg-slate-900" : "border-slate-200 bg-white"}`}
-          // @ts-expect-error web-only overflow style
-          style={{ minWidth: 320, overflowY: "auto" }}
-        >
-          <Text
-            className={`mb-3 text-lg font-bold ${isDark ? "text-white" : "text-slate-900"}`}
+        {!plannerCollapsed ? (
+          <View
+            className={`w-80 border-r p-4 ${isDark ? "border-slate-700 bg-slate-900" : "border-slate-200 bg-white"}`}
+            // @ts-expect-error web-only overflow style
+            style={{ minWidth: 320, overflowY: "auto" }}
           >
-            Route Planner
-          </Text>
-
-          {/* Origin */}
-          <Text
-            className={`mb-1 text-xs font-medium ${isDark ? "text-slate-400" : "text-slate-500"}`}
-          >
-            Origin (lat, lng)
-          </Text>
-          <View className="mb-2 flex-row items-center gap-2">
-            <TextInput
-              className={`flex-1 rounded-lg px-3 py-2 text-sm ${
-                isDark
-                  ? "bg-slate-800 text-white"
-                  : "bg-slate-100 text-slate-900"
-              } ${mapClickMode === "origin" ? "border-2 border-green-500" : ""}`}
-              placeholder="43.706, -79.41"
-              placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
-              value={originText}
-              onChangeText={setOriginText}
-              editable={!inputsDisabled}
-            />
-            <Pressable
-              onPress={() =>
-                setMapClickMode(mapClickMode === "origin" ? null : "origin")
-              }
-              disabled={inputsDisabled}
-              className={`rounded-lg px-2 py-2 ${
-                mapClickMode === "origin"
-                  ? "bg-green-600"
-                  : isDark
-                    ? "bg-slate-700"
-                    : "bg-slate-200"
-              }`}
+            <Text
+              className={`mb-3 text-lg font-bold ${isDark ? "text-white" : "text-slate-900"}`}
             >
-              <Text
-                className={`text-xs ${mapClickMode === "origin" ? "text-white" : isDark ? "text-slate-300" : "text-slate-600"}`}
-              >
-                📍
-              </Text>
-            </Pressable>
-          </View>
-          {!inputsDisabled && (
-            <Pressable onPress={handleUseCurrentLocation} className="mb-3">
-              <Text className="text-xs text-blue-500">
-                Use current location
-              </Text>
-            </Pressable>
-          )}
-
-          {/* Destination */}
-          <Text
-            className={`mb-1 text-xs font-medium ${isDark ? "text-slate-400" : "text-slate-500"}`}
-          >
-            Destination (lat, lng)
-          </Text>
-          <View className="mb-3 flex-row items-center gap-2">
-            <TextInput
-              className={`flex-1 rounded-lg px-3 py-2 text-sm ${
-                isDark
-                  ? "bg-slate-800 text-white"
-                  : "bg-slate-100 text-slate-900"
-              } ${mapClickMode === "destination" ? "border-2 border-purple-500" : ""}`}
-              placeholder="43.65, -79.38"
-              placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
-              value={destText}
-              onChangeText={setDestText}
-              editable={!inputsDisabled}
-            />
-            <Pressable
-              onPress={() =>
-                setMapClickMode(
-                  mapClickMode === "destination" ? null : "destination",
-                )
-              }
-              disabled={inputsDisabled}
-              className={`rounded-lg px-2 py-2 ${
-                mapClickMode === "destination"
-                  ? "bg-purple-600"
-                  : isDark
-                    ? "bg-slate-700"
-                    : "bg-slate-200"
-              }`}
-            >
-              <Text
-                className={`text-xs ${mapClickMode === "destination" ? "text-white" : isDark ? "text-slate-300" : "text-slate-600"}`}
-              >
-                🏁
-              </Text>
-            </Pressable>
-          </View>
-
-          {mapClickMode && (
-            <Text className="mb-2 text-xs text-amber-500">
-              Click the map to set {mapClickMode}
+              Route Planner
             </Text>
-          )}
 
-          {/* Plan Route button */}
-          {!tripActive && (
-            <Pressable
-              onPress={handlePlanRoute}
-              disabled={loading || inputsDisabled}
-              className={`mb-4 rounded-lg py-3 ${loading || inputsDisabled ? "bg-blue-400" : "bg-blue-600"}`}
+            {/* Origin */}
+            <Text
+              className={`mb-1 text-xs font-medium ${isDark ? "text-slate-400" : "text-slate-500"}`}
             >
-              <Text className="text-center text-sm font-semibold text-white">
-                {loading ? "Planning…" : "Plan Route"}
-              </Text>
-            </Pressable>
-          )}
-
-          {/* Error */}
-          {error && (
-            <View className="mb-3 rounded-lg bg-red-900/30 p-3">
-              <Text className="text-xs text-red-400">{error}</Text>
-            </View>
-          )}
-
-          {/* Route info */}
-          {route && (
-            <View
-              className={`mb-4 rounded-xl p-3 ${isDark ? "bg-slate-800" : "bg-slate-50"}`}
-            >
-              <Text
-                className={`mb-1 text-sm font-semibold ${isDark ? "text-white" : "text-slate-900"}`}
+              Origin (lat, lng)
+            </Text>
+            <View className="mb-2 flex-row items-center gap-2">
+              <TextInput
+                className={`flex-1 rounded-lg px-3 py-2 text-sm ${
+                  isDark
+                    ? "bg-slate-800 text-white"
+                    : "bg-slate-100 text-slate-900"
+                } ${mapClickMode === "origin" ? "border-2 border-green-500" : ""}`}
+                placeholder="43.706, -79.41"
+                placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
+                value={originText}
+                onChangeText={setOriginText}
+                editable={!inputsDisabled}
+              />
+              <Pressable
+                onPress={() =>
+                  setMapClickMode(mapClickMode === "origin" ? null : "origin")
+                }
+                disabled={inputsDisabled}
+                className={`rounded-lg px-2 py-2 ${
+                  mapClickMode === "origin"
+                    ? "bg-green-600"
+                    : isDark
+                      ? "bg-slate-700"
+                      : "bg-slate-200"
+                }`}
               >
-                Route Details
-              </Text>
-              <Text
-                className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}
-              >
-                Distance: {formatDistance(route.distance_meters)}
-              </Text>
-              <Text
-                className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}
-              >
-                Duration: {formatDuration(route.duration_seconds)}
-              </Text>
-              {route.hazards_avoided.length > 0 && (
-                <Text className="mt-1 text-xs text-amber-400">
-                  Hazards avoided: {route.hazards_avoided.length}
-                </Text>
-              )}
-              {route.instructions.length > 0 && (
-                <View className="mt-2">
-                  <Text
-                    className={`mb-1 text-xs font-medium ${isDark ? "text-slate-300" : "text-slate-600"}`}
-                  >
-                    Directions
-                  </Text>
-                  {route.instructions.slice(0, 6).map((instr, i) => (
-                    <Text
-                      key={i}
-                      className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}
-                    >
-                      {i + 1}. {instr}
-                    </Text>
-                  ))}
-                  {route.instructions.length > 6 && (
-                    <Text
-                      className={`text-xs ${isDark ? "text-slate-500" : "text-slate-400"}`}
-                    >
-                      +{route.instructions.length - 6} more…
-                    </Text>
-                  )}
-                </View>
-              )}
-            </View>
-          )}
-
-          {/* ── Trip controls ──────────────────────────── */}
-          {route && !tripActive && !demoRunning && (
-            <Pressable
-              onPress={handleStartTrip}
-              className="mb-4 rounded-lg bg-green-600 py-3"
-            >
-              <Text className="text-center text-sm font-semibold text-white">
-                Start Trip
-              </Text>
-            </Pressable>
-          )}
-
-          {tripActive && (
-            <View
-              className={`mb-4 rounded-xl p-3 ${isDark ? "bg-green-950/40" : "bg-green-50"}`}
-            >
-              <View className="mb-2 flex-row items-center gap-2">
-                <View className="h-2 w-2 rounded-full bg-green-500" />
                 <Text
-                  className={`text-xs font-semibold ${isDark ? "text-green-400" : "text-green-700"}`}
+                  className={`text-xs ${mapClickMode === "origin" ? "text-white" : isDark ? "text-slate-300" : "text-slate-600"}`}
                 >
-                  Trip in Progress
+                  📍
                 </Text>
+              </Pressable>
+            </View>
+            {!inputsDisabled && (
+              <Pressable onPress={handleUseCurrentLocation} className="mb-3">
+                <Text className="text-xs text-blue-500">
+                  Use current location
+                </Text>
+              </Pressable>
+            )}
+
+            {/* Destination */}
+            <Text
+              className={`mb-1 text-xs font-medium ${isDark ? "text-slate-400" : "text-slate-500"}`}
+            >
+              Destination (lat, lng)
+            </Text>
+            <View className="mb-3 flex-row items-center gap-2">
+              <TextInput
+                className={`flex-1 rounded-lg px-3 py-2 text-sm ${
+                  isDark
+                    ? "bg-slate-800 text-white"
+                    : "bg-slate-100 text-slate-900"
+                } ${mapClickMode === "destination" ? "border-2 border-purple-500" : ""}`}
+                placeholder="43.65, -79.38"
+                placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
+                value={destText}
+                onChangeText={setDestText}
+                editable={!inputsDisabled}
+              />
+              <Pressable
+                onPress={() =>
+                  setMapClickMode(
+                    mapClickMode === "destination" ? null : "destination",
+                  )
+                }
+                disabled={inputsDisabled}
+                className={`rounded-lg px-2 py-2 ${
+                  mapClickMode === "destination"
+                    ? "bg-purple-600"
+                    : isDark
+                      ? "bg-slate-700"
+                      : "bg-slate-200"
+                }`}
+              >
+                <Text
+                  className={`text-xs ${mapClickMode === "destination" ? "text-white" : isDark ? "text-slate-300" : "text-slate-600"}`}
+                >
+                  🏁
+                </Text>
+              </Pressable>
+            </View>
+
+            {mapClickMode && (
+              <Text className="mb-2 text-xs text-amber-500">
+                Click the map to set {mapClickMode}
+              </Text>
+            )}
+
+            {/* Plan Route button */}
+            {!tripActive && (
+              <Pressable
+                onPress={handlePlanRoute}
+                disabled={loading || inputsDisabled}
+                className={`mb-4 rounded-lg py-3 ${loading || inputsDisabled ? "bg-blue-400" : "bg-blue-600"}`}
+              >
+                <Text className="text-center text-sm font-semibold text-white">
+                  {loading ? "Planning..." : "Plan Route"}
+                </Text>
+              </Pressable>
+            )}
+
+            {/* Error */}
+            {error && (
+              <View className="mb-3 rounded-lg bg-red-900/30 p-3">
+                <Text className="text-xs text-red-400">{error}</Text>
               </View>
+            )}
 
-              {currentPosition && (
-                <Text
-                  className={`mb-1 text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}
-                >
-                  Position: {formatCoord(currentPosition)}
-                </Text>
-              )}
-
-              {/* Progress bar */}
+            {/* Route info */}
+            {route && (
               <View
-                className={`mb-2 h-2 overflow-hidden rounded-full ${isDark ? "bg-slate-700" : "bg-slate-200"}`}
+                className={`mb-4 rounded-xl p-3 ${isDark ? "bg-slate-800" : "bg-slate-50"}`}
               >
-                <View
-                  className="h-full rounded-full bg-green-500"
-                  style={{ width: `${Math.round(simProgress * 100)}%` }}
-                />
+                <Text
+                  className={`mb-1 text-sm font-semibold ${isDark ? "text-white" : "text-slate-900"}`}
+                >
+                  Route Details
+                </Text>
+                <Text
+                  className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}
+                >
+                  Distance: {formatDistance(route.distance_meters)}
+                </Text>
+                <Text
+                  className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}
+                >
+                  Duration: {formatDuration(route.duration_seconds)}
+                </Text>
+                {route.hazards_avoided.length > 0 && (
+                  <Text className="mt-1 text-xs text-amber-400">
+                    Hazards avoided: {route.hazards_avoided.length}
+                  </Text>
+                )}
+                {route.instructions.length > 0 && (
+                  <View className="mt-2">
+                    <Text
+                      className={`mb-1 text-xs font-medium ${isDark ? "text-slate-300" : "text-slate-600"}`}
+                    >
+                      Directions
+                    </Text>
+                    {route.instructions.slice(0, 6).map((instr, i) => (
+                      <Text
+                        key={i}
+                        className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}
+                      >
+                        {i + 1}. {instr}
+                      </Text>
+                    ))}
+                    {route.instructions.length > 6 && (
+                      <Text
+                        className={`text-xs ${isDark ? "text-slate-500" : "text-slate-400"}`}
+                      >
+                        +{route.instructions.length - 6} more...
+                      </Text>
+                    )}
+                  </View>
+                )}
               </View>
-              <Text
-                className={`mb-3 text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}
-              >
-                {Math.round(simProgress * 100)}% complete
-              </Text>
+            )}
 
-              <View className="flex-row gap-2">
-                {!followCamera && (
+            {/* â”€â”€ Trip controls â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+            {route && !tripActive && (
+              <Pressable
+                onPress={handleStartTrip}
+                className="mb-4 rounded-lg bg-green-600 py-3"
+              >
+                <Text className="text-center text-sm font-semibold text-white">
+                  Start Trip
+                </Text>
+              </Pressable>
+            )}
+
+            {tripActive && (
+              <View
+                className={`mb-4 rounded-xl p-3 ${isDark ? "bg-green-950/40" : "bg-green-50"}`}
+              >
+                <View className="mb-2 flex-row items-center gap-2">
+                  <View className="h-2 w-2 rounded-full bg-green-500" />
+                  <Text
+                    className={`text-xs font-semibold ${isDark ? "text-green-400" : "text-green-700"}`}
+                  >
+                    Trip in Progress
+                  </Text>
+                </View>
+
+                {currentPosition && (
+                  <Text
+                    className={`mb-1 text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}
+                  >
+                    Position: {formatCoord(currentPosition)}
+                  </Text>
+                )}
+
+                {/* Progress bar */}
+                <View
+                  className={`mb-2 h-2 overflow-hidden rounded-full ${isDark ? "bg-slate-700" : "bg-slate-200"}`}
+                >
+                  <View
+                    className="h-full rounded-full bg-green-500"
+                    style={{ width: `${Math.round(simProgress * 100)}%` }}
+                  />
+                </View>
+                <Text
+                  className={`mb-3 text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}
+                >
+                  {Math.round(simProgress * 100)}% complete
+                </Text>
+
+                <View className="flex-row gap-2">
+                  {!followCamera && (
+                    <Pressable
+                      onPress={() => setFollowCamera(true)}
+                      className="flex-1 rounded-lg bg-blue-600 py-2"
+                    >
+                      <Text className="text-center text-sm font-semibold text-white">
+                        Re-center
+                      </Text>
+                    </Pressable>
+                  )}
                   <Pressable
-                    onPress={() => setFollowCamera(true)}
-                    className="flex-1 rounded-lg bg-blue-600 py-2"
+                    onPress={handleEndTrip}
+                    className="flex-1 rounded-lg bg-red-600 py-2"
                   >
                     <Text className="text-center text-sm font-semibold text-white">
-                      Re-center
+                      End Trip
                     </Text>
                   </Pressable>
-                )}
-                <Pressable
-                  onPress={handleEndTrip}
-                  disabled={demoRunning}
-                  className="flex-1 rounded-lg bg-red-600 py-2"
-                >
-                  <Text className="text-center text-sm font-semibold text-white">
-                    End Trip
-                  </Text>
-                </Pressable>
+                </View>
               </View>
-            </View>
-          )}
+            )}
 
-          {/* Hazard zones count */}
-          {hazardZones.length > 0 && (
-            <View
-              className={`mb-3 rounded-xl p-3 ${isDark ? "bg-red-950/40" : "bg-red-50"}`}
+            {/* Hazard zones count */}
+            {hazardZones.length > 0 && (
+              <View
+                className={`mb-3 rounded-xl p-3 ${isDark ? "bg-red-950/40" : "bg-red-50"}`}
+              >
+                <Text
+                  className={`text-xs font-medium ${isDark ? "text-red-400" : "text-red-600"}`}
+                >
+                  {hazardZones.length} active hazard zone
+                  {hazardZones.length > 1 ? "s" : ""}
+                </Text>
+              </View>
+            )}
+
+            {/* Report Hazard */}
+            <Pressable
+              onPress={() => setHazardModalVisible(true)}
+              className={`mb-4 rounded-lg py-3 ${isDark ? "bg-red-700" : "bg-red-600"}`}
             >
-              <Text
-                className={`text-xs font-medium ${isDark ? "text-red-400" : "text-red-600"}`}
-              >
-                {hazardZones.length} active hazard zone
-                {hazardZones.length > 1 ? "s" : ""}
-              </Text>
-            </View>
-          )}
-
-          {/* Report Hazard */}
-          <Pressable
-            onPress={() => setHazardModalVisible(true)}
-            className={`mb-4 rounded-lg py-3 ${isDark ? "bg-red-700" : "bg-red-600"}`}
-          >
-            <Text className="text-center text-sm font-semibold text-white">
-              Report Hazard
-            </Text>
-          </Pressable>
-
-          {/* Subtle demo trigger */}
-          {!demoRunning && !tripActive && (
-            <Pressable onPress={handleRunDemo} className="mt-2 py-2">
-              <Text
-                className={`text-center text-xs ${isDark ? "text-slate-600" : "text-slate-400"}`}
-              >
-                Try demo scenario
+              <Text className="text-center text-sm font-semibold text-white">
+                Report Hazard
               </Text>
             </Pressable>
-          )}
-          {demoRunning && (
-            <Text
-              className={`mt-2 text-center text-xs ${isDark ? "text-slate-500" : "text-slate-400"}`}
-            >
-              Demo in progress...
-            </Text>
-          )}
-        </View>
 
-        {/* ── Map container ─────────────────────────────── */}
+            {/* Subtle demo trigger */}
+            {!demoRunning && !tripActive && (
+              <Pressable onPress={handleRunDemo} className="mt-2 py-2">
+                <Text
+                  className={`text-center text-xs ${isDark ? "text-slate-600" : "text-slate-400"}`}
+                >
+                  Try demo scenario
+                </Text>
+              </Pressable>
+            )}
+            {demoRunning && (
+              <Text
+                className={`mt-2 text-center text-xs ${isDark ? "text-slate-500" : "text-slate-400"}`}
+              >
+                Demo in progress...
+              </Text>
+            )}
+          </View>
+        ) : null}
+
+        {/* â”€â”€ Map container â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <View
           className="flex-1"
           style={{ minHeight: 400, position: "relative" as any }}
         >
-          {/* Weather layer overlay (includes live alert signal heatmaps) */}
-          {MAPBOX_PUBLIC_TOKEN && !mapError && (
-            <WeatherLayerOverlay
-              map={mapRef.current}
-              mapLoaded={mapIsLoaded}
-              showWeatherAlerts={showWeatherAlerts}
-              showWind={showWind}
-              onToggleAlerts={(on) => setActiveWeatherLayer(on ? "alerts" : null)}
-              onToggleWind={(on) => setActiveWeatherLayer(on ? "wind" : null)}
-              theme={theme}
-            />
-          )}
+          <View
+            style={{
+              position: "absolute" as any,
+              top: 10,
+              left: 10,
+              zIndex: 12,
+            }}
+          >
+            <Pressable
+              onPress={() => setPlannerCollapsed((prev) => !prev)}
+              className={`h-10 w-10 items-center justify-center rounded-lg border ${
+                isDark
+                  ? "border-slate-700 bg-slate-800"
+                  : "border-slate-200 bg-white"
+              }`}
+              accessibilityLabel={
+                plannerCollapsed ? "Open route planner" : "Close route planner"
+              }
+            >
+              <View
+                className={`mb-1 h-0.5 w-4 rounded ${isDark ? "bg-slate-200" : "bg-slate-700"}`}
+              />
+              <View
+                className={`mb-1 h-0.5 w-4 rounded ${isDark ? "bg-slate-200" : "bg-slate-700"}`}
+              />
+              <View
+                className={`h-0.5 w-4 rounded ${isDark ? "bg-slate-200" : "bg-slate-700"}`}
+              />
+            </Pressable>
+            <View
+              className={`mt-1 rounded-md px-2 py-1 ${isDark ? "bg-slate-900/90" : "bg-white/90"}`}
+            >
+              <Text
+                className={`text-[10px] ${isDark ? "text-slate-300" : "text-slate-600"}`}
+              >
+                Disaster step {currentStepIndex + 1}/{totalSteps}
+              </Text>
+            </View>
+          </View>
           {mapError ? (
             <View
               className={`flex-1 items-center justify-center px-4 ${isDark ? "bg-slate-800" : "bg-slate-50"}`}
@@ -1270,10 +1782,24 @@ export function MapScreen({ theme }: MapScreenProps) {
               </Text>
             </View>
           )}
+          <WeatherLayerOverlay
+            map={mapRef.current}
+            mapLoaded={mapIsLoaded}
+            showWeatherAlerts={showWeatherAlerts}
+            showWind={showWind}
+            onToggleAlerts={() => setActiveWeatherLayer((v) => v === "alerts" ? null : "alerts")}
+            onToggleWind={() => setActiveWeatherLayer((v) => v === "wind" ? null : "wind")}
+            theme={theme}
+            offsetTop={100}
+          />
+          <AlertSignalsLayer
+            map={mapRef.current}
+            mapLoaded={mapIsLoaded}
+          />
         </View>
       </View>
 
-      {/* ── Report Hazard Modal ──────────────────────── */}
+      {/* â”€â”€ Report Hazard Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <ReportHazardModal
         visible={hazardModalVisible}
         onClose={() => {

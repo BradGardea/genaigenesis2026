@@ -47,7 +47,11 @@ export function useEvacuationRoute(
 
     setState((s) => ({ ...s, loading: true, error: null }));
     try {
-      const route = await requestRoute(origin, destination, profile);
+      const routeOrigin =
+        tripActiveRef.current && currentPosRef.current
+          ? currentPosRef.current
+          : origin;
+      const route = await requestRoute(routeOrigin, destination, profile);
       setState((s) => ({ ...s, route, loading: false, error: null, rerouting: false }));
 
       esRef.current?.close();

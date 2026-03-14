@@ -97,7 +97,10 @@ async def plan_route(body: RouteRequest) -> RouteResponse:
     active_zones = hazard_store.get_active_hazards()
     hazard_polygons = [z.polygon for z in active_zones]
 
-    route = await compute_route(body.origin, body.destination, hazard_polygons)
+    try:
+        route = await compute_route(body.origin, body.destination, hazard_polygons)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     route_id = f"route-{uuid.uuid4().hex[:8]}"
 

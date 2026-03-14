@@ -632,6 +632,7 @@ export interface WeatherLayerOverlayProps {
   onToggleAlerts?: (on: boolean) => void;
   onToggleWind?: (on: boolean) => void;
   theme?: AppTheme;
+  offsetTop?: number;
 }
 
 // Static palettes for the pass-through toggles (controlled by MapScreen)
@@ -658,6 +659,7 @@ export function WeatherLayerOverlay({
   onToggleAlerts,
   onToggleWind,
   theme = "dark",
+  offsetTop = 12,
 }: WeatherLayerOverlayProps) {
   const isDark = theme === "dark";
   const panelBg = isDark ? "rgba(15,23,42,0.92)" : "rgba(255,255,255,0.95)";
@@ -987,24 +989,13 @@ export function WeatherLayerOverlay({
 
   return (
     <View
-      pointerEvents="box-none"
       style={{
         position: "absolute" as any,
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
+        top: offsetTop,
+        left: 12,
         zIndex: 20,
       }}
     >
-      {/* ── Floating panel: top-left, adjacent to sidebar ── */}
-      <View
-        style={{
-          position: "absolute" as any,
-          top: 12,
-          left: 12,
-        }}
-      >
         <View
           style={{
             width: 248,
@@ -1149,7 +1140,6 @@ export function WeatherLayerOverlay({
             </View>
           )}
         </View>
-      </View>
     </View>
   );
 }

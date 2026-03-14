@@ -134,7 +134,7 @@ function projectOntoRoute(
     }
   }
 
-  if (bestDist > maxDistM) return null;
+  if (Number.isFinite(maxDistM) && bestDist > maxDistM) return null;
   return { elapsed: bestElapsed, segIndex: bestSeg };
 }
 
@@ -188,7 +188,7 @@ export function useTripSimulation(
 
     // Smart reroute: if we have a current position (mid-trip), project onto the new route
     if (positionRef.current) {
-      const proj = projectOntoRoute(positionRef.current, coords, cumTime);
+      const proj = projectOntoRoute(positionRef.current, coords, cumTime, 1200);
       if (proj) {
         // Continue from the projected point on the new route
         elapsedRef.current = proj.elapsed;
@@ -198,11 +198,16 @@ export function useTripSimulation(
         setBearing(bearingAtSegment(coords, proj.segIndex));
         setProgress(proj.elapsed / totalTime);
       } else {
-        // Too far from new route — start from beginning
-        setPosition({ lng: coords[0][0], lat: coords[0][1] });
-        setBearing(bearingAtSegment(coords, 0));
-        setProgress(0);
-        elapsedRef.current = 0;
+        // If route changed significantly, snap to nearest point instead of jumping back to route start.
+        const nearest = projectOntoRoute(positionRef.current, coords, cumTime, Number.POSITIVE_INFINITY);
+        if (nearest) {
+          elapsedRef.current = nearest.elapsed;
+          const segDuration = cumTime[nearest.segIndex + 1] - cumTime[nearest.segIndex];
+          const t = segDuration > 0 ? (nearest.elapsed - cumTime[nearest.segIndex]) / segDuration : 0;
+          setPosition(interpolatePosition(coords, nearest.segIndex, t));
+          setBearing(bearingAtSegment(coords, nearest.segIndex));
+          setProgress(nearest.elapsed / totalTime);
+        }
       }
     } else {
       setPosition({ lng: coords[0][0], lat: coords[0][1] });

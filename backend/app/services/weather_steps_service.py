@@ -13,7 +13,7 @@ from app.services.timestep_dataset import TimestepDataset
 from app.utils.openai_weather_beautifier import beautify_weather_step
 
 WEATHER_DATASET_FILENAME = "goma_severe_storm_12h_72_timesteps.json"
-_WEATHER_RESPONSE_CACHE: dict[int, WeatherStepResponse] = {}
+_WEATHER_RESPONSE_CACHE: dict[tuple[int, bool], WeatherStepResponse] = {}
 
 
 @lru_cache(maxsize=1)
@@ -34,13 +34,14 @@ def _metadata_model() -> WeatherDatasetMetadata:
     )
 
 
-async def _build_response(step_index: int) -> WeatherStepResponse:
-    if step_index in _WEATHER_RESPONSE_CACHE:
-        return _WEATHER_RESPONSE_CACHE[step_index]
+async def _build_response(step_index: int, beautify: bool = True) -> WeatherStepResponse:
+    cache_key = (step_index, beautify)
+    if cache_key in _WEATHER_RESPONSE_CACHE:
+        return _WEATHER_RESPONSE_CACHE[cache_key]
 
     dataset = _weather_dataset()
     step = dataset.get_step(step_index)
-    beautified_cards = await beautify_weather_step(step)
+    beautified_cards = await beautify_weather_step(step, use_llm=beautify)
     step_time = str(step.get("time", ""))
 
     cards = [
@@ -69,14 +70,16 @@ async def _build_response(step_index: int) -> WeatherStepResponse:
         beautified=cards,
         raw=step,
     )
-    _WEATHER_RESPONSE_CACHE[step_index] = payload
+    _WEATHER_RESPONSE_CACHE[cache_key] = payload
     return payload
 
 
-async def get_weather_current_step(step: int) -> WeatherStepResponse:
-    return await _build_response(step)
+async def get_weather_current_step(step: int, beautify: bool = True) -> WeatherStepResponse:
+    return await _build_response(step, beautify=beautify)
 
 
-async def get_weather_next_step(curr_step: int) -> WeatherStepResponse:
+async def get_weather_next_step(
+    curr_step: int, beautify: bool = True
+) -> WeatherStepResponse:
     next_step = _weather_dataset().get_next_step_index(curr_step)
-    return await _build_response(next_step)
+    return await _build_response(next_step, beautify=beautify)

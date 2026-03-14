@@ -4,6 +4,8 @@ Thumbs.db
 .idea/
 .vscode/
 
+.claude/
+
 # Python
 __pycache__/
 *.py[cod]

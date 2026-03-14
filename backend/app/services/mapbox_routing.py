@@ -17,6 +17,7 @@ MIN_OFFSET_DEG = 0.008  # ~900 m — reaches major arterials, skips residential 
 CRISIS_TRAFFIC_FACTOR = 1.5  # multiplier for durations to reflect evacuation congestion
 WAYPOINT_SNAP_RADIUS_M = 25  # max metres Mapbox may move an avoidance waypoint when snapping
 ENTRY_EXIT_MARGIN_DEG = 0.002  # ~220 m buffer before entry / after exit of hazard
+MAX_AVOIDANCE_WAYPOINTS = 20
 
 
 def _extract_points(geom) -> list[Point]:
@@ -293,7 +294,22 @@ async def compute_route(
         waypoints = _compute_waypoints_from_route(
             geometry, hazard_polygons, repulsion_factor=repulsion
         )
-        routes = await fetch_route(origin, destination, waypoints)
+        if len(waypoints) > MAX_AVOIDANCE_WAYPOINTS:
+            logger.warning(
+                "Generated %d avoidance waypoints; truncating to %d",
+                len(waypoints),
+                MAX_AVOIDANCE_WAYPOINTS,
+            )
+            waypoints = waypoints[:MAX_AVOIDANCE_WAYPOINTS]
+
+        try:
+            routes = await fetch_route(origin, destination, waypoints)
+        except ValueError:
+            logger.warning(
+                "Avoidance attempt %d returned no routes; keeping best known route",
+                attempt + 1,
+            )
+            break
         route, is_clear = _select_best_route(routes, hazard_polygons)
         geometry = route["geometry"]
 
