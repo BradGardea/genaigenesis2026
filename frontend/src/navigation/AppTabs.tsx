@@ -20,7 +20,7 @@ const TAB_OPTIONS: { key: TabKey; label: string; icon: TabIconName }[] = [
 
 export function AppTabs() {
   const [activeTab, setActiveTab] = useState<TabKey>("info");
-  const [theme, setTheme] = useState<AppTheme>("light");
+  const [theme, setTheme] = useState<AppTheme>("dark");
   const [fullName, setFullName] = useState(userProfileMock.fullName);
   const [phoneNumber, setPhoneNumber] = useState(userProfileMock.phoneNumber);
   const [homeArea, setHomeArea] = useState(userProfileMock.homeArea);

@@ -406,6 +406,7 @@ export default function VoiceWidget({ wsUrl = WS_URL, userId = USER_ID }: VoiceW
           <span style={s.statusText}>{statusLabel[phase]}</span>
         </div>
 
+        <div style={s.buttonRow}>
         <button
           onClick={!isConnected ? connect : undefined}
           onMouseDown={isConnected ? startTalking : undefined}
@@ -423,7 +424,7 @@ export default function VoiceWidget({ wsUrl = WS_URL, userId = USER_ID }: VoiceW
             position: "relative",
           }}
         >
-          {!isRecording && <MicSVG size={12} color="currentColor" />}
+          {!isRecording && <MicSVG size={14} color="currentColor" />}
           {isRecording && <WaveSVG active={isRecording} level={level} />}
         </button>
 
@@ -451,6 +452,7 @@ export default function VoiceWidget({ wsUrl = WS_URL, userId = USER_ID }: VoiceW
         >
           ▾
         </button>
+        </div>
       </div>
 
       {(lastUserText || lastAIText) && (
@@ -476,8 +478,17 @@ export default function VoiceWidget({ wsUrl = WS_URL, userId = USER_ID }: VoiceW
 
   const minimized = (
     <button onClick={handleExpand} aria-label="Expand voice controls" style={s.minFab}>
-      <span style={{ fontSize: 14, lineHeight: 1, marginRight: 4 }}>▸</span>
-      <MicSVG size={14} color="currentColor" />
+      <svg width={0} height={0} style={{ position: "absolute", inset: 0 }}>
+        <defs>
+          <linearGradient id="mic-gradient" x1="0%" y1="100%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#0379d1" />
+            <stop offset="100%" stopColor="#0cba75" />
+          </linearGradient>
+        </defs>
+      </svg>
+      <div style={s.minFabIcon}>
+        <MicSVG size={24} color="url(#mic-gradient)" />
+      </div>
     </button>
   );
   const widget = isMinimized ? minimized : expanded;
@@ -500,12 +511,12 @@ const s: Record<string, CSSProperties> = {
     border: "0.5px solid var(--color-border-tertiary)",
     borderRadius: 18,
     background: "#ffffff",
-    padding: "12px 14px",
+    padding: "14px 16px",
     display: "flex",
     flexDirection: "column",
     gap: 10,
-    maxWidth: 260,
-    width: "min(260px, calc(100vw - 32px))",
+    maxWidth: 360,
+    width: "50vw",
     boxShadow: "0 12px 32px rgba(0,0,0,0.14)",
     fontFamily: "var(--font-sans)",
     opacity: 0,
@@ -528,30 +539,49 @@ const s: Record<string, CSSProperties> = {
     right: 16,
     bottom: 64,
     zIndex: 9999,
-    width: 54,
-    height: 42,
-    borderRadius: 16,
+    width: 55,
+    height: 45,
+    borderRadius: 18,
     border: "1px solid var(--color-border-info)",
     background: "#ffffff",
     color: "#1f1f1f",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    boxShadow: "0 10px 28px rgba(0,0,0,0.16)",
+    boxShadow: "0 12px 30px rgba(0,0,0,0.18)",
     cursor: "pointer",
-    gap: 6,
+    gap: 0,
     transition: "opacity 0.15s ease, transform 0.18s ease",
+  },
+  minFabMic: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  minFabIcon: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 32,
+    height: 32,
   },
   topRow: {
     display: "flex",
+    flexDirection: "column",
     alignItems: "center",
-    gap: 8,
+    gap: 12,
   },
   statusGroup: {
     display: "flex",
     alignItems: "center",
     gap: 7,
-    flex: 1,
+  },
+  buttonRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    width: "100%",
   },
   dot: {
     width: 8,
@@ -570,19 +600,20 @@ const s: Record<string, CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: 0,
-    padding: "6px 12px",
+    gap: 6,
+    padding: "8px 14px",
     borderRadius: 10,
-    border: "1px solid",
+    border: "1px solid #d7deea",
     fontSize: 13,
     fontWeight: 600,
     cursor: "pointer",
     flexShrink: 0,
-    transition: "opacity 0.15s, box-shadow 0.2s",
+    transition: "opacity 0.15s, box-shadow 0.2s, transform 0.15s",
     lineHeight: 1,
     minWidth: 46,
     minHeight: 34,
     position: "relative",
+    background: "linear-gradient(135deg, #f7f9fc 0%, #ffffff 100%)",
   },
   iconBtn: {
     width: 32,
@@ -592,7 +623,7 @@ const s: Record<string, CSSProperties> = {
     justifyContent: "center",
     borderRadius: 10,
     border: "1px solid #c44141",
-    background: "#fdeaea",
+    background: "linear-gradient(135deg, #fdeaea 0%, #fff5f5 100%)",
     color: "#c44141",
     cursor: "pointer",
     transition: "opacity 0.15s, background 0.2s, border-color 0.2s",
