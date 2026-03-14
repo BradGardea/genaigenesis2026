@@ -2,6 +2,7 @@ import os
 import json
 import asyncio
 import websockets
+from services.context_service import handle_message
 from fastapi import APIRouter, FastAPI, WebSocket, WebSocketDisconnect
 from dotenv import load_dotenv
 
@@ -104,6 +105,7 @@ async def realtime_proxy(client_ws: WebSocket):
 
                             context = await get_context_for_user(user_id, transcript)
                             context_str = json.dumps(context, indent=2)
+                            extra = await handle_message(transcript, step=1)
 
                             inject_event = {
                                 "type": "conversation.item.create",
@@ -115,7 +117,7 @@ async def realtime_proxy(client_ws: WebSocket):
                                             "type": "input_text",
                                             "text": (
                                                 f"[CONTEXT — do not read aloud, use to inform your response]\n"
-                                                f"{context_str}"
+                                                f"{context_str + extra.json()}"
                                             ),
                                         }
                                     ],
