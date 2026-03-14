@@ -40,6 +40,7 @@ export interface EvacuationPlan {
   summary: string;
   steps: string[];
   packingList: string[];
+  updatedAt?: string;
 }
 
 export type ConnectionRelationship = "dependent" | "guardian" | "friend" | "acquaintance";
