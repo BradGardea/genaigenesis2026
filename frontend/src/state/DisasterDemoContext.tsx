@@ -24,7 +24,7 @@ interface DisasterDemoContextValue {
   isStepping: boolean;
   weatherDatasetMetadata: WeatherDatasetMetadata | null;
   latestHighRiskAlert: { stepIndex: number; title: string; urgency: string } | null;
-  stepDisaster: () => Promise<void>;
+  stepDisaster: (options?: { beautify?: boolean }) => Promise<void>;
   markSectionSeen: (section: keyof (typeof disasterStepsMock)[number]["updateSummary"]) => void;
 }
 
@@ -76,6 +76,8 @@ function applyCityStatePayloadToStep(
       ...step.updateSummary,
       alerts: cityPayload.alerts.length,
     },
+    cityStateRaw: cityPayload.raw,
+    cityStateBeautified: cityPayload.beautified.map((item) => ({ ...item })),
   };
 }
 
@@ -158,10 +160,11 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
       isStepping,
       weatherDatasetMetadata,
       latestHighRiskAlert,
-      stepDisaster: async () => {
+      stepDisaster: async (options) => {
         if (isStepping) {
           return;
         }
+        const beautify = options?.beautify ?? true;
 
         const nextIndex = Math.min(currentStepIndex + 1, totalSteps - 1);
         if (nextIndex === currentStepIndex) {
@@ -174,8 +177,8 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
 
         try {
           const [weatherPayload, cityPayload] = await Promise.all([
-            fetchWeatherNextStep(currentStepIndex),
-            fetchCityStateNextStep(currentStepIndex),
+            fetchWeatherNextStep(currentStepIndex, beautify),
+            fetchCityStateNextStep(currentStepIndex, beautify),
           ]);
           setWeatherDatasetMetadata(weatherPayload.metadata);
           setTotalSteps(cityPayload.step.total_steps);

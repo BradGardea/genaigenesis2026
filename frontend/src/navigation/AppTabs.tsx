@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -56,29 +56,6 @@ export function AppTabs() {
     };
   }, [latestHighRiskAlert]);
 
-  const activeScreen = useMemo(() => {
-    switch (activeTab) {
-      case "map":
-        return <MapScreen theme={theme} />;
-      case "profile":
-        return (
-          <ProfileScreen
-            theme={theme}
-            onThemeChange={setTheme}
-            fullName={fullName}
-            onFullNameChange={setFullName}
-            phoneNumber={phoneNumber}
-            onPhoneNumberChange={setPhoneNumber}
-            homeArea={homeArea}
-            onHomeAreaChange={setHomeArea}
-          />
-        );
-      case "info":
-      default:
-        return <InfoScreen theme={theme} />;
-    }
-  }, [activeTab, fullName, homeArea, phoneNumber, theme]);
-
   return (
     <View className={`flex-1 ${isDark ? "bg-slate-950" : "bg-slate-100"}`}>
       {visibleAlertBanner ? (
@@ -96,7 +73,26 @@ export function AppTabs() {
         </View>
       ) : null}
 
-      <View className="flex-1">{activeScreen}</View>
+      <View className="flex-1">
+        <View style={{ display: activeTab === "info" ? "flex" : "none", flex: 1 }}>
+          <InfoScreen theme={theme} />
+        </View>
+        <View style={{ display: activeTab === "map" ? "flex" : "none", flex: 1 }}>
+          <MapScreen theme={theme} />
+        </View>
+        <View style={{ display: activeTab === "profile" ? "flex" : "none", flex: 1 }}>
+          <ProfileScreen
+            theme={theme}
+            onThemeChange={setTheme}
+            fullName={fullName}
+            onFullNameChange={setFullName}
+            phoneNumber={phoneNumber}
+            onPhoneNumberChange={setPhoneNumber}
+            homeArea={homeArea}
+            onHomeAreaChange={setHomeArea}
+          />
+        </View>
+      </View>
       <Pressable
         className={`absolute left-4 rounded-xl border px-4 py-2 ${
           isFinalStep || isStepping
@@ -110,7 +106,7 @@ export function AppTabs() {
         style={{ bottom: Math.max(insets.bottom, 6) + 64 }}
         disabled={isFinalStep || isStepping}
         onPress={() => {
-          void stepDisaster();
+          void stepDisaster({ beautify: activeTab !== "map" });
         }}
       >
         <Text

@@ -30,6 +30,8 @@ export interface DisasterStepData {
   connections: UserConnection[];
   savedInformation: SavedInformation[];
   weather: WeatherUpdate[];
+  cityStateRaw?: Record<string, unknown>;
+  cityStateBeautified?: Record<string, unknown>[];
   sectionUpdatedAt: DisasterStepSectionUpdatedAt;
   updateSummary: DisasterStepUpdateSummary;
 }

@@ -101,8 +101,9 @@ def _fallback_city_state_output(raw_step: dict[str, Any]) -> dict[str, list[dict
 
 async def extract_city_state_alerts_and_cards(
     raw_step: dict[str, Any],
+    use_llm: bool = True,
 ) -> dict[str, list[dict[str, str]]]:
-    if not settings.openai_api_key:
+    if not use_llm or not settings.openai_api_key:
         return _fallback_city_state_output(raw_step)
 
     system_prompt = (

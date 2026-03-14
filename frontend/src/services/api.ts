@@ -44,6 +44,10 @@ export function getActiveHazards(): Promise<HazardZone[]> {
   return request<HazardZone[]>("/hazards/active");
 }
 
+export async function deactivateHazard(hazardId: string): Promise<void> {
+  await request(`/hazards/${hazardId}`, { method: "DELETE" });
+}
+
 export function requestRoute(
   origin: Coordinate,
   destination: Coordinate,
