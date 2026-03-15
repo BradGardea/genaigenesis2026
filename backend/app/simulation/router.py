@@ -102,7 +102,15 @@ async def stream_events(sim_id: str, request: Request) -> StreamingResponse:
         finally:
             orch.unsubscribe_sse(queue)
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @router.post("/{sim_id}/inject-hazard", response_model=InjectHazardResponse)

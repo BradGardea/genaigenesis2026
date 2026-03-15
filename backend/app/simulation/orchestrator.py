@@ -206,14 +206,6 @@ class SimulationOrchestrator:
                 tick = self.clock.advance()
                 await self._process_tick(tick)
 
-                # Check if all agents are in terminal states
-                if all(
-                    a.state in (AgentState.arrived, AgentState.sheltering)
-                    for a in self.agents
-                ):
-                    logger.info("All agents reached terminal state at tick %d", tick)
-                    break
-
                 # Subtract processing time so ticks stay on schedule
                 elapsed = asyncio.get_event_loop().time() - tick_start
                 remaining = max(0, self.config.tick_interval_seconds - elapsed)
@@ -494,7 +486,7 @@ class SimulationOrchestrator:
         for area in areas:
             impact_type = area.get("impact_type", "")
             severity = int(area.get("severity", 0))
-            if impact_type not in ("road_closure", "flooding", "debris", "structure_damage") or severity < 25:
+            if impact_type not in ("road_closure", "flooding", "debris", "structure_damage") or severity < 40:
                 continue
             lat = area.get("lat")
             lon = area.get("lon")

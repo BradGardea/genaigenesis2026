@@ -118,7 +118,13 @@ export function subscribeToSimulation(
     try { onHazard(JSON.parse(e.data)); } catch { /* ignore */ }
   });
   es.addEventListener("agent_events", (e: MessageEvent) => {
-    try { onAgentEvents?.(JSON.parse(e.data)); } catch { /* ignore */ }
+    try {
+      const parsed = JSON.parse(e.data);
+      console.log("[SSE] agent_events received:", parsed.events?.length, "events");
+      onAgentEvents?.(parsed);
+    } catch (err) {
+      console.warn("[SSE] agent_events parse error:", err, e.data);
+    }
   });
   es.addEventListener("simulation_end", () => {
     es.close();
