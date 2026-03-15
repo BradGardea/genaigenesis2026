@@ -42,6 +42,10 @@ export function useSimulation(): SimulationControls {
       const status: SimulationStatus = await getSimulationStatus(id);
       setAgents(status.agents);
       setCurrentTick(status.current_tick);
+      // Always sync metrics from polling so stats stay fresh even if SSE lags
+      if (status.latest_metrics) {
+        setMetrics(status.latest_metrics);
+      }
       if (status.state !== "running") {
         setSimState(status.state);
         if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }

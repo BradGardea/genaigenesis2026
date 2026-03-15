@@ -28,6 +28,9 @@ export interface AgentSnapshot {
   last_decision: { action: string; reasoning: string; urgency: number } | null;
   cluster_id: string | null;
   is_leader: boolean;
+  dest_name: string;
+  dest_lat: number | null;
+  dest_lng: number | null;
 }
 
 export interface ClusterSummary {

@@ -20,6 +20,7 @@ from app.schemas.agent_models import (
     RelevantZone,
     SuggestedDestination,
 )
+from app.simulation.evacuation_points import sorted_evacuation_points
 
 
 def _distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -168,15 +169,25 @@ async def evaluate_risk(request: EvaluateRiskRequest) -> PersonRiskProfile:
     # ── Suggested destinations (only when no destination given) ─
     suggested: list[SuggestedDestination] = []
     if person.destination is None:
-        # Suggest a point away from the heaviest zones
-        suggested.append(SuggestedDestination(
-            name="Vilankulo Inland Assembly Point",
-            lat=-22.000,
-            lng=35.200,
-            type="evacuation_center",
-            distance_from_origin_km=_distance_km(person.origin.lat, person.origin.lng, -22.000, 35.200),
-            clears_all_avoid_polygons=True,
-        ))
+        for ep, dist_km in sorted_evacuation_points(person.origin.lat, person.origin.lng):
+            clears = True
+            if avoid_polygons:
+                ep_pt = Point(ep.lng, ep.lat)
+                for poly_dict in avoid_polygons:
+                    try:
+                        if shape(poly_dict).contains(ep_pt):
+                            clears = False
+                            break
+                    except Exception:
+                        pass
+            suggested.append(SuggestedDestination(
+                name=ep.name,
+                lat=ep.lat,
+                lng=ep.lng,
+                type=ep.type,
+                distance_from_origin_km=dist_km,
+                clears_all_avoid_polygons=clears,
+            ))
 
     return PersonRiskProfile(
         profile_id=profile_id,

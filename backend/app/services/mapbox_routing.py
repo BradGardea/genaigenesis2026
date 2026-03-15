@@ -236,7 +236,6 @@ async def fetch_route(
         "overview": "full",
         "steps": "true",
         "annotations": "duration",
-        "exclude": "unpaved",
         "alternatives": "true",
         "continue_straight": "true",
     }

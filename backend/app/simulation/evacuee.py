@@ -31,6 +31,7 @@ class EvacueeAgent:
         lng: float,
         dest_lat: float,
         dest_lng: float,
+        dest_name: str = "",
         profile: EvacuationProfileInput | None = None,
         watsonx_model_id: str = "meta-llama/llama-3-3-70b-instruct",
     ) -> None:
@@ -39,6 +40,7 @@ class EvacueeAgent:
         self.lng = lng
         self.dest_lat = dest_lat
         self.dest_lng = dest_lng
+        self.dest_name = dest_name
         self.profile = profile or EvacuationProfileInput()
         self.watsonx_model_id = watsonx_model_id
 
@@ -81,6 +83,9 @@ class EvacueeAgent:
             progress=round(self.progress, 3),
             cluster_id=self.cluster_id,
             is_leader=self.is_leader,
+            dest_name=self.dest_name,
+            dest_lat=self.dest_lat,
+            dest_lng=self.dest_lng,
         )
 
     def build_situation(
@@ -110,7 +115,7 @@ class EvacueeAgent:
             tick=tick,
         )
 
-    _RE_EVAL_INTERVAL = 3  # force re-evaluation every N ticks for non-moving agents
+    _RE_EVAL_INTERVAL = 1  # force re-evaluation every N ticks for non-moving agents
 
     def _situation_changed(self, situation: AgentSituation) -> bool:
         """Check if the situation materially changed since last decision.
@@ -139,6 +144,17 @@ class EvacueeAgent:
         """Get a decision from watsonx/rules if the situation changed."""
         if self.state in (AgentState.arrived, AgentState.sheltering):
             return None
+
+        # Fast-path: idle agents depart immediately on tick 1 without LLM call
+        if self.state == AgentState.idle and tick <= 2:
+            decision = AgentDecision(
+                action="depart",
+                reasoning="Evacuation order — departing immediately",
+                urgency=7,
+            )
+            self.last_decision = decision
+            self._last_decision_tick = tick
+            return decision
 
         situation = self.build_situation(tick, nearby_hazards, weather_summary)
         if not self._situation_changed(situation):

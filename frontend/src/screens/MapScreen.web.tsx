@@ -50,6 +50,17 @@ const SIM_AGENTS_LABEL_LAYER = "sim-agents-label";
 const SIM_CLUSTERS_SOURCE = "sim-clusters";
 const SIM_CLUSTERS_LAYER = "sim-clusters-circle";
 const SIM_CLUSTERS_LABEL_LAYER = "sim-clusters-label";
+const EVAC_POINTS_SOURCE = "evac-points";
+const EVAC_POINTS_LAYER = "evac-points-symbol";
+const EVAC_POINTS_RING_LAYER = "evac-points-ring";
+
+const EVACUATION_POINTS = [
+  { name: "EN1 Highway North Assembly", lat: -21.945, lng: 35.255, type: "field", capacity: 800 },
+  { name: "Mapinhane Junction (EN1)", lat: -22.040, lng: 35.260, type: "government", capacity: 400 },
+  { name: "Vilankulo West School", lat: -21.990, lng: 35.248, type: "school", capacity: 500 },
+  { name: "Pambarra Community Grounds", lat: -21.965, lng: 35.230, type: "field", capacity: 1200 },
+  { name: "EN1 South Crossroads Assembly", lat: -22.060, lng: 35.280, type: "field", capacity: 600 },
+];
 
 const CLUSTER_PALETTE = [
   "#E11D48", "#2563EB", "#16A34A", "#D97706", "#7C3AED",
@@ -286,7 +297,7 @@ function collapseNearbyDisplayNodes(areas: CityStateArea[], stepIndex: number, m
 
 export function MapScreen({ theme }: MapScreenProps) {
   const isDark = theme === "dark";
-  const { currentStep, currentStepIndex, totalSteps, stepHistory, stepDisaster, isStepping, isFinalStep } = useDisasterDemo();
+  const { currentStep, currentStepIndex, totalSteps, stepHistory, stepDisaster, isFinalStep } = useDisasterDemo();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const originMarkerRef = useRef<mapboxgl.Marker | null>(null);
@@ -353,18 +364,25 @@ export function MapScreen({ theme }: MapScreenProps) {
     };
   }, [currentStep.cityStateRaw]);
 
-  // Auto-advance disaster step on each simulation tick
-  const prevSimTickRef = useRef(0);
+  // Disaster steps run on their own loop, decoupled from simulation ticks.
+  const stepDisasterRef = useRef(stepDisaster);
+  stepDisasterRef.current = stepDisaster;
+  const isFinalStepRef = useRef(isFinalStep);
+  isFinalStepRef.current = isFinalStep;
+
   useEffect(() => {
-    if (simState !== "running") {
-      prevSimTickRef.current = 0;
-      return;
-    }
-    if (simTick > prevSimTickRef.current && !isStepping && !isFinalStep) {
-      prevSimTickRef.current = simTick;
-      void stepDisaster({ beautify: false });
-    }
-  }, [simTick, simState, isStepping, isFinalStep, stepDisaster]);
+    if (simState !== "running") return;
+
+    let cancelled = false;
+    (async () => {
+      while (!cancelled && !isFinalStepRef.current) {
+        await stepDisasterRef.current({ beautify: false });
+        if (!cancelled) await new Promise((r) => setTimeout(r, 800));
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [simState]);
 
   useEffect(() => {
     routeRef.current = route;
@@ -431,9 +449,24 @@ export function MapScreen({ theme }: MapScreenProps) {
         is_leader: agent.is_leader ?? false,
         cluster_id: agent.cluster_id ?? "",
         cluster_color: (agent.cluster_id && clusterColorMap.get(agent.cluster_id)) || "#94A3B8",
+        dest_name: agent.dest_name ?? "",
       },
     }));
     source.setData({ type: "FeatureCollection", features });
+
+    // Scale down circle radius as agent count grows (supports up to 1500)
+    if (map.getLayer(SIM_AGENTS_LAYER)) {
+      const n = simAgents.length;
+      const scale = n <= 20 ? 1 : n <= 80 ? 0.85 : n <= 200 ? 0.7 : n <= 500 ? 0.55 : n <= 1000 ? 0.4 : 0.3;
+      const baseR = 5 * scale;
+      const leaderR = 8 * scale;
+      map.setPaintProperty(SIM_AGENTS_LAYER, "circle-radius",
+        ["case", ["==", ["get", "is_leader"], true], Math.max(leaderR, 2), Math.max(baseR, 1.5)]
+      );
+      map.setPaintProperty(SIM_AGENTS_LAYER, "circle-stroke-width",
+        ["case", ["==", ["get", "is_leader"], true], Math.max(2 * scale, 0.5), Math.max(1 * scale, 0.5)]
+      );
+    }
   }, [simAgents, simState, mapReadyVersion, clusterColorMap]);
 
   // ── Simulation cluster layer update ───────────────────────────────────────
@@ -476,9 +509,13 @@ export function MapScreen({ theme }: MapScreenProps) {
     source.setData({ type: "FeatureCollection", features });
   }, [simAgents, simState, mapReadyVersion, clusterColorMap]);
 
-  // Fly to simulation area when simulation starts
+  // Fly to simulation area once when simulation starts (not on every disaster step)
+  const simFlewRef = useRef(false);
   useEffect(() => {
+    if (simState === "idle") { simFlewRef.current = false; return; }
     if (simState !== "running") return;
+    if (simFlewRef.current) return;
+    simFlewRef.current = true;
     const map = mapRef.current;
     if (!map) return;
     const center: [number, number] = disasterBbox
@@ -772,8 +809,8 @@ export function MapScreen({ theme }: MapScreenProps) {
           source: SIM_ROUTES_SOURCE,
           paint: {
             "line-color": "#0f172a",
-            "line-width": 7,
-            "line-opacity": 0.5,
+            "line-width": 5,
+            "line-opacity": 0.25,
           },
           layout: { "line-cap": "round", "line-join": "round" },
         });
@@ -783,8 +820,9 @@ export function MapScreen({ theme }: MapScreenProps) {
           source: SIM_ROUTES_SOURCE,
           paint: {
             "line-color": ["get", "cluster_color"],
-            "line-width": 4,
-            "line-opacity": 0.9,
+            "line-width": 2.5,
+            "line-opacity": 0.45,
+            "line-dasharray": [4, 2],
           },
           layout: { "line-cap": "round", "line-join": "round" },
         });
@@ -836,7 +874,7 @@ export function MapScreen({ theme }: MapScreenProps) {
           type: "circle",
           source: SIM_AGENTS_SOURCE,
           paint: {
-            "circle-radius": ["case", ["==", ["get", "is_leader"], true], 10, 6],
+            "circle-radius": ["case", ["==", ["get", "is_leader"], true], 8, 5],
             "circle-color": [
               "match", ["get", "state"],
               "idle",       "#94A3B8",
@@ -846,9 +884,9 @@ export function MapScreen({ theme }: MapScreenProps) {
               "sheltering", "#FB923C",
               "#94A3B8",
             ],
-            "circle-stroke-color": ["get", "cluster_color"],
-            "circle-stroke-width": ["case", ["==", ["get", "is_leader"], true], 3, 2],
-            "circle-opacity": ["case", ["==", ["get", "is_leader"], true], 1.0, 0.7],
+            "circle-stroke-color": "#ffffff",
+            "circle-stroke-width": ["case", ["==", ["get", "is_leader"], true], 2, 1.5],
+            "circle-opacity": 1.0,
           },
         });
         map.addLayer({
@@ -881,6 +919,7 @@ export function MapScreen({ theme }: MapScreenProps) {
             `Progress: ${Math.round((p.progress ?? 0) * 100)}%<br/>`,
             p.cluster_id ? `Cluster: <span style="color:${cColor};font-weight:600;">${p.cluster_id}</span><br/>` : "",
             `Family: ${p.family_size ?? 1} · Vehicles: ${p.vehicles ?? 1}`,
+            p.dest_name ? `<br/>Dest: <span style="font-weight:600;">${p.dest_name}</span>` : "",
             p.last_action ? `<br/>Decision: <em>${p.last_action}</em>` : "",
             "</div>",
           ].join("");
@@ -891,6 +930,61 @@ export function MapScreen({ theme }: MapScreenProps) {
         });
         map.on("mouseenter", SIM_AGENTS_LAYER, () => { map.getCanvas().style.cursor = "pointer"; });
         map.on("mouseleave", SIM_AGENTS_LAYER, () => { map.getCanvas().style.cursor = ""; });
+
+        // ── Evacuation point markers ──────────────────────────────
+        const evacFeatures = EVACUATION_POINTS.map((ep) => ({
+          type: "Feature" as const,
+          geometry: { type: "Point" as const, coordinates: [ep.lng, ep.lat] },
+          properties: { name: ep.name, type: ep.type, capacity: ep.capacity },
+        }));
+        map.addSource(EVAC_POINTS_SOURCE, {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: evacFeatures },
+        });
+        map.addLayer({
+          id: EVAC_POINTS_RING_LAYER,
+          type: "circle",
+          source: EVAC_POINTS_SOURCE,
+          paint: {
+            "circle-radius": 14,
+            "circle-color": "rgba(22, 163, 74, 0.15)",
+            "circle-stroke-color": "#16A34A",
+            "circle-stroke-width": 2,
+          },
+        });
+        map.addLayer({
+          id: EVAC_POINTS_LAYER,
+          type: "symbol",
+          source: EVAC_POINTS_SOURCE,
+          layout: {
+            "text-field": "E",
+            "text-size": 13,
+            "text-font": ["DIN Pro Bold", "Arial Unicode MS Bold"],
+            "text-allow-overlap": true,
+          },
+          paint: {
+            "text-color": "#16A34A",
+            "text-halo-color": "#ffffff",
+            "text-halo-width": 1.5,
+          },
+        });
+        map.on("click", EVAC_POINTS_RING_LAYER, (e) => {
+          if (!e.features?.length) return;
+          const p = e.features[0].properties ?? {};
+          const html = [
+            '<div style="font-family:system-ui;font-size:12px;line-height:1.5;">',
+            `<strong style="color:#16A34A;">${p.name ?? "Evacuation Point"}</strong><br/>`,
+            `Type: <span style="text-transform:capitalize;">${p.type ?? "unknown"}</span><br/>`,
+            `Capacity: ${p.capacity ?? "?"} people`,
+            "</div>",
+          ].join("");
+          new mapboxgl.Popup({ offset: 14, maxWidth: "220px" })
+            .setLngLat(e.lngLat)
+            .setHTML(html)
+            .addTo(map);
+        });
+        map.on("mouseenter", EVAC_POINTS_RING_LAYER, () => { map.getCanvas().style.cursor = "pointer"; });
+        map.on("mouseleave", EVAC_POINTS_RING_LAYER, () => { map.getCanvas().style.cursor = ""; });
 
         // Click handler for weather alert popups
         map.on("click", WEATHER_ALERT_FILL, (e) => {

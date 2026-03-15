@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import type { AgentSnapshot, ClusterSummary, SimulationConfig, TickMetrics } from "../services/simulationApi";
 import type { AppTheme } from "../types/theme";
@@ -54,8 +54,8 @@ const DEFAULT_CONFIG: SimulationConfig = {
   bbox_max_lng: 35.330,
   destination_lat: -22.000,
   destination_lng: 35.200,
-  tick_interval_seconds: 2.0,
-  virtual_seconds_per_tick: 600.0,
+  tick_interval_seconds: 1.5,
+  virtual_seconds_per_tick: 2400.0,
   max_ticks: 72,
 };
 
@@ -79,20 +79,7 @@ export function SimulationPanel({
   const [collapsed, setCollapsed] = useState(false);
   const [numAgents, setNumAgents] = useState(DEFAULT_CONFIG.num_evacuees);
   const [maxTicksInput, setMaxTicksInput] = useState(String(DEFAULT_CONFIG.max_ticks));
-  const [destLat, setDestLat] = useState(String(DEFAULT_CONFIG.destination_lat));
-  const [destLng, setDestLng] = useState(String(DEFAULT_CONFIG.destination_lng));
   const [clusterRadiusM, setClusterRadiusM] = useState("500");
-
-  // When disaster bbox changes, place the destination just outside the bbox
-  // so agents evacuate away from the disaster area rather than cross-continent.
-  useEffect(() => {
-    if (!disasterBbox) return;
-    const centerLat = (disasterBbox.minLat + disasterBbox.maxLat) / 2;
-    const spanLng = disasterBbox.maxLng - disasterBbox.minLng;
-    const offsetLng = Math.max(0.05, spanLng * 0.8);
-    setDestLat(String(Number(centerLat.toFixed(5))));
-    setDestLng(String(Number((disasterBbox.maxLng + offsetLng).toFixed(5))));
-  }, [disasterBbox]);
 
   const hasDisaster = !!disasterBbox;
 
@@ -110,9 +97,7 @@ export function SimulationPanel({
     const cfg: SimulationConfig = {
       ...DEFAULT_CONFIG,
       num_evacuees: numAgents,
-      max_ticks: parseInt(maxTicksInput) || 20,
-      destination_lat: parseFloat(destLat) || DEFAULT_CONFIG.destination_lat,
-      destination_lng: parseFloat(destLng) || DEFAULT_CONFIG.destination_lng,
+      max_ticks: parseInt(maxTicksInput) || 72,
       cluster_radius_m: parseFloat(clusterRadiusM) || 500,
     };
 
@@ -353,7 +338,7 @@ export function SimulationPanel({
                 <input
                   type="range"
                   min={1}
-                  max={500}
+                  max={1500}
                   step={1}
                   value={numAgents}
                   onChange={(e) => setNumAgents(Number(e.target.value))}
@@ -366,7 +351,7 @@ export function SimulationPanel({
                 />
                 <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 2 }}>
                   <Text style={{ fontSize: 9, color: textMuted }}>1</Text>
-                  <Text style={{ fontSize: 9, color: textMuted }}>500</Text>
+                  <Text style={{ fontSize: 9, color: textMuted }}>1500</Text>
                 </View>
               </View>
 
@@ -410,35 +395,14 @@ export function SimulationPanel({
                 />
               </View>
 
-              {/* Destination */}
-              <View>
-                <Text style={{ fontSize: 10, fontWeight: "600", color: textMuted, marginBottom: 3 }}>DEST (lat, lng)</Text>
-                <View style={{ flexDirection: "row", gap: 4 }}>
-                  <TextInput
-                    value={destLat}
-                    onChangeText={setDestLat}
-                    placeholder="lat"
-                    placeholderTextColor={textMuted}
-                    style={{
-                      flex: 1, fontSize: 11, color: textPrimary,
-                      backgroundColor: isDark ? "#1e293b" : "#f8fafc",
-                      borderRadius: 6, paddingHorizontal: 6, paddingVertical: 4,
-                      borderWidth: 1, borderColor: border,
-                    }}
-                  />
-                  <TextInput
-                    value={destLng}
-                    onChangeText={setDestLng}
-                    placeholder="lng"
-                    placeholderTextColor={textMuted}
-                    style={{
-                      flex: 1, fontSize: 11, color: textPrimary,
-                      backgroundColor: isDark ? "#1e293b" : "#f8fafc",
-                      borderRadius: 6, paddingHorizontal: 6, paddingVertical: 4,
-                      borderWidth: 1, borderColor: border,
-                    }}
-                  />
-                </View>
+              {/* Evacuation points info */}
+              <View style={{ backgroundColor: isDark ? "#1e293b" : "#f0fdf4", borderRadius: 6, padding: 6, gap: 2 }}>
+                <Text style={{ fontSize: 10, fontWeight: "600", color: isDark ? "#86efac" : "#166534" }}>
+                  5 evacuation points
+                </Text>
+                <Text style={{ fontSize: 9, color: textMuted }}>
+                  Agents auto-route to nearest point
+                </Text>
               </View>
 
               {hasDisaster && (

@@ -38,14 +38,14 @@ class ScheduledHazard(BaseModel):
 class SimulationConfig(BaseModel):
     """Configuration for a simulation run."""
 
-    num_evacuees: int = Field(ge=1, le=500, default=5)
+    num_evacuees: int = Field(ge=1, le=1500, default=5)
     cluster_radius_m: float = Field(default=500.0, description="Proximity radius for cluster formation (metres)")
     # Bounding box: agents start within this region (default: Vilankulo, Mozambique)
     bbox_min_lat: float = Field(default=-22.050)
     bbox_max_lat: float = Field(default=-21.960)
     bbox_min_lng: float = Field(default=35.270)
     bbox_max_lng: float = Field(default=35.330)
-    # Shared destination for all evacuees (default: inland toward Vilankulo West)
+    # Fallback destination if no evacuation point is found (default: inland Vilankulo)
     destination_lat: float = Field(default=-22.000)
     destination_lng: float = Field(default=35.200)
     # Tick configuration
@@ -103,6 +103,9 @@ class AgentSnapshot(BaseModel):
     )
     cluster_id: str | None = None
     is_leader: bool = False
+    dest_name: str = ""
+    dest_lat: float | None = None
+    dest_lng: float | None = None
 
 
 class ClusterSummary(BaseModel):

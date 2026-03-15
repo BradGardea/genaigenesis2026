@@ -25,6 +25,7 @@ from app.simulation.models import (
     TickMetrics,
 )
 from app.simulation.evacuee import EvacueeAgent
+from app.simulation.evacuation_points import nearest_evacuation_point
 from app.services.hazard_store import hazard_store
 from app.services.mapbox_routing import compute_route, CRISIS_TRAFFIC_FACTOR
 from app.simulation.metrics import MetricsCollector
@@ -35,7 +36,7 @@ from app.services.timestep_dataset import TimestepDataset
 logger = logging.getLogger(__name__)
 
 # Agent processing concurrency limit
-_AGENT_SEMAPHORE = asyncio.Semaphore(10)
+_AGENT_SEMAPHORE = asyncio.Semaphore(50)
 
 CITY_STATE_TIMELINE_FILENAME = "goma_severe_storm_12h_72_timesteps.json"
 
@@ -102,7 +103,11 @@ class SimulationOrchestrator:
         self._init_agents()
 
     def _init_agents(self) -> None:
-        """Generate randomized evacuee agents within the bounding box."""
+        """Generate randomized evacuee agents within the bounding box.
+
+        Each agent is routed to the nearest evacuation point based on
+        their spawn location.
+        """
         cfg = self.config
         for i in range(cfg.num_evacuees):
             lat = random.uniform(cfg.bbox_min_lat, cfg.bbox_max_lat)
@@ -117,6 +122,9 @@ class SimulationOrchestrator:
                     "Agent %d: could not find valid spawn after %d retries, using last attempt",
                     i, _MAX_SPAWN_RETRIES,
                 )
+
+            evac_point = nearest_evacuation_point(lat, lng)
+
             profile = EvacuationProfileInput(
                 family_size=random.randint(1, 5),
                 vehicles=random.randint(0, 2),
@@ -128,8 +136,9 @@ class SimulationOrchestrator:
                 agent_id=f"agent-{i:03d}",
                 lat=lat,
                 lng=lng,
-                dest_lat=cfg.destination_lat,
-                dest_lng=cfg.destination_lng,
+                dest_lat=evac_point.lat,
+                dest_lng=evac_point.lng,
+                dest_name=evac_point.name,
                 profile=profile,
                 watsonx_model_id=cfg.watsonx_model_id,
             )
@@ -192,6 +201,7 @@ class SimulationOrchestrator:
     async def _run_loop(self) -> None:
         try:
             while not self.clock.is_expired and self.state == SimulationState.running:
+                tick_start = asyncio.get_event_loop().time()
                 tick = self.clock.advance()
                 await self._process_tick(tick)
 
@@ -203,7 +213,11 @@ class SimulationOrchestrator:
                     logger.info("All agents reached terminal state at tick %d", tick)
                     break
 
-                await asyncio.sleep(self.config.tick_interval_seconds)
+                # Subtract processing time so ticks stay on schedule
+                elapsed = asyncio.get_event_loop().time() - tick_start
+                remaining = max(0, self.config.tick_interval_seconds - elapsed)
+                if remaining > 0:
+                    await asyncio.sleep(remaining)
 
         except asyncio.CancelledError:
             logger.info("Simulation %s cancelled", self.sim_id)
@@ -223,6 +237,10 @@ class SimulationOrchestrator:
 
         # 1b. Advance city state timeline — generate urban impacts and inject route hazards
         city_state_step = await self._advance_city_state(tick)
+
+        # 1c. Inject city_state hazards directly into hazard_store
+        if city_state_step:
+            self._inject_city_state_hazards(city_state_step, tick)
 
         # 2. Fetch weather (cached per tick + rounded coords)
         weather_summary = await self._get_weather_for_tick(tick)
@@ -251,9 +269,6 @@ class SimulationOrchestrator:
 
         async def process_agent(agent: EvacueeAgent) -> int:
             async with _AGENT_SEMAPHORE:
-                # Stagger Mapbox calls to avoid rate-limit bursts
-                await asyncio.sleep(random.uniform(0, 0.5))
-
                 decision = await agent.decide(tick, nearby_hazards, weather_summary)
                 if decision:
                     await agent.apply_decision(
@@ -399,7 +414,7 @@ class SimulationOrchestrator:
         hazards: list[dict] = []
         for area in areas:
             impact_type = area.get("impact_type", "")
-            if impact_type in ("flooding", "road_closure") and int(area.get("severity", 0)) >= 65:
+            if impact_type in ("flooding", "road_closure", "debris", "structure_damage") and int(area.get("severity", 0)) >= 25:
                 hazards.append({
                     "id": area.get("node_id", "unknown"),
                     "type": impact_type,
@@ -407,6 +422,45 @@ class SimulationOrchestrator:
                     "source": "city_state",
                 })
         return hazards
+
+    def _inject_city_state_hazards(self, city_state_step: dict, tick: int) -> int:
+        """Inject hazards from city_state affected areas directly into hazard_store.
+
+        Returns the number of new hazards injected.
+        """
+        cs = city_state_step.get("city_state", {})
+        areas = cs.get("affected_areas", [])
+        injected = 0
+        for area in areas:
+            impact_type = area.get("impact_type", "")
+            severity = int(area.get("severity", 0))
+            if impact_type not in ("flooding", "road_closure", "debris", "structure_damage") or severity < 25:
+                continue
+            lat = area.get("lat")
+            lon = area.get("lon")
+            if lat is None or lon is None:
+                continue
+            node_id = str(area.get("node_id", f"cs-{tick}-{injected}"))
+            # Skip if already injected (keyed by node_id)
+            cache_key = f"cs-hazard-{node_id}"
+            if cache_key in self._city_state_cache:
+                continue
+            self._city_state_cache[cache_key] = True
+            type_map = {"flooding": "flood", "road_closure": "roadblock", "debris": "debris", "structure_damage": "collapse"}
+            radius = float(area.get("radius_m", 200)) if impact_type == "road_closure" else 300.0
+            report = HazardReport(
+                hazard_type=type_map.get(impact_type, "hazard"),
+                location=Coordinate(lng=float(lon), lat=float(lat)),
+                radius_meters=radius,
+                description=f"City state {impact_type} (severity {severity}) at tick {tick}",
+            )
+            hazard_store.add_hazard(report)
+            injected += 1
+            logger.info(
+                "Injected city_state hazard %s at tick %d: %s severity=%d",
+                node_id, tick, impact_type, severity,
+            )
+        return injected
 
     async def _inject_scheduled_hazards(self, tick: int) -> None:
         """Add hazards scheduled for this tick."""
