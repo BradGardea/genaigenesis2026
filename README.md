@@ -1,10 +1,16 @@
 <p align="center">
+  <img src="presentation_materials/misc/header.png" alt="CrisisNet — Emergency Evacuation Planning" width="100%" />
+</p>
+
+<p align="center">
   <img src="frontend/src/assets/logos/crisis-net-logo-rainbow.png" alt="CrisisNet Logo" width="180" />
 </p>
 
 <h1 align="center">CrisisNet</h1>
 
 A full-stack emergency evacuation planning platform that combines real-time hazard tracking, AI-driven multi-agent decision-making, and dynamic route planning to help people navigate disasters safely. Built with a FastAPI backend and an Expo React Native (TypeScript) frontend.
+
+---
 
 ## Features
 
@@ -16,6 +22,88 @@ A full-stack emergency evacuation planning platform that combines real-time haza
 - **Disaster simulation engine** — Runs multi-agent evacuation simulations with LLM-driven evacuee decision-making, streamed via SSE
 - **Community connections** — Tracks interpersonal relationships and help-needed status during disasters
 - **Cross-platform UI** — Expo React Native app with Mapbox maps, NativeWind styling, and platform-specific screen splits (web/native)
+
+---
+
+## App Screens
+
+### Alerts
+
+Real-time, urgency-coded alerts sourced from weather services and hazard detection systems. Each alert is tagged with a severity level (Extreme Urgency, Caution, Warning) and a category (Evacuation, Hazard Update) so users can immediately identify what requires action. Alerts update automatically as the disaster progresses through each simulation step.
+
+<p align="center">
+  <img src="presentation_materials/alerts_page.png" alt="Alerts page showing urgency-coded disaster alerts" width="360" />
+</p>
+
+### Evacuation Plans
+
+AI-generated evacuation plans with a scored success probability, step-by-step departure instructions, and a packing checklist. The AI agent pipeline evaluates the current disaster state, the user's personal risk profile, and available routes to recommend the safest evacuation strategy.
+
+<p align="center">
+  <img src="presentation_materials/evacuation_page.png" alt="Evacuation plan with route instructions and success probability" width="360" />
+</p>
+
+### Weather Intelligence
+
+A live weather dashboard displaying storm position tracking, wind speed and pressure readings, rainfall intensity with flood-risk scoring, and an overall risk outlook. Data is fetched from multiple external providers and updates with each disaster step.
+
+<p align="center">
+  <img src="presentation_materials/weather_page.png" alt="Weather dashboard with storm position, wind, rainfall, and risk outlook" width="360" />
+</p>
+
+### My Connections
+
+An interactive knowledge graph showing the user's social network during a crisis. Each node represents a connection (family, friends, dependents) with their relationship type and current status. Nodes flash red when a connection needs help, enabling users to coordinate mutual aid in real time.
+
+<p align="center">
+  <img src="presentation_materials/my_connections_page.png" alt="Knowledge graph of community connections with help-needed indicators" width="360" />
+</p>
+
+### Saved Information
+
+Offline-ready emergency resources cached locally for use when connectivity is lost. Includes local area maps, survival guides tailored to the active disaster type, known shelter locations, and signalling/morse code references — each with file size and availability status.
+
+<p align="center">
+  <img src="presentation_materials/saved_materials_page.png" alt="Offline emergency resources including maps, guides, and shelter locations" width="360" />
+</p>
+
+---
+
+## Simulation Engine
+
+The simulation system models multi-agent evacuation scenarios where each evacuee is an autonomous, LLM-driven agent that makes decisions based on personal context, risk tolerance, and available information.
+
+### Single-Agent Simulation
+
+A single evacuee navigates through active hazard zones (shown as a heatmap of wind, flood, and fire intensity). The platform computes a real-time evacuation route that dynamically avoids danger areas, with the agent's path traced across the map.
+
+<p align="center">
+  <img src="presentation_materials/single_agent.png" alt="Single agent evacuating through hazard heatmap with dynamic routing" width="480" />
+</p>
+
+### Multi-Agent Simulation
+
+Hundreds of evacuee agents run simultaneously, each independently deciding when to depart, which route to take, and where to shelter. The map shows all active routes, agent positions, and the real-time hazard landscape. An activity feed tracks each agent's status (planning, evacuating, arrived, sheltering).
+
+<p align="center">
+  <img src="presentation_materials/multi-agent.png" alt="Multi-agent simulation with hundreds of evacuees navigating hazards" width="600" />
+</p>
+
+<p align="center">
+  <img src="presentation_materials/misc/multi-agent-outcome.png" alt="Completed multi-agent simulation showing all evacuation routes and agent arrival log" width="600" />
+</p>
+
+### Weather Simulation Overlays
+
+Real-time weather data is visualized as heatmap overlays on the map, showing wind fields, precipitation intensity, and storm structure. Evacuation routes are plotted against these layers so users and agents can see exactly what conditions they will encounter along each path.
+
+<p align="center">
+  <img src="presentation_materials/weather_sim_1.png" alt="Weather heatmap overlay with wind and precipitation data over evacuation routes" width="480" />
+  &nbsp;&nbsp;
+  <img src="presentation_materials/weather_sim_2.png" alt="Cyclone structure visualization with spiral rain bands on the simulation map" width="480" />
+</p>
+
+---
 
 ## Tech Stack
 
