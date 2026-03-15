@@ -475,15 +475,27 @@ class EvacueeAgent:
             self.state = AgentState.idle
             self._situation_hash = ""
 
+    def copy_leader_route(self, leader: "EvacueeAgent") -> None:
+        """Copy the leader's route geometry instead of making a separate Mapbox call."""
+        if leader.route_geometry is None:
+            return
+        self.route_id = f"sim-route-{uuid.uuid4().hex[:8]}"
+        self.route_geometry = leader.route_geometry
+        self.route_distance_m = leader.route_distance_m
+        self.route_duration_s = leader.route_duration_s
+        self.progress = 0.0
+        self.state = AgentState.evacuating
+        self.dest_lat = leader.dest_lat
+        self.dest_lng = leader.dest_lng
+        self.dest_name = leader.dest_name
+
     async def apply_leader_decision(
         self,
         decision: AgentDecision,
-        compute_route_fn,
+        leader: "EvacueeAgent",
         hazard_polygons: list[dict],
-        crisis_traffic_factor: float,
-        origin_offset: tuple[float, float],
     ) -> None:
-        """Mirror a cluster leader's decision without calling the LLM."""
+        """Mirror a cluster leader's decision — reuse leader's route, no Mapbox call."""
         self.last_decision = decision
         self.rerouted_this_tick = False
 
@@ -495,10 +507,7 @@ class EvacueeAgent:
                 "urgency": decision.urgency,
                 "dest_name": self.dest_name,
             })
-            self.state = AgentState.planning
-            offset_lat = self.lat + origin_offset[0]
-            offset_lng = self.lng + origin_offset[1]
-            await self._plan_route_from(offset_lat, offset_lng, compute_route_fn, hazard_polygons, crisis_traffic_factor)
+            self.copy_leader_route(leader)
 
         elif decision.action == "reroute" and self.state == AgentState.evacuating:
             old_route_id = self.route_id
@@ -506,31 +515,15 @@ class EvacueeAgent:
             old_distance = self.route_distance_m
             old_duration = self.route_duration_s
             old_progress = self.progress
-            old_dest_lat = self.dest_lat
-            old_dest_lng = self.dest_lng
-            old_dest_name = self.dest_name
-
-            # Consider switching to a better evacuation point
-            dest_changed = self._pick_best_evacuation_point(hazard_polygons)
 
             self.rerouted_this_tick = True
-            self.state = AgentState.planning
-            await self._plan_route_from(
-                self.lat + origin_offset[0],
-                self.lng + origin_offset[1],
-                compute_route_fn,
-                hazard_polygons,
-                crisis_traffic_factor,
-            )
+            self.copy_leader_route(leader)
 
             if self.state == AgentState.evacuating and self.route_id != old_route_id:
-                reasoning = decision.reasoning
-                if dest_changed:
-                    reasoning = f"Rerouted to {self.dest_name} — {decision.reasoning}"
                 self.events_this_tick.append({
                     "type": "reroute",
                     "agent_id": self.agent_id,
-                    "reasoning": reasoning,
+                    "reasoning": decision.reasoning,
                     "urgency": decision.urgency,
                     "dest_name": self.dest_name,
                 })
@@ -541,9 +534,6 @@ class EvacueeAgent:
                 self.route_distance_m = old_distance
                 self.route_duration_s = old_duration
                 self.progress = old_progress
-                self.dest_lat = old_dest_lat
-                self.dest_lng = old_dest_lng
-                self.dest_name = old_dest_name
                 self.state = AgentState.evacuating
                 self.rerouted_this_tick = False
 

@@ -89,8 +89,8 @@ def _rule_based_decision(situation: AgentSituation) -> AgentDecision | None:
             urgency=7,
         )
 
-    # High congestion → wait
-    if situation.congestion_level > 0.8:
+    # High congestion — only stall idle agents, not ones already moving
+    if situation.congestion_level > 0.8 and situation.state.value == "idle":
         return AgentDecision(
             action="wait",
             reasoning="Roads heavily congested — waiting for conditions to improve",

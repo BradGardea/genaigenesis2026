@@ -330,10 +330,8 @@ class SimulationOrchestrator:
             if leader and leader.last_decision and follower.cluster_id in leader_decided_this_tick:
                 await follower.apply_leader_decision(
                     leader.last_decision,
-                    compute_route,
+                    leader,
                     hazard_polygons,
-                    traffic_factor,
-                    follower._leader_offset,
                 )
                 if follower.rerouted_this_tick:
                     reroutes += 1
@@ -584,7 +582,8 @@ class SimulationOrchestrator:
         return summary
 
     def _compute_congestion(self) -> None:
-        """Simple congestion: more co-located evacuating agents = higher congestion."""
+        """Simple congestion based on fixed road capacity, not relative to sim size."""
+        ROAD_CAPACITY = 15  # nearby agents before congestion hits 1.0
         evacuating = [a for a in self.agents if a.state == AgentState.evacuating]
         if not evacuating:
             return
@@ -600,7 +599,7 @@ class SimulationOrchestrator:
                 and abs(other.lat - agent.lat) < 0.005
                 and abs(other.lng - agent.lng) < 0.005
             )
-            agent.congestion = min(1.0, nearby / max(len(evacuating), 1))
+            agent.congestion = min(1.0, nearby / ROAD_CAPACITY)
 
     @staticmethod
     def _weather_traffic_factor(weather_summary: str) -> float:
