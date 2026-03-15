@@ -101,18 +101,45 @@ export interface PersonConnectionsResponse {
   connections: PersonConnectionNode[];
 }
 
+export type SavedDocType =
+  | "map"
+  | "guide"
+  | "shelter_list"
+  | "signal_guide"
+  | "contacts"
+  | "checklist"
+  | "water_safety"
+  | "first_aid"
+  | "general";
+
 export interface SavedInformation {
   id: string;
   title: string;
   note: string;
   updatedAt: string;
+  docType?: SavedDocType;
+  fileSize?: string;
+  offline?: boolean;
 }
+
+export type WeatherConditionType =
+  | "cyclone"
+  | "thunderstorm"
+  | "heavy_rain"
+  | "high_wind"
+  | "flooding"
+  | "storm_surge"
+  | "low_visibility"
+  | "pressure"
+  | "tornado"
+  | "general";
 
 export interface WeatherUpdate {
   id: string;
   headline: string;
   details: string;
   severity: string;
+  conditionType?: WeatherConditionType;
   updatedAt: string;
   rawData?: Record<string, unknown>;
 }
@@ -160,6 +187,9 @@ export interface CityStateAlertPayload {
   updatedAt: string;
   area: string;
   source: string;
+  status: string;
+  lat?: number | null;
+  lon?: number | null;
   rawData?: Record<string, unknown>;
 }
 

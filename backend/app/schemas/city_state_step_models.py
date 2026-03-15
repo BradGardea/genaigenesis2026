@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel
 
@@ -37,6 +37,9 @@ class CityStateAlert(BaseModel):
     updatedAt: str
     area: str
     source: str
+    status: str = "Active"
+    lat: Optional[float] = None
+    lon: Optional[float] = None
     rawData: dict[str, Any]
 
 

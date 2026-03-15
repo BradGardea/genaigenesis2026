@@ -11,7 +11,7 @@ export const infoBubblesMock: InfoBubble[] = [
     occurredAt: "2026-03-13T16:10:00Z",
     updatedAt: "2026-03-13T16:30:00Z",
     area: "River Corridor - Zone C",
-    source: "Regional Emergency Management"
+    status: "Regional Emergency Management"
   },
   {
     id: "inf-002",
@@ -22,7 +22,7 @@ export const infoBubblesMock: InfoBubble[] = [
     occurredAt: "2026-03-13T15:45:00Z",
     updatedAt: "2026-03-13T16:05:00Z",
     area: "Highway 14",
-    source: "Transportation Operations Center"
+    status: "Transportation Operations Center"
   },
   {
     id: "inf-003",
@@ -33,7 +33,7 @@ export const infoBubblesMock: InfoBubble[] = [
     occurredAt: "2026-03-13T15:40:00Z",
     updatedAt: "2026-03-13T15:50:00Z",
     area: "Civic Arena",
-    source: "Traffic Camera Feed"
+    status: "Traffic Camera Feed"
   },
   {
     id: "inf-004",
@@ -44,7 +44,7 @@ export const infoBubblesMock: InfoBubble[] = [
     occurredAt: "2026-03-13T14:30:00Z",
     updatedAt: "2026-03-13T15:00:00Z",
     area: "County Wide",
-    source: "Public Information Office"
+    status: "Public Information Office"
   },
   {
     id: "inf-005",
@@ -55,7 +55,7 @@ export const infoBubblesMock: InfoBubble[] = [
     occurredAt: "2026-03-13T16:00:00Z",
     updatedAt: "2026-03-13T16:20:00Z",
     area: "Hillside Sectors",
-    source: "National Weather Service"
+    status: "National Weather Service"
   },
   {
     id: "inf-006",
@@ -66,7 +66,7 @@ export const infoBubblesMock: InfoBubble[] = [
     occurredAt: "2026-03-13T15:20:00Z",
     updatedAt: "2026-03-13T15:35:00Z",
     area: "Westside District",
-    source: "Shelter Coordination Team"
+    status: "Shelter Coordination Team"
   },
   {
     id: "inf-007",
@@ -77,6 +77,6 @@ export const infoBubblesMock: InfoBubble[] = [
     occurredAt: "2026-03-13T15:55:00Z",
     updatedAt: "2026-03-13T16:15:00Z",
     area: "Metro Area",
-    source: "Public Health Unit"
+    status: "Public Health Unit"
   }
 ];

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Platform, Pressable, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { userProfileMock } from "../data";
@@ -8,6 +8,26 @@ import { MapScreen } from "../screens/MapScreen";
 import { ProfileScreen } from "../screens/ProfileScreen";
 import { useDisasterDemo } from "../state/DisasterDemoContext";
 import { AppTheme } from "../types/theme";
+
+const REQUIRE_START_KEY = "crisisnet_require_start";
+
+function readRequireStart(): boolean {
+  if (Platform.OS !== "web") return false;
+  try {
+    const stored = localStorage.getItem(REQUIRE_START_KEY);
+    if (stored === "true") return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function writeRequireStart(value: boolean): void {
+  if (Platform.OS !== "web") return;
+  try {
+    localStorage.setItem(REQUIRE_START_KEY, String(value));
+  } catch { /* ignore */ }
+}
 
 // Metro bundles mp3 as { uri: string } on web; resolve to a usable URL.
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -44,6 +64,7 @@ export function AppTabs() {
     disasterStarted,
     startDisaster,
   } = useDisasterDemo();
+  const [requireStart, setRequireStart] = useState(readRequireStart);
   const [isPlaying, setIsPlaying] = useState(false);
   const [visibleAlertBanner, setVisibleAlertBanner] = useState<{
     id: string;
@@ -52,9 +73,22 @@ export function AppTabs() {
     stepLabel: string;
   } | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
+  const autoStartedRef = useRef(false);
 
   const insets = useSafeAreaInsets();
   const isDark = theme === "dark";
+
+  const handleRequireStartChange = useCallback((value: boolean) => {
+    setRequireStart(value);
+    writeRequireStart(value);
+  }, []);
+
+  // Auto-start disaster when requireStart is false
+  useEffect(() => {
+    if (requireStart || disasterStarted || autoStartedRef.current) return;
+    autoStartedRef.current = true;
+    startDisaster();
+  }, [requireStart, disasterStarted, startDisaster]);
 
   const handleStartDisaster = useCallback(() => {
     if (disasterStarted || countdown !== null) return;
@@ -180,6 +214,8 @@ export function AppTabs() {
             onPhoneNumberChange={setPhoneNumber}
             homeArea={homeArea}
             onHomeAreaChange={setHomeArea}
+            requireStart={requireStart}
+            onRequireStartChange={handleRequireStartChange}
           />
         </View>
       </View>
@@ -187,7 +223,7 @@ export function AppTabs() {
         className="absolute left-4 flex-row gap-2"
         style={{ bottom: Math.max(insets.bottom, 6) + 64 }}
       >
-        {!disasterStarted ? (
+        {!disasterStarted && requireStart ? (
           <Pressable
             className={`rounded-xl border px-4 py-2 ${
               countdown !== null
@@ -217,7 +253,7 @@ export function AppTabs() {
                 : "⚠ Start Disaster"}
             </Text>
           </Pressable>
-        ) : (
+        ) : disasterStarted ? (
           <>
             <Pressable
               className={`rounded-xl border px-4 py-2 ${
@@ -278,7 +314,7 @@ export function AppTabs() {
               </Text>
             </Pressable>
           </>
-        )}
+        ) : null}
       </View>
 
       <View

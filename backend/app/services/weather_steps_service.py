@@ -50,6 +50,7 @@ async def _build_response(step_index: int, beautify: bool = True) -> WeatherStep
             headline=card["headline"],
             details=card["details"],
             severity=card["severity"],  # type: ignore[arg-type]
+            conditionType=card.get("conditionType", "general"),  # type: ignore[arg-type]
             updatedAt=step_time,
             rawData=step,
         )

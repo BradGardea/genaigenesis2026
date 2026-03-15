@@ -15,6 +15,7 @@ import {
 import { DisasterStepData, disasterStepsMock } from "../data/mock/disasterSteps";
 import {
   CityStateStepResponse,
+  InfoCategory,
   URGENCY_WEIGHT,
   WeatherDatasetMetadata,
   WeatherStepResponse,
@@ -174,11 +175,13 @@ function applyCityStatePayloadToStep(
       title: item.title,
       details: item.details,
       urgency: item.urgency,
-      category: "hazard update",
+      category: (item.category as InfoCategory) || "hazard update",
       occurredAt: item.occurredAt,
       updatedAt: item.updatedAt,
       area: item.area,
-      source: item.source,
+      status: item.status || item.source || "Active",
+      lat: item.lat ?? undefined,
+      lon: item.lon ?? undefined,
     })),
     sectionUpdatedAt: {
       ...step.sectionUpdatedAt,
@@ -288,9 +291,9 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
           if (previous.length === 0) {
             return previous;
           }
-          const initial = previous[0];
+          const baseMockStep = disasterStepsMock[0];
           const weatherPatched = applyWeatherPayloadToStep(
-            initial.step,
+            baseMockStep,
             weatherPayload,
           );
           const updatedInitialStep = applyCityStatePayloadToStep(
@@ -309,7 +312,7 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
             occurredAt: now,
             updatedAt: now,
             area: "Vilankulo, Mozambique",
-            source: "CrisisNet Emergency System",
+            status: "Emergency",
           };
           const stepWithAlert = {
             ...updatedInitialStep,

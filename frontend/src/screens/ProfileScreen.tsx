@@ -17,6 +17,8 @@ interface ProfileScreenProps {
   onPhoneNumberChange: (value: string) => void;
   homeArea: string;
   onHomeAreaChange: (value: string) => void;
+  requireStart: boolean;
+  onRequireStartChange: (value: boolean) => void;
 }
 
 const RELATIONSHIP_OPTIONS: ConnectionRelationship[] = [
@@ -34,7 +36,9 @@ export function ProfileScreen({
   phoneNumber,
   onPhoneNumberChange,
   homeArea,
-  onHomeAreaChange
+  onHomeAreaChange,
+  requireStart,
+  onRequireStartChange
 }: ProfileScreenProps) {
   const isDark = theme === "dark";
 
@@ -137,6 +141,29 @@ export function ProfileScreen({
             >
               Dark
             </Text>
+          </Pressable>
+        </View>
+
+        <Text className={`mb-2 text-xs ${isDark ? "text-slate-300" : "text-slate-600"}`}>
+          Require Start
+        </Text>
+        <View className="mb-4 flex-row items-center justify-between">
+          <Text className={`text-sm ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+            {requireStart ? "Manual start required" : "Auto-start on load"}
+          </Text>
+          <Pressable
+            className={`h-7 w-12 items-center justify-center rounded-full ${
+              requireStart
+                ? isDark ? "bg-emerald-600" : "bg-emerald-500"
+                : isDark ? "bg-slate-700" : "bg-slate-300"
+            }`}
+            onPress={() => onRequireStartChange(!requireStart)}
+          >
+            <View
+              className={`absolute h-5 w-5 rounded-full bg-white shadow ${
+                requireStart ? "right-1" : "left-1"
+              }`}
+            />
           </Pressable>
         </View>
 

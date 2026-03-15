@@ -118,7 +118,7 @@ export default function VoiceWidget({ wsUrl = WS_URL, userId = USER_ID }: VoiceW
   const [level, setLevel] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const { currentStepIndex } = useDisasterDemo();
-  const [isMinimized, setIsMinimized] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(true);
   const [portalEl, setPortalEl] = useState<HTMLElement | null>(null);
   const [isVisible, setIsVisible] = useState(false);
 
@@ -686,7 +686,3 @@ const s: Record<string, CSSProperties> = {
     color: "var(--color-text-danger)",
   },
 };
-
-
-
-

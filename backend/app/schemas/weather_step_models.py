@@ -5,6 +5,18 @@ from typing import Any, Literal
 from pydantic import BaseModel
 
 WeatherSeverity = Literal["low", "medium", "high", "extreme"]
+WeatherConditionType = Literal[
+    "cyclone",
+    "thunderstorm",
+    "heavy_rain",
+    "high_wind",
+    "flooding",
+    "storm_surge",
+    "low_visibility",
+    "pressure",
+    "tornado",
+    "general",
+]
 
 
 class WeatherStepCard(BaseModel):
@@ -12,6 +24,7 @@ class WeatherStepCard(BaseModel):
     headline: str
     details: str
     severity: WeatherSeverity
+    conditionType: WeatherConditionType
     updatedAt: str
     rawData: dict[str, Any]
 

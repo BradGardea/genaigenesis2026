@@ -104,9 +104,75 @@ export const disasterStepsMock: DisasterStepData[] = [
     savedInformation: [
       {
         id: "save-001",
-        title: "Emergency Assembly Point",
-        note: "Vilankulo Secondary School, Bairro 5. Report to the main hall.",
-        updatedAt: at(0)
+        title: "Vilankulo Local Area Map",
+        note: "Offline map covering Vilankulo municipality, EN1 corridor, Bairro 1-7, airport road, and coastline. Includes elevation contours and flood-prone zones.",
+        updatedAt: at(0),
+        docType: "map",
+        fileSize: "4.7 MB",
+        offline: true
+      },
+      {
+        id: "save-002",
+        title: "Emergency Survival Guide — Tropical Cyclone",
+        note: "Shelter-in-place procedures, wind protection, flood survival, water contamination prevention, and post-storm safety checks. Adapted for coastal Mozambique.",
+        updatedAt: at(0),
+        docType: "guide",
+        fileSize: "1.2 MB",
+        offline: true
+      },
+      {
+        id: "save-003",
+        title: "Known Shelter Locations",
+        note: "Vilankulo Secondary School (Bairro 5, main hall) · Hospital Provincial de Vilankulo (ground floor intake) · Igreja Católica de Vilankulo (reinforced stone) · Escola Primária Completa (Bairro 7).",
+        updatedAt: at(0),
+        docType: "shelter_list",
+        fileSize: "340 KB",
+        offline: true
+      },
+      {
+        id: "save-004",
+        title: "Signalling & Morse Code Reference",
+        note: "SOS: ··· ——— ··· | Visual: 3 fires in triangle | Mirror flash: sweep horizon | Whistle: 3 short blasts, pause, repeat | Ground-to-air: V = need assistance, X = need medical, → = travelling this direction.",
+        updatedAt: at(0),
+        docType: "signal_guide",
+        fileSize: "180 KB",
+        offline: true
+      },
+      {
+        id: "save-005",
+        title: "Emergency Contacts",
+        note: "INGD Disaster Hotline: 800-100-114 · Radio Mozambique 97.9 FM · Hospital Provincial: +258-29-380-015 · Municipal Emergency: +258-29-380-100 · Red Cross Mozambique: +258-21-490-943.",
+        updatedAt: at(0),
+        docType: "contacts",
+        fileSize: "85 KB",
+        offline: true
+      },
+      {
+        id: "save-006",
+        title: "Evacuation Packing Checklist",
+        note: "□ ID documents (waterproof bag) □ Medication □ Water 2L per person □ Phone + charger □ Cash (small notes) □ Torch + batteries □ First aid kit □ Rain cover □ Sturdy shoes □ Whistle □ Non-perishable food.",
+        updatedAt: at(0),
+        docType: "checklist",
+        fileSize: "95 KB",
+        offline: true
+      },
+      {
+        id: "save-007",
+        title: "Water Purification & Safety Guide",
+        note: "Boil water for 3+ minutes before drinking. Purification tablets: 1 per litre, wait 30 minutes. Avoid floodwater contact — risk of sewage contamination, leptospirosis, and open wound infection. Store clean water in sealed containers.",
+        updatedAt: at(0),
+        docType: "water_safety",
+        fileSize: "420 KB",
+        offline: true
+      },
+      {
+        id: "save-008",
+        title: "First Aid — Storm Injury Reference",
+        note: "Wound care with contaminated water exposure. Tourniquet and pressure bandage instructions. Hypothermia recognition (prolonged rain exposure). Crush injury protocol. When to seek hospital vs. treat in place.",
+        updatedAt: at(0),
+        docType: "first_aid",
+        fileSize: "780 KB",
+        offline: true
       }
     ],
     weather: [
@@ -208,20 +274,7 @@ export const disasterStepsMock: DisasterStepData[] = [
         updatedAt: at(10)
       }
     ],
-    savedInformation: [
-      {
-        id: "save-001",
-        title: "Emergency Assembly Point",
-        note: "Vilankulo Secondary School, Bairro 5. Report to the main hall.",
-        updatedAt: at(0)
-      },
-      {
-        id: "save-002",
-        title: "Alternate Shelter",
-        note: "Hospital Provincial de Vilankulo, ground floor intake.",
-        updatedAt: at(10)
-      }
-    ],
+    savedInformation: [],
     weather: [
       {
         id: "weather-001",
@@ -242,7 +295,7 @@ export const disasterStepsMock: DisasterStepData[] = [
       alerts: 3,
       evacuationPlans: 1,
       connections: 2,
-      savedInformation: 1,
+      savedInformation: 0,
       weather: 1
     }
   },
@@ -321,20 +374,7 @@ export const disasterStepsMock: DisasterStepData[] = [
         updatedAt: at(20)
       }
     ],
-    savedInformation: [
-      {
-        id: "save-001",
-        title: "Emergency Assembly Point",
-        note: "Vilankulo Secondary School, Bairro 5. Report to the main hall.",
-        updatedAt: at(0)
-      },
-      {
-        id: "save-003",
-        title: "Emergency Radio",
-        note: "Radio Mozambique 97.9 FM for official updates.",
-        updatedAt: at(20)
-      }
-    ],
+    savedInformation: [],
     weather: [
       {
         id: "weather-002",
@@ -355,7 +395,7 @@ export const disasterStepsMock: DisasterStepData[] = [
       alerts: 3,
       evacuationPlans: 1,
       connections: 2,
-      savedInformation: 1,
+      savedInformation: 0,
       weather: 1
     }
   },
@@ -442,14 +482,7 @@ export const disasterStepsMock: DisasterStepData[] = [
         updatedAt: at(30)
       }
     ],
-    savedInformation: [
-      {
-        id: "save-004",
-        title: "Water Safety",
-        note: "Boil all water for 3 minutes. Use purification tablets if no heat source available.",
-        updatedAt: at(30)
-      }
-    ],
+    savedInformation: [],
     weather: [
       {
         id: "weather-003",
@@ -470,7 +503,7 @@ export const disasterStepsMock: DisasterStepData[] = [
       alerts: 3,
       evacuationPlans: 1,
       connections: 3,
-      savedInformation: 1,
+      savedInformation: 0,
       weather: 1
     }
   },
@@ -557,14 +590,7 @@ export const disasterStepsMock: DisasterStepData[] = [
         updatedAt: at(40)
       }
     ],
-    savedInformation: [
-      {
-        id: "save-005",
-        title: "Recovery Guidance",
-        note: "Photograph all damage. Keep receipts. Wait for municipal return-to-home notice.",
-        updatedAt: at(40)
-      }
-    ],
+    savedInformation: [],
     weather: [
       {
         id: "weather-004",
@@ -585,7 +611,7 @@ export const disasterStepsMock: DisasterStepData[] = [
       alerts: 3,
       evacuationPlans: 1,
       connections: 3,
-      savedInformation: 1,
+      savedInformation: 0,
       weather: 1
     }
   }

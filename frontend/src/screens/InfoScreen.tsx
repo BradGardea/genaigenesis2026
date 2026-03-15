@@ -12,7 +12,9 @@ import {
 import {
   PersonConnectionsResponse,
   PersonConnectionNode,
-  PersonSummary
+  PersonSummary,
+  SavedDocType,
+  WeatherConditionType,
 } from "../data/types";
 import { useDisasterDemo } from "../state/DisasterDemoContext";
 import { AppTheme } from "../types/theme";
@@ -164,9 +166,27 @@ export function InfoScreen({ theme }: InfoScreenProps) {
                           {item.urgency}
                         </Text>
                       </View>
-                      <Text className={`text-xs font-semibold ${isDark ? "text-brand-darkMuted" : "text-brand-muted"}`}>
-                        {item.category}
-                      </Text>
+                      <View
+                        className={`rounded-md px-2 py-0.5 ${
+                          item.category === "advisory"
+                            ? isDark ? "bg-sky-900/60" : "bg-sky-100"
+                            : item.category === "closure"
+                              ? isDark ? "bg-amber-900/60" : "bg-amber-100"
+                              : isDark ? "bg-rose-900/40" : "bg-rose-100"
+                        }`}
+                      >
+                        <Text
+                          className={`text-[11px] font-semibold capitalize ${
+                            item.category === "advisory"
+                              ? isDark ? "text-sky-300" : "text-sky-700"
+                              : item.category === "closure"
+                                ? isDark ? "text-amber-300" : "text-amber-700"
+                                : isDark ? "text-rose-300" : "text-rose-700"
+                          }`}
+                        >
+                          {item.category}
+                        </Text>
+                      </View>
                     </View>
 
                     <Text className={`text-base font-semibold ${isDark ? "text-brand-darkInk" : "text-brand-ink"}`}>
@@ -183,17 +203,29 @@ export function InfoScreen({ theme }: InfoScreenProps) {
                           : "border-brand-border bg-brand-surface"
                       }`}
                     >
-                      <Text className={`text-xs ${isDark ? "text-brand-darkMuted" : "text-brand-muted"}`}>
-                        Area: {item.area}
-                      </Text>
+                      <View className="flex-row items-center justify-between">
+                        <Text className={`text-xs ${isDark ? "text-brand-darkMuted" : "text-brand-muted"}`}>
+                          {item.area}{item.lat != null && item.lon != null ? ` (${item.lat.toFixed(3)}, ${item.lon.toFixed(3)})` : ""}
+                        </Text>
+                        <View className="flex-row items-center">
+                          <View
+                            className={`mr-1.5 h-2 w-2 rounded-full ${
+                              item.status === "Critical" || item.status === "Worsening"
+                                ? "bg-red-500"
+                                : item.status === "Active" || item.status === "Intensifying"
+                                  ? "bg-amber-500"
+                                  : item.status === "Easing" || item.status === "Persisting"
+                                    ? "bg-yellow-400"
+                                    : "bg-emerald-500"
+                            }`}
+                          />
+                          <Text className={`text-xs font-medium ${isDark ? "text-brand-darkMuted" : "text-brand-muted"}`}>
+                            {item.status}
+                          </Text>
+                        </View>
+                      </View>
                       <Text className={`mt-1 text-xs ${getFreshnessColor(item.occurredAt)}`}>
                         Occurred: {formatTime(item.occurredAt)}
-                      </Text>
-                      <Text className={`mt-1 text-xs ${getFreshnessColor(item.updatedAt)}`}>
-                        Updated: {formatTime(item.updatedAt)}
-                      </Text>
-                      <Text className={`mt-1 text-xs ${isDark ? "text-brand-darkMuted" : "text-brand-muted"}`}>
-                        Source: {item.source}
                       </Text>
                     </View>
                   </View>
@@ -371,37 +403,168 @@ export function InfoScreen({ theme }: InfoScreenProps) {
     );
   };
 
+  const docGlyph = (docType?: SavedDocType): string => {
+    switch (docType) {
+      case "map": return "🗺️";
+      case "guide": return "📘";
+      case "shelter_list": return "🏠";
+      case "signal_guide": return "📡";
+      case "contacts": return "📞";
+      case "checklist": return "☑️";
+      case "water_safety": return "💧";
+      case "first_aid": return "🩹";
+      default: return "📄";
+    }
+  };
+
+  const allSavedDocs = useMemo(() => {
+    const docs: typeof latestStep.savedInformation = [];
+    for (const { step } of stepHistory) {
+      for (const doc of step.savedInformation) {
+        if (!docs.some((d) => d.id === doc.id)) {
+          docs.push(doc);
+        }
+      }
+    }
+    return docs;
+  }, [stepHistory]);
+
   const renderSavedInformation = () => (
     <View>
-      {stepHistoryNewestFirst.map(({ step, stepIndex }) => (
-        <View key={`saved-step-${stepIndex}`} className={`${commonCardClass} relative overflow-hidden`}>
-          <Text
-            className={`text-xs font-semibold uppercase ${getFreshnessColor(step.sectionUpdatedAt.savedInformation)}`}
-          >
-            Step {stepIndex + 1} | fetched {formatTime(step.sectionUpdatedAt.savedInformation)}
+      {allSavedDocs.length === 0 ? (
+        <View className={commonCardClass}>
+          <Text className={`text-sm ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+            No offline resources downloaded yet. Documents will be fetched automatically.
           </Text>
-          {step.savedInformation.map((item) => (
-            <View key={`saved-step-${stepIndex}-${item.id}`} className={`mt-3 rounded-xl p-3 ${isDark ? "bg-slate-800" : "bg-slate-100"}`}>
-              <Text className={`text-base font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
-                {item.title}
-              </Text>
-              <Text className={`mt-2 text-sm ${isDark ? "text-slate-300" : "text-slate-700"}`}>{item.note}</Text>
-              <Text className={`mt-2 text-xs ${getFreshnessColor(item.updatedAt)}`}>
-                Updated: {formatTime(item.updatedAt)}
+        </View>
+      ) : (
+        <View className={commonCardClass}>
+          <View className="flex-row items-center justify-between">
+            <Text className={`text-xs font-semibold uppercase ${isDark ? "text-emerald-400" : "text-emerald-600"}`}>
+              Offline Resources
+            </Text>
+            <View className={`rounded-md px-2 py-0.5 ${isDark ? "bg-emerald-900/50" : "bg-emerald-100"}`}>
+              <Text className={`text-[10px] font-semibold ${isDark ? "text-emerald-300" : "text-emerald-700"}`}>
+                {allSavedDocs.length} documents
               </Text>
             </View>
-          ))}
-          {stepIndex !== currentStepIndex ? (
+          </View>
+          {allSavedDocs.map((item) => (
             <View
-              pointerEvents="none"
-              className="absolute inset-0 rounded-2xl"
-              style={{ backgroundColor: isDark ? "rgba(100,116,139,0.34)" : "rgba(148,163,184,0.28)" }}
-            />
-          ) : null}
+              key={`saved-${item.id}`}
+              className={`mt-3 flex-row rounded-xl border p-3 ${
+                isDark ? "border-brand-darkBorder bg-brand-darkSurface" : "border-brand-border bg-brand-surface"
+              }`}
+            >
+              <View
+                className={`mr-3 h-10 w-10 items-center justify-center rounded-lg ${
+                  isDark ? "bg-slate-700" : "bg-slate-200"
+                }`}
+              >
+                <Text className="text-lg">{docGlyph(item.docType)}</Text>
+              </View>
+              <View className="flex-1">
+                <View className="flex-row items-start justify-between">
+                  <Text
+                    className={`flex-1 text-sm font-semibold ${isDark ? "text-brand-darkInk" : "text-brand-ink"}`}
+                  >
+                    {item.title}
+                  </Text>
+                  {item.offline ? (
+                    <View className="ml-2 flex-row items-center">
+                      <View className="mr-1 h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                      <Text className={`text-[10px] font-medium ${isDark ? "text-emerald-400" : "text-emerald-600"}`}>
+                        Offline
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+                <Text
+                  className={`mt-1 text-xs leading-5 ${isDark ? "text-brand-darkMuted" : "text-brand-muted"}`}
+                  numberOfLines={3}
+                >
+                  {item.note}
+                </Text>
+                <View className="mt-2 flex-row items-center">
+                  {item.fileSize ? (
+                    <View
+                      className={`mr-2 rounded px-1.5 py-0.5 ${isDark ? "bg-slate-700" : "bg-slate-200"}`}
+                    >
+                      <Text className={`text-[10px] font-medium ${isDark ? "text-slate-300" : "text-slate-600"}`}>
+                        {item.fileSize}
+                      </Text>
+                    </View>
+                  ) : null}
+                  <Text className={`text-[10px] ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                    {formatTime(item.updatedAt)}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          ))}
         </View>
-      ))}
+      )}
     </View>
   );
+
+  const weatherGlyph = (conditionType?: WeatherConditionType): string => {
+    switch (conditionType) {
+      case "cyclone": return "\uD83C\uDF00";
+      case "thunderstorm": return "\u26C8\uFE0F";
+      case "heavy_rain": return "\uD83C\uDF27\uFE0F";
+      case "high_wind": return "\uD83D\uDCA8";
+      case "flooding": return "\uD83C\uDF0A";
+      case "storm_surge": return "\uD83C\uDF0A";
+      case "low_visibility": return "\uD83C\uDF2B\uFE0F";
+      case "pressure": return "\uD83D\uDD3B";
+      case "tornado": return "\uD83C\uDF2A\uFE0F";
+      default: return "\u2601\uFE0F";
+    }
+  };
+
+  const weatherSeverityColor = (severity: string): { bg: string; text: string; dot: string } => {
+    switch (severity) {
+      case "extreme":
+        return {
+          bg: isDark ? "bg-red-900/60" : "bg-red-100",
+          text: isDark ? "text-red-300" : "text-red-700",
+          dot: "bg-red-500",
+        };
+      case "high":
+        return {
+          bg: isDark ? "bg-orange-900/60" : "bg-orange-100",
+          text: isDark ? "text-orange-300" : "text-orange-700",
+          dot: "bg-orange-500",
+        };
+      case "medium":
+        return {
+          bg: isDark ? "bg-amber-900/60" : "bg-amber-100",
+          text: isDark ? "text-amber-300" : "text-amber-700",
+          dot: "bg-amber-500",
+        };
+      default:
+        return {
+          bg: isDark ? "bg-sky-900/60" : "bg-sky-100",
+          text: isDark ? "text-sky-300" : "text-sky-700",
+          dot: "bg-sky-500",
+        };
+    }
+  };
+
+  const conditionLabel = (conditionType?: WeatherConditionType): string => {
+    switch (conditionType) {
+      case "cyclone": return "Cyclone";
+      case "thunderstorm": return "Thunderstorm";
+      case "heavy_rain": return "Rainfall";
+      case "high_wind": return "Wind";
+      case "flooding": return "Flood Risk";
+      case "storm_surge": return "Storm Surge";
+      case "low_visibility": return "Visibility";
+      case "pressure": return "Pressure";
+      case "tornado": return "Tornado";
+      default: return "Weather";
+    }
+  };
 
   const renderWeather = () => (
     <View>
@@ -412,22 +575,78 @@ export function InfoScreen({ theme }: InfoScreenProps) {
           >
             Step {stepIndex + 1} | fetched {formatTime(step.sectionUpdatedAt.weather)}
           </Text>
-          {step.weather.map((item) => (
-            <View key={`weather-step-${stepIndex}-${item.id}`} className={`mt-3 rounded-xl p-3 ${isDark ? "bg-slate-800" : "bg-slate-100"}`}>
-              <View className="flex-row items-center justify-between">
-                <Text className={`mr-2 flex-1 text-base font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
-                  {item.headline}
+          {step.weather.map((item) => {
+            const sevColors = weatherSeverityColor(item.severity);
+            return (
+              <View
+                key={`weather-step-${stepIndex}-${item.id}`}
+                className={`mt-3 rounded-xl border p-4 ${
+                  isDark
+                    ? "border-brand-darkBorder bg-brand-darkSurface"
+                    : "border-brand-border bg-brand-surface"
+                }`}
+              >
+                <View className="flex-row items-start">
+                  <View
+                    className={`mr-3 h-10 w-10 items-center justify-center rounded-lg ${
+                      isDark ? "bg-slate-700" : "bg-slate-200"
+                    }`}
+                  >
+                    <Text className="text-lg">{weatherGlyph(item.conditionType)}</Text>
+                  </View>
+                  <View className="flex-1">
+                    <View className="flex-row items-center justify-between">
+                      <Text
+                        className={`flex-1 text-base font-semibold ${
+                          isDark ? "text-brand-darkInk" : "text-brand-ink"
+                        }`}
+                        numberOfLines={2}
+                      >
+                        {item.headline}
+                      </Text>
+                    </View>
+                    <View className="mt-1.5 flex-row items-center">
+                      <View className={`rounded-md px-2 py-0.5 ${sevColors.bg}`}>
+                        <View className="flex-row items-center">
+                          <View className={`mr-1.5 h-1.5 w-1.5 rounded-full ${sevColors.dot}`} />
+                          <Text className={`text-[11px] font-semibold uppercase ${sevColors.text}`}>
+                            {item.severity}
+                          </Text>
+                        </View>
+                      </View>
+                      {item.conditionType && item.conditionType !== "general" ? (
+                        <View
+                          className={`ml-2 rounded-md px-2 py-0.5 ${
+                            isDark ? "bg-slate-700" : "bg-slate-200"
+                          }`}
+                        >
+                          <Text
+                            className={`text-[11px] font-medium ${
+                              isDark ? "text-slate-300" : "text-slate-600"
+                            }`}
+                          >
+                            {conditionLabel(item.conditionType)}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  </View>
+                </View>
+
+                <Text
+                  className={`mt-3 text-sm leading-6 ${
+                    isDark ? "text-brand-darkInk" : "text-brand-ink"
+                  }`}
+                >
+                  {item.details}
                 </Text>
-                <Text className={`text-xs font-semibold uppercase ${isDark ? "text-slate-300" : "text-slate-700"}`}>
-                  {item.severity}
+
+                <Text className={`mt-2 text-[10px] ${getFreshnessColor(item.updatedAt)}`}>
+                  Updated: {formatTime(item.updatedAt)}
                 </Text>
               </View>
-              <Text className={`mt-2 text-sm ${isDark ? "text-slate-300" : "text-slate-700"}`}>{item.details}</Text>
-              <Text className={`mt-2 text-xs ${getFreshnessColor(item.updatedAt)}`}>
-                Updated: {formatTime(item.updatedAt)}
-              </Text>
-            </View>
-          ))}
+            );
+          })}
           {stepIndex !== currentStepIndex ? (
             <View
               pointerEvents="none"
@@ -480,7 +699,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
                 <Text className={`text-xl ${isDark ? "text-slate-100" : "text-slate-900"}`}>&#9776;</Text>
                 {unreadUpdates > 0 ? (
                   <View className="absolute -right-3 -top-2 rounded-full bg-red-600 px-2 py-0.5">
-            <Text className="text-[10px] font-semibold text-white">{unreadUpdates} new</Text>
+            <Text className="text-[10px] font-semibold text-white">{unreadUpdates > 99 ? "99+" : unreadUpdates} </Text>
           </View>
         ) : null}
               </Pressable>

@@ -93,7 +93,10 @@ async def _build_response(step_index: int, beautify: bool = True) -> CityStateSt
             occurredAt=step_time,
             updatedAt=step_time,
             area=alert["area"],
-            source=alert["source"],
+            source=alert.get("source", "City Impact Model"),
+            status=alert.get("status", "Active"),
+            lat=alert.get("lat"),
+            lon=alert.get("lon"),
             rawData=step,
         )
         for index, alert in enumerate(transformed["alerts"])
