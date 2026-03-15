@@ -66,9 +66,11 @@ def _fallback_cards(raw_step: dict[str, Any]) -> list[dict[str, str]]:
     ]
 
 
-async def beautify_weather_step(raw_step: dict[str, Any]) -> list[dict[str, str]]:
+async def beautify_weather_step(
+    raw_step: dict[str, Any], use_llm: bool = True
+) -> list[dict[str, str]]:
     """Return human-friendly weather cards; uses OpenAI when configured."""
-    if not settings.openai_api_key:
+    if not use_llm or not settings.openai_api_key:
         return _fallback_cards(raw_step)
 
     system_prompt = (

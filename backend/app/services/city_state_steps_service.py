@@ -11,39 +11,65 @@ from app.schemas.city_state_step_models import (
 )
 from app.schemas.weather_step_models import WeatherStepMeta
 from app.services.timestep_dataset import TimestepDataset
+from app.services.city_state_augmentor import augment_city_state_step, maybe_inject_route_hazard
 from app.utils.openai_city_state_alert_extractor import (
     extract_city_state_alerts_and_cards,
 )
 
 CITY_STATE_DATASET_FILENAME = "goma_severe_storm_12h_72_timesteps_city_state.json"
-_CITY_STATE_RESPONSE_CACHE: dict[int, CityStateStepResponse] = {}
+TIMELINE_DATASET_FILENAME = "goma_severe_storm_12h_72_timesteps.json"
+_CITY_STATE_RESPONSE_CACHE: dict[tuple[int, bool], CityStateStepResponse] = {}
 
 
 @lru_cache(maxsize=1)
-def _city_state_dataset() -> TimestepDataset:
+def _timeline_dataset() -> TimestepDataset:
     root = Path(__file__).resolve().parents[3]
-    return TimestepDataset(root / "data" / CITY_STATE_DATASET_FILENAME)
+    return TimestepDataset(root / "data" / TIMELINE_DATASET_FILENAME)
 
 
 def _metadata_model() -> CityStateDatasetMetadata:
-    metadata = _city_state_dataset().metadata()
+    metadata = _timeline_dataset().metadata()
     return CityStateDatasetMetadata(
-        dataset_name=str(metadata.get("dataset_name", CITY_STATE_DATASET_FILENAME)),
-        version=str(metadata.get("version", "unknown")),
+        dataset_name=CITY_STATE_DATASET_FILENAME.removesuffix(".json"),
+        version="2.0",
         generated_at=str(metadata.get("generated_at", "")),
-        scenario_note=str(metadata.get("scenario_note", "")),
+        scenario_note=(
+            "Synthetic city-state route-pressure simulation. City impacts are generated "
+            "at request time from route geometry and step progression instead of pre-authored events."
+        ),
         location=metadata.get("location", {}),
-        schema_alignment=metadata.get("schema_alignment", {}),
+        schema_alignment={
+            "source_dataset": str(metadata.get("dataset_name", TIMELINE_DATASET_FILENAME)),
+            "city_state_schema_base": "Synthetic timestep-aligned urban impact representation",
+            "extensions": [
+                "city_state",
+                "operational_status",
+                "danger_to_remain",
+                "overall_severity",
+                "dominant_impacts",
+                "affected_areas",
+                "impact_summary",
+                "city_services",
+            ],
+        },
     )
 
 
-async def _build_response(step_index: int) -> CityStateStepResponse:
-    if step_index in _CITY_STATE_RESPONSE_CACHE:
-        return _CITY_STATE_RESPONSE_CACHE[step_index]
+async def _build_response(step_index: int, beautify: bool = True) -> CityStateStepResponse:
+    cache_key = (step_index, beautify)
+    if cache_key in _CITY_STATE_RESPONSE_CACHE:
+        return _CITY_STATE_RESPONSE_CACHE[cache_key]
 
-    dataset = _city_state_dataset()
-    step = dataset.get_step(step_index)
-    transformed = await extract_city_state_alerts_and_cards(step)
+    dataset = _timeline_dataset()
+    timeline_step = dataset.get_step(step_index)
+    raw_step = {"time": str(timeline_step.get("time", "")), "city_state": {}}
+    step = augment_city_state_step(raw_step, step_index=step_index, total_steps=dataset.total_steps)
+    await maybe_inject_route_hazard(
+        step,
+        step_index=step_index,
+        total_steps=dataset.total_steps,
+    )
+    transformed = await extract_city_state_alerts_and_cards(step, use_llm=beautify)
     step_time = str(step.get("time", ""))
 
     cards = [
@@ -87,14 +113,16 @@ async def _build_response(step_index: int) -> CityStateStepResponse:
         alerts=alerts,
         raw=step,
     )
-    _CITY_STATE_RESPONSE_CACHE[step_index] = payload
+    _CITY_STATE_RESPONSE_CACHE[cache_key] = payload
     return payload
 
 
-async def get_city_state_current_step(step: int) -> CityStateStepResponse:
-    return await _build_response(step)
+async def get_city_state_current_step(step: int, beautify: bool = True) -> CityStateStepResponse:
+    return await _build_response(step, beautify=beautify)
 
 
-async def get_city_state_next_step(curr_step: int) -> CityStateStepResponse:
-    next_step = _city_state_dataset().get_next_step_index(curr_step)
-    return await _build_response(next_step)
+async def get_city_state_next_step(
+    curr_step: int, beautify: bool = True
+) -> CityStateStepResponse:
+    next_step = _timeline_dataset().get_next_step_index(curr_step)
+    return await _build_response(next_step, beautify=beautify)

@@ -55,23 +55,39 @@ export async function fetchWeatherUpdates(): Promise<WeatherUpdate[]> {
   return fetchJson<WeatherUpdate[]>("/information/weather");
 }
 
-export async function fetchWeatherCurrentStep(step: number): Promise<WeatherStepResponse> {
-  return fetchJson<WeatherStepResponse>(`/information/weather/current-step?step=${step}`);
-}
-
-export async function fetchWeatherNextStep(currStep: number): Promise<WeatherStepResponse> {
+export async function fetchWeatherCurrentStep(
+  step: number,
+  beautify = true
+): Promise<WeatherStepResponse> {
   return fetchJson<WeatherStepResponse>(
-    `/information/weather/next-step?curr_step=${currStep}`
+    `/information/weather/current-step?step=${step}&beautify=${beautify}`
   );
 }
 
-export async function fetchCityStateCurrentStep(step: number): Promise<CityStateStepResponse> {
-  return fetchJson<CityStateStepResponse>(`/information/city-state/current-step?step=${step}`);
+export async function fetchWeatherNextStep(
+  currStep: number,
+  beautify = true
+): Promise<WeatherStepResponse> {
+  return fetchJson<WeatherStepResponse>(
+    `/information/weather/next-step?curr_step=${currStep}&beautify=${beautify}`
+  );
 }
 
-export async function fetchCityStateNextStep(currStep: number): Promise<CityStateStepResponse> {
+export async function fetchCityStateCurrentStep(
+  step: number,
+  beautify = true
+): Promise<CityStateStepResponse> {
   return fetchJson<CityStateStepResponse>(
-    `/information/city-state/next-step?curr_step=${currStep}`
+    `/information/city-state/current-step?step=${step}&beautify=${beautify}`
+  );
+}
+
+export async function fetchCityStateNextStep(
+  currStep: number,
+  beautify = true
+): Promise<CityStateStepResponse> {
+  return fetchJson<CityStateStepResponse>(
+    `/information/city-state/next-step?curr_step=${currStep}&beautify=${beautify}`
   );
 }
 
