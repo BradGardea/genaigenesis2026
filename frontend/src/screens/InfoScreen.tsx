@@ -1,15 +1,23 @@
-import { useMemo, useState } from "react";
-import { FlatList, Modal, Pressable, Text, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { FlatList, Image, Modal, Pressable, Text, View } from "react-native";
 import {
   DISASTER_STEP_INTERVAL_MINUTES,
   EvacuationPlan,
   InfoBubble,
   disasterStepsMock,
+  fetchFirstPersonConnections,
   URGENCY_CARD_COLORS,
   URGENCY_WEIGHT,
 } from "../data";
+import {
+  PersonConnectionsResponse,
+  PersonConnectionNode,
+  PersonSummary
+} from "../data/types";
 import { useDisasterDemo } from "../state/DisasterDemoContext";
 import { AppTheme } from "../types/theme";
+import VoiceWidget from "@/components/Audio";
+import logoGreenBlue from "../assets/logos/crisis-net-logo-green-blue.png";
 
 type InfoSection =
   | "alerts"
@@ -40,22 +48,6 @@ const URGENCY_PILL_TEXT_COLOR: Record<string, Record<AppTheme, string>> = {
   "extreme urgency alert": { light: "#7f1d1d", dark: "#ef4444" }
 };
 
-function hexToRgb(hex: string): [number, number, number] {
-  const parsed = hex.replace("#", "");
-  const value = Number.parseInt(parsed, 16);
-  return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
-}
-
-function interpolateHex(startHex: string, endHex: string, ratio: number): string {
-  const clamped = Math.max(0, Math.min(1, ratio));
-  const [r1, g1, b1] = hexToRgb(startHex);
-  const [r2, g2, b2] = hexToRgb(endHex);
-  const r = Math.round(r1 + (r2 - r1) * clamped);
-  const g = Math.round(g1 + (g2 - g1) * clamped);
-  const b = Math.round(b1 + (b2 - b1) * clamped);
-  return `rgb(${r}, ${g}, ${b})`;
-}
-
 function formatTime(dateValue: string): string {
   return new Date(dateValue).toLocaleString();
 }
@@ -83,6 +75,19 @@ function toSectionUpdatedAtKey(section: InfoSection): keyof (typeof disasterStep
   return section;
 }
 
+const urgencyToken = (urgency: string): string => {
+  switch (urgency) {
+    case "urgent warning":
+      return "urgentWarning";
+    case "urgent alert":
+      return "urgentAlert";
+    case "extreme urgency alert":
+      return "extremeUrgency";
+    default:
+      return urgency.replace(/\s+/g, "");
+  }
+};
+
 export function InfoScreen({ theme }: InfoScreenProps) {
   const isDark = theme === "dark";
   const {
@@ -95,6 +100,9 @@ export function InfoScreen({ theme }: InfoScreenProps) {
   } = useDisasterDemo();
   const [menuOpen, setMenuOpen] = useState(false);
   const [section, setSection] = useState<InfoSection>("alerts");
+  const [connectionsPayload, setConnectionsPayload] = useState<PersonConnectionsResponse | null>(null);
+  const [connectionsError, setConnectionsError] = useState<string | null>(null);
+  const [connectionsLoading, setConnectionsLoading] = useState(false);
   const stepHistoryNewestFirst = useMemo(
     () => [...stepHistory].filter(({ stepIndex }) => stepIndex >= 0).reverse(),
     [stepHistory],
@@ -102,29 +110,15 @@ export function InfoScreen({ theme }: InfoScreenProps) {
   const latestStep = stepHistory[stepHistory.length - 1]?.step ?? disasterStepsMock[0];
   const referenceNowMs = new Date(latestStep.simulatedAt).getTime();
 
-  const commonCardClass = `mb-3 rounded-2xl border p-4 ${
-    isDark ? "border-slate-700 bg-slate-900" : "border-slate-300 bg-white"
+  const commonCardClass = `mb-3 rounded-xl border p-4 ${
+    isDark ? "border-brand-darkBorder bg-brand-darkCard" : "border-brand-border bg-brand-card shadow-soft"
   }`;
 
   const getFreshnessColor = (isoTime: string): string => {
     const ageMinutes = Math.max(0, (referenceNowMs - new Date(isoTime).getTime()) / 60000);
-    const green = "#16a34a";
-    const yellow = "#eab308";
-    const red = "#dc2626";
-
-    if (ageMinutes <= 5) {
-      return green;
-    }
-
-    if (ageMinutes <= 10) {
-      return interpolateHex(green, yellow, (ageMinutes - 5) / 5);
-    }
-
-    if (ageMinutes <= 15) {
-      return interpolateHex(yellow, red, (ageMinutes - 10) / 5);
-    }
-
-    return red;
+    if (ageMinutes <= 5) return "text-status-success";
+    if (ageMinutes <= 10) return "text-status-warn";
+    return "text-status-danger";
   };
 
   const renderAlerts = () => (
@@ -144,57 +138,64 @@ export function InfoScreen({ theme }: InfoScreenProps) {
         return (
           <View key={`alerts-step-${stepIndex}`} className={`${commonCardClass} relative overflow-hidden`}>
             <Text
-              className="text-xs font-semibold uppercase"
-              style={{ color: getFreshnessColor(step.sectionUpdatedAt.alerts) }}
+              className={`text-xs font-semibold uppercase ${getFreshnessColor(step.sectionUpdatedAt.alerts)}`}
             >
               Step {stepIndex + 1} | fetched {formatTime(step.sectionUpdatedAt.alerts)}
             </Text>
             {sortedAlerts.map((item) => {
-              const colorSet = URGENCY_CARD_COLORS[item.urgency][theme];
+              const token = urgencyToken(item.urgency);
+              const accentBg = `bg-urgency-${token}-${isDark ? "darkBg" : "lightBg"}`;
+              const accentBorder = `bg-urgency-${token}-${isDark ? "darkBorder" : "lightBorder"}`;
+              const pillText = URGENCY_PILL_TEXT_COLOR[item.urgency][theme];
 
               return (
-                <View
-                  key={`alerts-step-${stepIndex}-${item.id}`}
-                  className="mb-3 mt-3 rounded-2xl border p-4"
-                  style={{ backgroundColor: colorSet.backgroundColor, borderColor: colorSet.borderColor }}
-                >
-                  <View className="mb-2 self-start rounded-full border border-black/10 bg-white/55 px-3 py-1">
-                    <Text
-                      className="text-[11px] font-semibold uppercase"
-                      style={{ color: URGENCY_PILL_TEXT_COLOR[item.urgency][theme] }}
-                    >
-                      {item.urgency}
-                    </Text>
-                  </View>
-                  <Text className={`text-base font-semibold ${isDark ? "text-slate-50" : "text-slate-900"}`}>
-                    {item.title}
-                  </Text>
-                  <Text
-                    className={`mb-3 mt-1 text-xs uppercase tracking-wide ${
-                      isDark ? "text-slate-200" : "text-slate-700"
+                <View key={`alerts-step-${stepIndex}-${item.id}`} className="relative mt-3">
+                  <View className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-full ${accentBorder}`} />
+                  <View
+                    className={`ml-2 rounded-xl border px-4 pb-4 pt-3 ${
+                      isDark
+                        ? "border-brand-darkBorder bg-brand-darkCard shadow-panel"
+                        : "border-brand-border bg-brand-card shadow-soft"
                     }`}
                   >
-                    {item.category}
-                  </Text>
-                  <Text className={`mb-3 text-sm ${isDark ? "text-slate-100" : "text-slate-900"}`}>
-                    {item.details}
-                  </Text>
-                  <View
-                    className="rounded-xl p-3"
-                    style={{ backgroundColor: isDark ? "rgba(15,23,42,0.35)" : "rgba(255,255,255,0.65)" }}
-                  >
-                    <Text className={`text-xs ${isDark ? "text-slate-200" : "text-slate-700"}`}>
-                      Area: {item.area}
+                    <View className="mb-3 flex-row items-center justify-between">
+                      <View className={`rounded-pill px-3 py-1 ${accentBg}`}>
+                        <Text className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: pillText }}>
+                          {item.urgency}
+                        </Text>
+                      </View>
+                      <Text className={`text-xs font-semibold ${isDark ? "text-brand-darkMuted" : "text-brand-muted"}`}>
+                        {item.category}
+                      </Text>
+                    </View>
+
+                    <Text className={`text-base font-semibold ${isDark ? "text-brand-darkInk" : "text-brand-ink"}`}>
+                      {item.title}
                     </Text>
-                    <Text className="mt-1 text-xs" style={{ color: getFreshnessColor(item.occurredAt) }}>
-                      Occurred: {formatTime(item.occurredAt)}
+                    <Text className={`mb-3 mt-1 text-sm leading-6 ${isDark ? "text-brand-darkInk" : "text-brand-ink"}`}>
+                      {item.details}
                     </Text>
-                    <Text className="mt-1 text-xs" style={{ color: getFreshnessColor(item.updatedAt) }}>
-                      Updated: {formatTime(item.updatedAt)}
-                    </Text>
-                    <Text className={`mt-1 text-xs ${isDark ? "text-slate-200" : "text-slate-700"}`}>
-                      Source: {item.source}
-                    </Text>
+
+                    <View
+                      className={`rounded-lg border px-3 py-3 ${
+                        isDark
+                          ? "border-brand-darkBorder bg-brand-darkSurface"
+                          : "border-brand-border bg-brand-surface"
+                      }`}
+                    >
+                      <Text className={`text-xs ${isDark ? "text-brand-darkMuted" : "text-brand-muted"}`}>
+                        Area: {item.area}
+                      </Text>
+                      <Text className={`mt-1 text-xs ${getFreshnessColor(item.occurredAt)}`}>
+                        Occurred: {formatTime(item.occurredAt)}
+                      </Text>
+                      <Text className={`mt-1 text-xs ${getFreshnessColor(item.updatedAt)}`}>
+                        Updated: {formatTime(item.updatedAt)}
+                      </Text>
+                      <Text className={`mt-1 text-xs ${isDark ? "text-brand-darkMuted" : "text-brand-muted"}`}>
+                        Source: {item.source}
+                      </Text>
+                    </View>
                   </View>
                 </View>
               );
@@ -223,8 +224,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
         return (
           <View key={`plans-step-${stepIndex}`} className={`${commonCardClass} relative overflow-hidden`}>
             <Text
-              className="text-xs font-semibold uppercase"
-              style={{ color: getFreshnessColor(step.sectionUpdatedAt.evacuationPlans) }}
+              className={`text-xs font-semibold uppercase ${getFreshnessColor(step.sectionUpdatedAt.evacuationPlans)}`}
             >
               Step {stepIndex + 1} | fetched {formatTime(step.sectionUpdatedAt.evacuationPlans)}
             </Text>
@@ -264,7 +264,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
                   </Text>
                 ))}
                 {item.updatedAt ? (
-                  <Text className="mt-2 text-xs" style={{ color: getFreshnessColor(item.updatedAt) }}>
+                  <Text className={`mt-2 text-xs ${getFreshnessColor(item.updatedAt)}`}>
                     Updated: {formatTime(item.updatedAt)}
                   </Text>
                 ) : null}
@@ -283,55 +283,100 @@ export function InfoScreen({ theme }: InfoScreenProps) {
     </View>
   );
 
-  const renderConnections = () => (
-    <View>
-      {stepHistoryNewestFirst.map(({ step, stepIndex }) => (
-        <View key={`connections-step-${stepIndex}`} className={`${commonCardClass} relative overflow-hidden`}>
-          <Text
-            className="text-xs font-semibold uppercase"
-            style={{ color: getFreshnessColor(step.sectionUpdatedAt.connections) }}
-          >
-            Step {stepIndex + 1} | fetched {formatTime(step.sectionUpdatedAt.connections)}
-          </Text>
-          {step.connections.length === 0 ? (
-            <Text className={`mt-3 ${isDark ? "text-slate-300" : "text-slate-700"}`}>No connections yet. Add one from Profile.</Text>
-          ) : (
-            step.connections.map((item) => (
-              <View key={`connections-step-${stepIndex}-${item.id}`} className={`mt-3 rounded-xl p-3 ${isDark ? "bg-slate-800" : "bg-slate-100"}`}>
-                <Text className={`text-base font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
-                  {item.contactPhone}
-                </Text>
-                <Text className={`mt-1 text-sm capitalize ${isDark ? "text-slate-300" : "text-slate-700"}`}>
-                  Relationship: {item.relationship}
-                </Text>
-                <Text className={`mt-1 text-sm ${isDark ? "text-slate-300" : "text-slate-700"}`}>
-                  Trust level: {item.trustLevel}
-                </Text>
-                <Text className="mt-1 text-xs" style={{ color: getFreshnessColor(item.updatedAt) }}>
-                  Updated: {formatTime(item.updatedAt)}
-                </Text>
-              </View>
-            ))
-          )}
-          {stepIndex !== currentStepIndex ? (
-            <View
-              pointerEvents="none"
-              className="absolute inset-0 rounded-2xl"
-              style={{ backgroundColor: isDark ? "rgba(100,116,139,0.34)" : "rgba(148,163,184,0.28)" }}
-            />
-          ) : null}
-        </View>
-      ))}
+  useEffect(() => {
+    if (connectionsPayload || connectionsLoading) return;
+    setConnectionsLoading(true);
+    fetchFirstPersonConnections()
+      .then(setConnectionsPayload)
+      .catch((error: unknown) => {
+        setConnectionsError(error instanceof Error ? error.message : "Failed to load connections");
+      })
+      .finally(() => setConnectionsLoading(false));
+  }, [connectionsPayload, connectionsLoading]);
+
+  const renderPersonCard = (title: string, person: PersonSummary, accent?: string) => (
+    <View className={`mt-3 rounded-xl p-4 ${isDark ? "bg-slate-800" : "bg-slate-100"}`}>
+      <Text className={`text-xs font-semibold uppercase ${accent ?? (isDark ? "text-slate-300" : "text-slate-600")}`}>
+        {title}
+      </Text>
+      <Text className={`mt-1 text-lg font-semibold ${isDark ? "text-slate-50" : "text-slate-900"}`}>
+        {person.name}
+      </Text>
+      <Text className={`mt-1 text-sm ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+        Scenario: {person.scenario}
+      </Text>
+      <Text className={`mt-1 text-sm ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+        Seats available: {person.seats_available}
+      </Text>
+      <Text className={`mt-1 text-xs ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+        Position: {person.current_position[1].toFixed(3)}, {person.current_position[0].toFixed(3)}
+      </Text>
     </View>
   );
+
+  const renderConnections = () => {
+    const updatedAt = connectionsPayload?.metadata.generated_at ?? latestStep.sectionUpdatedAt.connections;
+
+    return (
+      <View>
+        <View className={`${commonCardClass} relative overflow-hidden`}>
+          <Text className={`text-xs font-semibold uppercase ${getFreshnessColor(updatedAt)}`}>
+            Updated {formatTime(updatedAt)}
+          </Text>
+
+          {connectionsLoading ? (
+            <Text className={`mt-3 ${isDark ? "text-slate-300" : "text-slate-700"}`}>Loading connections…</Text>
+          ) : connectionsError ? (
+            <Text className="mt-3 text-status-danger">Error: {connectionsError}</Text>
+          ) : connectionsPayload ? (
+            <>
+              {renderPersonCard("You", connectionsPayload.focal_person, isDark ? "text-emerald-200" : "text-emerald-700")}
+              <Text className={`mt-4 text-sm font-semibold uppercase ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+                Connections ({connectionsPayload.connections.length})
+              </Text>
+              {connectionsPayload.connections.length === 0 ? (
+                <Text className={`mt-2 ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                  No connections found in the graph.
+                </Text>
+              ) : (
+                connectionsPayload.connections.map((node: PersonConnectionNode, index: number) => (
+                  <View
+                    key={`connection-${node.person.person_id}-${index}`}
+                    className={`mt-3 rounded-xl p-3 ${isDark ? "bg-slate-900" : "bg-white"}`}
+                  >
+                    <Text className={`text-base font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
+                      {node.person.name}
+                    </Text>
+                    <Text className={`mt-1 text-sm capitalize ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+                      Relationship: {node.relationship}
+                    </Text>
+                    <Text className={`mt-1 text-sm ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+                      Seats available: {node.person.seats_available}
+                    </Text>
+                    <Text className={`mt-1 text-sm ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+                      Scenario: {node.person.scenario}
+                    </Text>
+                    <Text className={`mt-1 text-xs ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                      Position: {node.person.current_position[1].toFixed(3)}, {node.person.current_position[0].toFixed(3)}
+                    </Text>
+                  </View>
+                ))
+              )}
+            </>
+          ) : (
+            <Text className={`mt-3 ${isDark ? "text-slate-300" : "text-slate-700"}`}>No data available.</Text>
+          )}
+        </View>
+      </View>
+    );
+  };
 
   const renderSavedInformation = () => (
     <View>
       {stepHistoryNewestFirst.map(({ step, stepIndex }) => (
         <View key={`saved-step-${stepIndex}`} className={`${commonCardClass} relative overflow-hidden`}>
           <Text
-            className="text-xs font-semibold uppercase"
-            style={{ color: getFreshnessColor(step.sectionUpdatedAt.savedInformation) }}
+            className={`text-xs font-semibold uppercase ${getFreshnessColor(step.sectionUpdatedAt.savedInformation)}`}
           >
             Step {stepIndex + 1} | fetched {formatTime(step.sectionUpdatedAt.savedInformation)}
           </Text>
@@ -341,7 +386,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
                 {item.title}
               </Text>
               <Text className={`mt-2 text-sm ${isDark ? "text-slate-300" : "text-slate-700"}`}>{item.note}</Text>
-              <Text className="mt-2 text-xs" style={{ color: getFreshnessColor(item.updatedAt) }}>
+              <Text className={`mt-2 text-xs ${getFreshnessColor(item.updatedAt)}`}>
                 Updated: {formatTime(item.updatedAt)}
               </Text>
             </View>
@@ -363,8 +408,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
       {stepHistoryNewestFirst.map(({ step, stepIndex }) => (
         <View key={`weather-step-${stepIndex}`} className={`${commonCardClass} relative overflow-hidden`}>
           <Text
-            className="text-xs font-semibold uppercase"
-            style={{ color: getFreshnessColor(step.sectionUpdatedAt.weather) }}
+            className={`text-xs font-semibold uppercase ${getFreshnessColor(step.sectionUpdatedAt.weather)}`}
           >
             Step {stepIndex + 1} | fetched {formatTime(step.sectionUpdatedAt.weather)}
           </Text>
@@ -379,7 +423,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
                 </Text>
               </View>
               <Text className={`mt-2 text-sm ${isDark ? "text-slate-300" : "text-slate-700"}`}>{item.details}</Text>
-              <Text className="mt-2 text-xs" style={{ color: getFreshnessColor(item.updatedAt) }}>
+              <Text className={`mt-2 text-xs ${getFreshnessColor(item.updatedAt)}`}>
                 Updated: {formatTime(item.updatedAt)}
               </Text>
             </View>
@@ -399,7 +443,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
   return (
     <>
       <FlatList
-        className={`flex-1 ${isDark ? "bg-slate-950" : "bg-slate-100"}`}
+        className={`flex-1 ${isDark ? "bg-brand-darkSurface" : "bg-brand-surface"}`}
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 18 }}
         data={[section]}
         keyExtractor={(item) => item}
@@ -427,7 +471,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
             <View className="flex-row items-center">
               <Pressable
                 className={`relative h-10 w-10 items-center justify-center rounded-xl border ${
-                  isDark ? "border-slate-700 bg-slate-900" : "border-slate-300 bg-white"
+                  isDark ? "border-slate-700 bg-slate-900" : "border-brand-border bg-brand-card shadow-soft"
                 }`}
                 onPress={() => {
                   setMenuOpen(true);
@@ -436,22 +480,27 @@ export function InfoScreen({ theme }: InfoScreenProps) {
                 <Text className={`text-xl ${isDark ? "text-slate-100" : "text-slate-900"}`}>&#9776;</Text>
                 {unreadUpdates > 0 ? (
                   <View className="absolute -right-3 -top-2 rounded-full bg-red-600 px-2 py-0.5">
-                    <Text className="text-[10px] font-semibold text-white">{unreadUpdates} new</Text>
-                  </View>
-                ) : null}
+            <Text className="text-[10px] font-semibold text-white">{unreadUpdates} new</Text>
+          </View>
+        ) : null}
               </Pressable>
 
-              <Text className={`ml-3 text-2xl font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
+              <Text className={`ml-3 text-2xl font-semibold ${isDark ? "text-brand-darkInk" : "text-brand-ink"}`}>
                 {toSectionTitle(section)}
               </Text>
+
+              <View style={{ flex: 1 }} />
+
+              <Image source={logoGreenBlue} style={{ width: 40, height: 40, resizeMode: "contain", marginRight: 6 }} />
+              <VoiceWidget/>
             </View>
 
-            <Text className={`mt-2 text-xs ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+            <Text className={`mt-2 text-xs ${isDark ? "text-brand-darkMuted" : "text-brand-muted"}`}>
               Step {currentStepIndex + 1}/{totalSteps} | T+{currentStepIndex * DISASTER_STEP_INTERVAL_MINUTES}m
             </Text>
-            <Text className={`mt-1 text-xs ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+            <Text className={`mt-1 text-xs ${isDark ? "text-brand-darkMuted" : "text-brand-muted"}`}>
               {toSectionTitle(section)} updated:{" "}
-              <Text style={{ color: getFreshnessColor(latestStep.sectionUpdatedAt[toSectionUpdatedAtKey(section)]) }}>
+              <Text className={getFreshnessColor(latestStep.sectionUpdatedAt[toSectionUpdatedAtKey(section)])}>
                 {formatTime(latestStep.sectionUpdatedAt[toSectionUpdatedAtKey(section)])}
               </Text>
             </Text>

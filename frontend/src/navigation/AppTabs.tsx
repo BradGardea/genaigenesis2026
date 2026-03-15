@@ -30,7 +30,7 @@ const TAB_OPTIONS: { key: TabKey; label: string; icon: TabIconName }[] = [
 
 export function AppTabs() {
   const [activeTab, setActiveTab] = useState<TabKey>("info");
-  const [theme, setTheme] = useState<AppTheme>("light");
+  const [theme, setTheme] = useState<AppTheme>("dark");
   const [fullName, setFullName] = useState(userProfileMock.fullName);
   const [phoneNumber, setPhoneNumber] = useState(userProfileMock.phoneNumber);
   const [homeArea, setHomeArea] = useState(userProfileMock.homeArea);
@@ -133,7 +133,7 @@ export function AppTabs() {
   }, [latestHighRiskAlert]);
 
   return (
-    <View className={`flex-1 ${isDark ? "bg-slate-950" : "bg-slate-100"}`}>
+    <View className={`flex-1 ${isDark ? "bg-brand-darkSurface" : "bg-brand-surface"}`}>
       {visibleAlertBanner ? (
         <View
           className={`absolute left-3 right-3 top-10 z-20 rounded-xl border px-3 py-2 ${
@@ -283,7 +283,7 @@ export function AppTabs() {
 
       <View
         className={`border-t px-3 ${
-          isDark ? "border-slate-700 bg-slate-900" : "border-slate-300 bg-white"
+          isDark ? "border-brand-darkBorder bg-brand-darkCard" : "border-brand-border bg-brand-card"
         }`}
         style={{ paddingBottom: Math.max(insets.bottom, 6), paddingTop: 6 }}
       >
@@ -292,11 +292,11 @@ export function AppTabs() {
             const isActive = activeTab === tab.key;
             const iconColor = isActive
               ? isDark
-                ? "#0f172a"
+                ? "#e5e7eb"
                 : "#f8fafc"
               : isDark
                 ? "#cbd5e1"
-                : "#334155";
+                : "#1f4b99";
 
             return (
               <Pressable
@@ -304,11 +304,11 @@ export function AppTabs() {
                 className={`mx-1 flex-1 items-center rounded-xl px-1 py-1.5 ${
                   isActive
                     ? isDark
-                      ? "bg-slate-100"
-                      : "bg-slate-900"
+                      ? "bg-brand-darkMuted/20"
+                      : "bg-brand-primary"
                     : isDark
-                      ? "bg-slate-800"
-                      : "bg-slate-200"
+                      ? "bg-brand-darkCard"
+                      : "bg-brand-card"
                 }`}
                 onPress={() => setActiveTab(tab.key)}
               >
@@ -321,11 +321,11 @@ export function AppTabs() {
                   className={`mt-0.5 text-[10px] font-semibold ${
                     isActive
                       ? isDark
-                        ? "text-slate-900"
-                        : "text-slate-100"
+                        ? "text-brand-darkInk"
+                        : "text-white"
                       : isDark
-                        ? "text-slate-300"
-                        : "text-slate-700"
+                        ? "text-brand-darkMuted"
+                        : "text-brand-ink"
                   }`}
                 >
                   {tab.label}
