@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pathlib import Path
 
 
 class Settings(BaseSettings):
@@ -20,7 +21,9 @@ class Settings(BaseSettings):
         return self.expo_public_mapbox_access_token
 
     model_config = SettingsConfigDict(
-        env_file=".env", case_sensitive=False, extra="ignore"
+        env_file=(str(Path(__file__).resolve().parents[2] / ".env"), ".env"),
+        case_sensitive=False,
+        extra="ignore",
     )
 
 

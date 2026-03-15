@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import uuid
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -175,7 +176,8 @@ async def stream_route_updates(route_id: str, request: Request) -> StreamingResp
                     break
                 try:
                     event = await asyncio.wait_for(sub.queue.get(), timeout=30)
-                    yield f"event: {event.event_type}\ndata: {event.data}\n\n"
+                    payload = json.dumps(event.data, separators=(",", ":"))
+                    yield f"event: {event.event_type}\ndata: {payload}\n\n"
                 except asyncio.TimeoutError:
                     yield ": heartbeat\n\n"
         finally:

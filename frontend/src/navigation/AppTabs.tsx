@@ -60,7 +60,7 @@ export function AppTabs() {
     <View className={`flex-1 ${isDark ? "bg-slate-950" : "bg-slate-100"}`}>
       {visibleAlertBanner ? (
         <View
-          className={`absolute left-3 right-3 top-2 z-20 rounded-xl border px-3 py-2 ${
+          className={`absolute left-3 right-3 top-10 z-20 rounded-xl border px-3 py-2 ${
             isDark ? "border-red-400 bg-red-900" : "border-red-300 bg-red-50"
           }`}
         >
@@ -110,7 +110,7 @@ export function AppTabs() {
         }}
       >
         <Text
-          className={`text-xs font-semibold ${
+          className={`text-xs font-semibold select-none ${
             isFinalStep || isStepping
               ? isDark
                 ? "text-slate-300"

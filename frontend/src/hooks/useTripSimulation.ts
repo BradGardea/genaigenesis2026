@@ -33,7 +33,7 @@ function computeBearing(from: Coordinate, to: Coordinate): number {
   return (toDeg(Math.atan2(y, x)) + 360) % 360;
 }
 
-function buildCumulativeDistances(coords: number[][]): { cumDist: number[]; totalDist: number } {
+export function buildCumulativeDistances(coords: number[][]): { cumDist: number[]; totalDist: number } {
   const cumDist = [0];
   for (let i = 1; i < coords.length; i++) {
     const a: Coordinate = { lng: coords[i - 1][0], lat: coords[i - 1][1] };

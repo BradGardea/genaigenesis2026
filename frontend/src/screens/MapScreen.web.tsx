@@ -5,7 +5,7 @@ import { Pressable, Text, TextInput, View } from "react-native";
 import { AppTheme } from "../types/theme";
 import { Coordinate, GeoJSONLineString, HazardZone, RouteResponse, RouteWeatherPoint } from "../types/domain";
 import { useEvacuationRoute } from "../hooks/useEvacuationRoute";
-import { useTripSimulation } from "../hooks/useTripSimulation";
+import { useTripSimulation, buildCumulativeDistances } from "../hooks/useTripSimulation";
 import {
   deactivateHazard,
   getActiveHazards,
@@ -16,6 +16,11 @@ import {
 import { ReportHazardModal } from "../components/ReportHazardModal";
 import { SimulationPanel, type DisasterBbox } from "../components/SimulationPanel";
 import { useSimulation } from "../hooks/useSimulation";
+import {
+  WeatherLayerOverlay,
+  WeatherLayerMode,
+} from "../components/WeatherLayerOverlay";
+import { AlertSignalsLayer } from "../components/AlertSignalsLayer";
 import { useDisasterDemo } from "../state/DisasterDemoContext";
 
 interface MapScreenProps {
@@ -35,7 +40,7 @@ const WEATHER_ALERT_SOURCE = "weather-alerts";
 const WEATHER_ALERT_FILL = "weather-alerts-fill";
 const WEATHER_ALERT_OUTLINE = "weather-alerts-outline";
 const CITY_STATE_SOURCE = "city-state-impacts";
-const CITY_STATE_LAYER = "city-state-impacts-circle";
+const CITY_STATE_LAYER = "city-state-impacts-heatmap";
 const CITY_STATE_LABEL_LAYER = "city-state-impacts-label";
 const SIM_ROUTES_SOURCE = "sim-routes";
 const SIM_ROUTES_LAYER = "sim-routes-line";
@@ -43,9 +48,10 @@ const SIM_AGENTS_SOURCE = "sim-agents";
 const SIM_AGENTS_LAYER = "sim-agents-circle";
 const SIM_AGENTS_LABEL_LAYER = "sim-agents-label";
 
-const DEFAULT_CENTER: [number, number] = [29.222, -1.679];
-const DEFAULT_ROUTE_ORIGIN: Coordinate = { lat: -1.661392, lng: 29.174324 };
-const DEFAULT_ROUTE_DESTINATION: Coordinate = { lat: -1.632659, lng: 29.248804 };
+const DEFAULT_CENTER: [number, number] = [35.321269, -21.992207];
+const DEFAULT_ROUTE_ORIGIN: Coordinate = { lat: -21.992207, lng: 35.321269 };
+const DEFAULT_ROUTE_DESTINATION: Coordinate = { lat: -22.005956, lng: 35.285656 };
+const PROTECTED_SEED_STEPS = 30;
 
 function coordFromText(text: string): Coordinate | null {
   const parts = text.split(",").map((s) => s.trim());
@@ -74,6 +80,10 @@ function formatDistance(meters: number): string {
   return `${(meters / 1000).toFixed(1)} km`;
 }
 
+function formatLatLon6(lat: number, lon: number): string {
+  return `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+}
+
 interface CityStateArea {
   lat: number;
   lon: number;
@@ -82,13 +92,17 @@ interface CityStateArea {
   danger_to_remain: string;
   status: string;
   radius_m: number;
+  node_id?: string;
+  source_kind?: string;
+  source_refs?: string[];
 }
 
 function toHazardType(impactType: string, severity: number): string | null {
   if (impactType === "road_closure") return "roadblock";
-  if (impactType === "flooding" && severity >= 74) return "flood";
+  if (impactType === "flooding") return "flood";
   if (impactType === "high_wind" && severity >= 82) return "wind";
-  if (impactType === "structure_damage" && severity >= 88) return "roadblock";
+  if (impactType === "structure_damage" && severity >= 65) return "roadblock";
+  if (impactType === "debris" && severity >= 30) return "roadblock";
   return null;
 }
 
@@ -121,7 +135,10 @@ function extractCityStateAreas(raw: Record<string, unknown> | undefined): CitySt
         typeof value.severity === "number" &&
         typeof value.danger_to_remain === "string" &&
         typeof value.status === "string" &&
-        typeof value.radius_m === "number"
+        typeof value.radius_m === "number" &&
+        (value.node_id == null || typeof value.node_id === "string") &&
+        (value.source_kind == null || typeof value.source_kind === "string") &&
+        (value.source_refs == null || Array.isArray(value.source_refs))
       );
     })
     .slice(0, 200);
@@ -135,29 +152,37 @@ function isHighDanger(area: CityStateArea): boolean {
   );
 }
 
+function isProtectedCoastalSeed(area: CityStateArea, stepIndex: number): boolean {
+  return stepIndex <= PROTECTED_SEED_STEPS && (area.source_kind?.endsWith("_protected") ?? false);
+}
+
 function approxDistanceMeters(a: CityStateArea, b: CityStateArea): number {
   const dy = (a.lat - b.lat) * 111_320;
   const dx = (a.lon - b.lon) * 111_320 * Math.cos(((a.lat + b.lat) / 2) * Math.PI / 180);
   return Math.hypot(dx, dy);
 }
 
-function compressIntoHighDangerZones(areas: CityStateArea[]): CityStateArea[] {
+function compressIntoHighDangerZones(areas: CityStateArea[], stepIndex: number): CityStateArea[] {
   const cloned = areas.map((a) => ({ ...a }));
   const absorbed = new Set<number>();
 
   for (let i = 0; i < cloned.length; i++) {
     const high = cloned[i];
+    if (isProtectedCoastalSeed(high, stepIndex)) continue;
     if (!isHighDanger(high)) continue;
     let mergedCount = 0;
+    const mergedIndices: number[] = [];
 
     for (let j = 0; j < cloned.length; j++) {
       if (i === j || absorbed.has(j)) continue;
       const low = cloned[j];
+      if (isProtectedCoastalSeed(low, stepIndex)) continue;
       if (high.impact_type !== low.impact_type) continue;
       if (isHighDanger(low)) continue;
       if (approxDistanceMeters(high, low) > high.radius_m) continue;
 
       absorbed.add(j);
+      mergedIndices.push(j);
       mergedCount += 1;
     }
 
@@ -166,15 +191,26 @@ function compressIntoHighDangerZones(areas: CityStateArea[]): CityStateArea[] {
       high.severity = Math.min(100, high.severity + Math.min(mergedCount, 8));
       high.danger_to_remain = "high";
       high.status = "merged_cluster";
+      const refs = new Set<string>(high.source_refs ?? []);
+      refs.add(high.node_id ?? "");
+      for (const idx of mergedIndices) {
+        const low = cloned[idx];
+        (low.source_refs ?? []).forEach((r) => refs.add(r));
+        if (low.node_id) refs.add(low.node_id);
+      }
+      high.source_kind = "high_danger_absorb";
+      high.source_refs = Array.from(refs).filter(Boolean).slice(0, 20);
     }
   }
 
   return cloned.filter((_, idx) => !absorbed.has(idx));
 }
 
-function collapseNearbyDisplayNodes(areas: CityStateArea[], mergeDistanceM = 230): CityStateArea[] {
+function collapseNearbyDisplayNodes(areas: CityStateArea[], stepIndex: number, mergeDistanceM = 230): CityStateArea[] {
+  const protectedSeeds = areas.filter((a) => isProtectedCoastalSeed(a, stepIndex)).map((a) => ({ ...a }));
+  const mergeCandidates = areas.filter((a) => !isProtectedCoastalSeed(a, stepIndex));
   const grouped = new Map<string, CityStateArea[]>();
-  for (const area of areas) {
+  for (const area of mergeCandidates) {
     const bucket = isHighDanger(area) ? "high" : "low";
     const key = `${area.impact_type}:${bucket}`;
     const list = grouped.get(key);
@@ -219,6 +255,11 @@ function collapseNearbyDisplayNodes(areas: CityStateArea[], mergeDistanceM = 230
         cap,
         Math.round(Math.max(...cluster.map((c) => c.radius_m)) + Math.sqrt(cluster.length) * 80)
       );
+      const refs = new Set<string>();
+      cluster.forEach((c) => {
+        (c.source_refs ?? []).forEach((r) => refs.add(r));
+        if (c.node_id) refs.add(c.node_id);
+      });
       collapsed.push({
         lat,
         lon,
@@ -227,10 +268,13 @@ function collapseNearbyDisplayNodes(areas: CityStateArea[], mergeDistanceM = 230
         danger_to_remain: severity >= 70 ? "high" : cluster[0].danger_to_remain,
         status: "merged_cluster",
         radius_m,
+        node_id: `display-merge-${cluster[0].impact_type}-${Math.round(lat * 1e6)}-${Math.round(lon * 1e6)}`,
+        source_kind: "display_collapsed",
+        source_refs: Array.from(refs).slice(0, 24),
       });
     }
   }
-  return collapsed;
+  return [...protectedSeeds, ...collapsed];
 }
 
 const CAR_MARKER_CSS_ID = "crisisnet-car-marker-css";
@@ -287,8 +331,9 @@ export function MapScreen({ theme }: MapScreenProps) {
   const [hazardModalVisible, setHazardModalVisible] = useState(false);
   const [mapClickMode, setMapClickMode] = useState<"origin" | "destination" | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
-  const [plannerCollapsed, setPlannerCollapsed] = useState(false);
+  const [plannerCollapsed, setPlannerCollapsed] = useState(true);
   const [mapReadyVersion, setMapReadyVersion] = useState(0);
+  const [mapIsLoaded, setMapIsLoaded] = useState(false);
 
   // â”€â”€ Weather layer state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [showWind, setShowWind] = useState(false);
@@ -477,6 +522,13 @@ export function MapScreen({ theme }: MapScreenProps) {
 
       map.on("load", () => {
         setMapReadyVersion((value) => value + 1);
+        setMapIsLoaded(true);
+        // Ensure map fills container after layout settles
+        requestAnimationFrame(() => map.resize());
+        setTimeout(() => map.resize(), 100);
+        setTimeout(() => map.resize(), 300);
+        setTimeout(() => map.resize(), 600);
+        setTimeout(() => map.resize(), 1200);
         map.addSource(ROUTE_SOURCE, {
           type: "geojson",
           data: { type: "FeatureCollection", features: [] },
@@ -544,32 +596,50 @@ export function MapScreen({ theme }: MapScreenProps) {
         });
         map.addLayer({
           id: CITY_STATE_LAYER,
-          type: "circle",
+          type: "heatmap",
           source: CITY_STATE_SOURCE,
           paint: {
-            "circle-radius": ["interpolate", ["linear"], ["get", "severity"], 0, 4, 100, 11],
-            "circle-color": [
-              "match",
-              ["get", "impact_type"],
-              "rain",
-              "#7dd3fc",
-              "high_wind",
-              "#94a3b8",
-              "flooding",
-              "#0ea5e9",
-              "road_closure",
-              "#ef4444",
-              "powerline_failure",
-              "#eab308",
-              "structure_damage",
-              "#dc2626",
-              "debris",
-              "#8b5cf6",
-              "#ef4444",
+            // Weight each point by its severity (0–100 → 0–1)
+            "heatmap-weight": [
+              "interpolate",
+              ["linear"],
+              ["get", "severity"],
+              0, 0,
+              100, 1,
             ],
-            "circle-stroke-color": "#0f172a",
-            "circle-stroke-width": 1,
-            "circle-opacity": 0.9,
+            "heatmap-intensity": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              8, 0.8,
+              14, 1.4,
+            ],
+            // Tight fixed geographic radius (~40m)
+            "heatmap-radius": [
+              "interpolate",
+              ["exponential", 2],
+              ["zoom"],
+              8, 1,
+              9, 2,
+              10, 4,
+              11, 8,
+              12, 16,
+              13, 32,
+              14, 64,
+            ],
+            // Severity gradient: transparent → blue → cyan → green → yellow → orange → red
+            "heatmap-color": [
+              "interpolate",
+              ["linear"],
+              ["heatmap-density"],
+              0,   "rgba(0,0,255,0)",
+              0.15, "rgba(65,182,196,0.6)",
+              0.35, "rgba(127,205,187,0.75)",
+              0.55, "rgba(255,237,160,0.85)",
+              0.75, "rgba(253,141,60,0.9)",
+              1,   "rgba(215,25,28,1)",
+            ],
+            "heatmap-opacity": 0.85,
           },
         });
         map.addLayer({
@@ -586,12 +656,29 @@ export function MapScreen({ theme }: MapScreenProps) {
         map.on("click", CITY_STATE_LAYER, (e) => {
           if (!e.features?.length) return;
           const props = e.features[0].properties ?? {};
+          const geom = e.features[0].geometry;
+          const coords =
+            geom && geom.type === "Point" && Array.isArray(geom.coordinates)
+              ? (geom.coordinates as number[])
+              : null;
           const impactType = String(props.impact_type ?? "unknown").replace("_", " ");
           const severity = props.severity ?? "unknown";
           const danger = props.danger_to_remain ?? "unknown";
           const status = props.status ?? "unknown";
           const radius = props.radius_m ?? "n/a";
+          const sourceKind = props.source_kind ?? "unknown";
+          const sourceRefsRaw = String(props.source_refs ?? "");
+          const sourceRefs = sourceRefsRaw
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .slice(0, 6)
+            .join(", ");
           const step = props.step_index != null ? Number(props.step_index) + 1 : "n/a";
+          const latLon =
+            coords && coords.length >= 2
+              ? formatLatLon6(Number(coords[1]), Number(coords[0]))
+              : "n/a";
           const popupHtml = [
             '<div style="font-family:system-ui;font-size:13px;line-height:1.4;">',
             "<strong>Incident: " + impactType + "</strong><br/>",
@@ -599,6 +686,9 @@ export function MapScreen({ theme }: MapScreenProps) {
             "<span>Danger: " + danger + "</span><br/>",
             "<span>Status: " + status + "</span><br/>",
             "<span>Radius: " + radius + " m</span><br/>",
+            "<span>Lat,Lon: " + latLon + "</span><br/>",
+            "<span>Source: " + sourceKind + "</span><br/>",
+            "<span>Refs: " + (sourceRefs || "n/a") + "</span><br/>",
             '<span style="color:#64748b;">Step ' + step + "</span>",
             "</div>",
           ].join("");
@@ -610,12 +700,29 @@ export function MapScreen({ theme }: MapScreenProps) {
         map.on("click", CITY_STATE_LABEL_LAYER, (e) => {
           if (!e.features?.length) return;
           const props = e.features[0].properties ?? {};
+          const geom = e.features[0].geometry;
+          const coords =
+            geom && geom.type === "Point" && Array.isArray(geom.coordinates)
+              ? (geom.coordinates as number[])
+              : null;
           const impactType = String(props.impact_type ?? "unknown").replace("_", " ");
           const severity = props.severity ?? "unknown";
           const danger = props.danger_to_remain ?? "unknown";
           const status = props.status ?? "unknown";
           const radius = props.radius_m ?? "n/a";
+          const sourceKind = props.source_kind ?? "unknown";
+          const sourceRefsRaw = String(props.source_refs ?? "");
+          const sourceRefs = sourceRefsRaw
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .slice(0, 6)
+            .join(", ");
           const step = props.step_index != null ? Number(props.step_index) + 1 : "n/a";
+          const latLon =
+            coords && coords.length >= 2
+              ? formatLatLon6(Number(coords[1]), Number(coords[0]))
+              : "n/a";
           const popupHtml = [
             '<div style="font-family:system-ui;font-size:13px;line-height:1.4;">',
             "<strong>Incident: " + impactType + "</strong><br/>",
@@ -623,6 +730,9 @@ export function MapScreen({ theme }: MapScreenProps) {
             "<span>Danger: " + danger + "</span><br/>",
             "<span>Status: " + status + "</span><br/>",
             "<span>Radius: " + radius + " m</span><br/>",
+            "<span>Lat,Lon: " + latLon + "</span><br/>",
+            "<span>Source: " + sourceKind + "</span><br/>",
+            "<span>Refs: " + (sourceRefs || "n/a") + "</span><br/>",
             '<span style="color:#64748b;">Step ' + step + "</span>",
             "</div>",
           ].join("");
@@ -806,14 +916,26 @@ export function MapScreen({ theme }: MapScreenProps) {
     const raf = requestAnimationFrame(() => {
       map.resize();
     });
-    const timeout = setTimeout(() => {
-      map.resize();
-    }, 120);
+    const t1 = setTimeout(() => map.resize(), 120);
+    const t2 = setTimeout(() => map.resize(), 500);
     return () => {
       cancelAnimationFrame(raf);
-      clearTimeout(timeout);
+      clearTimeout(t1);
+      clearTimeout(t2);
     };
   }, [plannerCollapsed]);
+
+  // ResizeObserver: auto-resize map when container dimensions change
+  useEffect(() => {
+    const container = containerRef.current;
+    const map = mapRef.current;
+    if (!container || !map) return;
+    const observer = new ResizeObserver(() => {
+      map.resize();
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [mapIsLoaded]);
 
   // â”€â”€ Map click listener â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
@@ -846,19 +968,48 @@ export function MapScreen({ theme }: MapScreenProps) {
       const routeChanged = prevRouteIdRef.current !== null && prevRouteIdRef.current !== route.route_id;
       prevRouteIdRef.current = route.route_id;
 
-      if (tripActive && routeChanged && map.getLayer(ROUTE_LAYER)) {
-        // Fade out, swap data, fade back in
+      // Build display geometry — trim to show only the route ahead of the
+      // user's current position (like Google Maps) during demo stepping.
+      let displayGeometry = route.geometry;
+
+      if (currentPosition && !tripActive) {
+        const coords = route.geometry.coordinates as [number, number][];
+        let bestIdx = 0;
+        let bestDist = Infinity;
+        for (let i = 0; i < coords.length; i++) {
+          const [lng, lat] = coords[i];
+          const d = Math.hypot(lng - currentPosition.lng, lat - currentPosition.lat);
+          if (d < bestDist) {
+            bestDist = d;
+            bestIdx = i;
+          }
+        }
+        const trimmedCoords: [number, number][] = [
+          [currentPosition.lng, currentPosition.lat],
+          ...coords.slice(bestIdx + 1),
+        ];
+        if (trimmedCoords.length >= 2) {
+          displayGeometry = {
+            type: "LineString" as const,
+            coordinates: trimmedCoords,
+          };
+        }
+      }
+
+      // Fade transition on reroute (active trip OR demo stepping)
+      if ((tripActive || currentPosition) && routeChanged && map.getLayer(ROUTE_LAYER)) {
         map.setPaintProperty(ROUTE_LAYER, "line-opacity", 0);
         setTimeout(() => {
-          source.setData({ type: "Feature", properties: {}, geometry: route.geometry });
+          source.setData({ type: "Feature", properties: {}, geometry: displayGeometry });
           map.setPaintProperty(ROUTE_LAYER, "line-opacity", 0.85);
         }, 200);
       } else {
-        source.setData({ type: "Feature", properties: {}, geometry: route.geometry });
+        source.setData({ type: "Feature", properties: {}, geometry: displayGeometry });
       }
 
-      if (!tripActive) {
-        const coords = (route.geometry as GeoJSONLineString).coordinates as [number, number][];
+      // Only fit-bounds on initial load (no current position yet)
+      if (!tripActive && !currentPosition) {
+        const coords = (displayGeometry as GeoJSONLineString).coordinates as [number, number][];
         if (coords.length > 1) {
           const bounds = coords.reduce(
             (b, c) => b.extend(c as mapboxgl.LngLatLike),
@@ -871,7 +1022,7 @@ export function MapScreen({ theme }: MapScreenProps) {
       prevRouteIdRef.current = null;
       source.setData({ type: "FeatureCollection", features: [] });
     }
-  }, [route, tripActive]);
+  }, [route, tripActive, currentPosition]);
 
   // â”€â”€ Update origin/dest markers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
@@ -880,7 +1031,9 @@ export function MapScreen({ theme }: MapScreenProps) {
     originMarkerRef.current?.remove();
     destMarkerRef.current?.remove();
 
-    if (origin) {
+    if (origin && !currentPosition) {
+      // Only show origin marker when the user hasn't started moving yet.
+      // Once advancing, the car marker replaces it visually.
       originMarkerRef.current = new mapboxgl.Marker({ color: "#22c55e" })
         .setLngLat([origin.lng, origin.lat])
         .setPopup(new mapboxgl.Popup({ offset: 24 }).setText("Origin"))
@@ -892,7 +1045,7 @@ export function MapScreen({ theme }: MapScreenProps) {
         .setPopup(new mapboxgl.Popup({ offset: 24 }).setText("Destination"))
         .addTo(map);
     }
-  }, [origin, destination]);
+  }, [origin, destination, currentPosition]);
 
   // â”€â”€ Update current position marker (car icon) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
@@ -997,7 +1150,11 @@ export function MapScreen({ theme }: MapScreenProps) {
     const recentHistory = stepHistory.slice(-10);
     const features = recentHistory.flatMap(({ stepIndex, step }) => {
       const rawAreas = extractCityStateAreas(step.cityStateRaw);
-      const areas = collapseNearbyDisplayNodes(compressIntoHighDangerZones(rawAreas), 260);
+      const areas = collapseNearbyDisplayNodes(
+        compressIntoHighDangerZones(rawAreas, stepIndex),
+        stepIndex,
+        260
+      );
       return areas.map((area, index) => ({
         type: "Feature" as const,
         id: "city-impact-" + stepIndex + "-" + index,
@@ -1007,6 +1164,9 @@ export function MapScreen({ theme }: MapScreenProps) {
           danger_to_remain: area.danger_to_remain,
           status: area.status,
           radius_m: area.radius_m,
+          node_id: area.node_id ?? "",
+          source_kind: area.source_kind ?? "unknown",
+          source_refs: (area.source_refs ?? []).join(","),
           step_index: stepIndex,
           icon: toImpactIcon(area.impact_type),
         },
@@ -1033,7 +1193,8 @@ export function MapScreen({ theme }: MapScreenProps) {
 
     async function syncCityStateHazards() {
       const stepAreas = collapseNearbyDisplayNodes(
-        compressIntoHighDangerZones(extractCityStateAreas(currentStep.cityStateRaw)),
+        compressIntoHighDangerZones(extractCityStateAreas(currentStep.cityStateRaw), currentStepIndex),
+        currentStepIndex,
         240
       );
       const persistStepsFor = (hazardType: string) => {
@@ -1053,6 +1214,13 @@ export function MapScreen({ theme }: MapScreenProps) {
 
       try {
         const tracked = syncedHazardsRef.current;
+        if (currentStepIndex === 0) {
+          const activeAtStart = await getActiveHazards();
+          await Promise.all(
+            activeAtStart.map((hazard) => deactivateHazard(hazard.hazard_id).catch(() => undefined))
+          );
+          tracked.clear();
+        }
         const desired = new Set<string>();
         let changed = false;
 
@@ -1086,17 +1254,7 @@ export function MapScreen({ theme }: MapScreenProps) {
           changed = true;
         }
 
-        for (const [key, entry] of Array.from(tracked.entries())) {
-          if (cancelled) return;
-          if (desired.has(key)) continue;
-          const ttl = persistStepsFor(entry.hazardType);
-          if (entry.persistent && (currentStepIndex - entry.lastSeenStep) <= ttl) {
-            continue;
-          }
-          await deactivateHazard(entry.hazardId).catch(() => undefined);
-          tracked.delete(key);
-          changed = true;
-        }
+        // No decay: once a hazard is added it stays on the map (can only get worse).
 
         if (changed) {
           await fetchHazards();
@@ -1115,16 +1273,92 @@ export function MapScreen({ theme }: MapScreenProps) {
     };
   }, [currentStep.cityStateRaw, currentStepIndex, fetchHazards, refetch]);
 
+  // ── Incremental step-based position advancement ──────────────
+  // Track distance traveled along the current route so that each step
+  // advances incrementally (like Google Maps) rather than snapping to a
+  // fraction of the whole route, which causes position jumps on reroute.
+  const distanceTraveledRef = useRef<number>(0);
+  const prevDemoRouteIdRef = useRef<string | null>(null);
+  const prevStepIndexRef = useRef<number>(0);
+
   useEffect(() => {
     if (!route?.geometry?.coordinates?.length || totalSteps <= 1) {
       return;
     }
-    const coords = route.geometry.coordinates as [number, number][];
-    const fraction = Math.min(1, Math.max(0, currentStepIndex / (totalSteps - 1)));
-    const pointIndex = Math.min(coords.length - 1, Math.floor(fraction * (coords.length - 1)));
-    const [lng, lat] = coords[pointIndex];
-    setCurrentPosition({ lat, lng });
-  }, [currentStepIndex, route?.geometry, setCurrentPosition, totalSteps]);
+    const coords = route.geometry.coordinates as number[][];
+    const { cumDist, totalDist } = buildCumulativeDistances(coords);
+
+    if (totalDist === 0) return;
+
+    const isReroute =
+      prevDemoRouteIdRef.current !== null &&
+      prevDemoRouteIdRef.current !== route.route_id;
+    const isFirstRoute = prevDemoRouteIdRef.current === null;
+
+    prevDemoRouteIdRef.current = route.route_id;
+
+    if (isReroute) {
+      // The new route starts from our current position (fixed in
+      // useEvacuationRoute). Reset traveled distance and stay at coords[0].
+      distanceTraveledRef.current = 0;
+      const [lng, lat] = coords[0];
+      setCurrentPosition({ lat, lng });
+      prevStepIndexRef.current = currentStepIndex;
+      return;
+    }
+
+    if (isFirstRoute && currentStepIndex === 0) {
+      // Initial load: place user at the start of the route
+      distanceTraveledRef.current = 0;
+      const [lng, lat] = coords[0];
+      setCurrentPosition({ lat, lng });
+      prevStepIndexRef.current = 0;
+      return;
+    }
+
+    // Normal step advancement
+    const stepsRemaining = totalSteps - 1 - prevStepIndexRef.current;
+    if (stepsRemaining <= 0 || currentStepIndex === prevStepIndexRef.current) {
+      return;
+    }
+
+    const stepsTaken = currentStepIndex - prevStepIndexRef.current;
+    const distRemaining = totalDist - distanceTraveledRef.current;
+    const distPerStep = distRemaining / stepsRemaining;
+    const advanceDist = distPerStep * stepsTaken;
+
+    distanceTraveledRef.current = Math.min(
+      totalDist,
+      distanceTraveledRef.current + advanceDist
+    );
+    prevStepIndexRef.current = currentStepIndex;
+
+    // Find position along route at this distance
+    const targetDist = distanceTraveledRef.current;
+    let posLng: number;
+    let posLat: number;
+
+    if (targetDist >= totalDist) {
+      [posLng, posLat] = coords[coords.length - 1];
+    } else {
+      let segIdx = 0;
+      for (let i = 1; i < cumDist.length; i++) {
+        if (cumDist[i] >= targetDist) {
+          segIdx = i - 1;
+          break;
+        }
+      }
+      const segStart = cumDist[segIdx];
+      const segLen = cumDist[segIdx + 1] - segStart;
+      const t = segLen > 0 ? (targetDist - segStart) / segLen : 0;
+      const [lng1, lat1] = coords[segIdx];
+      const [lng2, lat2] = coords[segIdx + 1];
+      posLng = lng1 + t * (lng2 - lng1);
+      posLat = lat1 + t * (lat2 - lat1);
+    }
+
+    setCurrentPosition({ lat: posLat, lng: posLng });
+  }, [currentStepIndex, route?.route_id, route?.geometry, setCurrentPosition, totalSteps]);
 
   // â”€â”€ Rerouting: pulse route line â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
@@ -1507,58 +1741,12 @@ export function MapScreen({ theme }: MapScreenProps) {
               <View className={`mb-1 h-0.5 w-4 rounded ${isDark ? "bg-slate-200" : "bg-slate-700"}`} />
               <View className={`h-0.5 w-4 rounded ${isDark ? "bg-slate-200" : "bg-slate-700"}`} />
             </Pressable>
-            <View className={`mt-1 rounded-md px-2 py-1 ${isDark ? "bg-slate-900/90" : "bg-white/90"}`}>
+            {/* <View className={`mt-1 rounded-md px-2 py-1 ${isDark ? "bg-slate-900/90" : "bg-white/90"}`}>
               <Text className={`text-[10px] ${isDark ? "text-slate-300" : "text-slate-600"}`}>
                 Disaster step {currentStepIndex + 1}/{totalSteps}
               </Text>
-            </View>
+            </View> */}
           </View>
-          {/* Weather controls overlay */}
-          {MAPBOX_PUBLIC_TOKEN && !mapError && (
-            <View
-              style={{
-                position: "absolute" as any,
-                top: 64,
-                left: 10,
-                zIndex: 10,
-              }}
-            >
-              <View
-                className={`rounded-lg ${isDark ? "bg-slate-900/90" : "bg-white/90"}`}
-                style={{ paddingHorizontal: 10, paddingVertical: 6, gap: 4, backdropFilter: "blur(6px)" } as any}
-              >
-                <Text className={`text-xs font-semibold uppercase tracking-wide ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                  Layers
-                </Text>
-                <Pressable
-                  onPress={() => setShowWind((v) => !v)}
-                  className={`flex-row items-center rounded px-2 py-1 ${showWind ? (isDark ? "bg-sky-900/50" : "bg-sky-100") : ""}`}
-                >
-                  <Text className={`text-xs ${showWind ? (isDark ? "text-sky-300" : "text-sky-700") : (isDark ? "text-slate-300" : "text-slate-600")}`}>
-                    {showWind ? "[on]" : "[off]"} Wind
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setShowWeatherAlerts((v) => !v)}
-                  className={`flex-row items-center rounded px-2 py-1 ${showWeatherAlerts ? (isDark ? "bg-amber-900/50" : "bg-amber-100") : ""}`}
-                >
-                  <Text className={`text-xs ${showWeatherAlerts ? (isDark ? "text-amber-300" : "text-amber-700") : (isDark ? "text-slate-300" : "text-slate-600")}`}>
-                    {showWeatherAlerts ? "[on]" : "[off]"} Alerts
-                  </Text>
-                </Pressable>
-                {route && (
-                  <Pressable
-                    onPress={() => setShowRouteWeather((v) => !v)}
-                    className={`flex-row items-center rounded px-2 py-1 ${showRouteWeather ? (isDark ? "bg-emerald-900/50" : "bg-emerald-100") : ""}`}
-                  >
-                    <Text className={`text-xs ${showRouteWeather ? (isDark ? "text-emerald-300" : "text-emerald-700") : (isDark ? "text-slate-300" : "text-slate-600")}`}>
-                      {showRouteWeather ? "[on]" : "[off]"} Route Wx
-                    </Text>
-                  </Pressable>
-                )}
-              </View>
-            </View>
-          )}
           {/* Simulation panel — bottom-left */}
           {MAPBOX_PUBLIC_TOKEN && !mapError && (
             <View
@@ -1612,6 +1800,20 @@ export function MapScreen({ theme }: MapScreenProps) {
               </Text>
             </View>
           )}
+          <WeatherLayerOverlay
+            map={mapRef.current}
+            mapLoaded={mapIsLoaded}
+            showWeatherAlerts={showWeatherAlerts}
+            showWind={showWind}
+            onToggleAlerts={() => setShowWeatherAlerts((v) => !v)}
+            onToggleWind={() => setShowWind((v) => !v)}
+            theme={theme}
+            offsetTop={100}
+          />
+          <AlertSignalsLayer
+            map={mapRef.current}
+            mapLoaded={mapIsLoaded}
+          />
         </View>
       </View>
 
