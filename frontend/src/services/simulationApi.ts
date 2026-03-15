@@ -17,6 +17,8 @@ export type SimState = "created" | "running" | "completed" | "stopped";
 
 export interface AgentSnapshot {
   agent_id: string;
+  name?: string;
+  scenario?: string;
   state: AgentState;
   lat: number;
   lng: number;
@@ -81,6 +83,7 @@ export interface SimulationConfig {
 export interface AgentEvent {
   type: "depart" | "reroute" | "shelter_in_place" | "arrived";
   agent_id: string;
+  agent_name?: string;
   reasoning?: string;
   urgency?: number;
   dest_name?: string;

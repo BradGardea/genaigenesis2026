@@ -90,6 +90,8 @@ class AgentSnapshot(BaseModel):
     """Public view of an agent at a point in time."""
 
     agent_id: str
+    name: str = ""
+    scenario: str = ""
     state: AgentState
     lat: float
     lng: float

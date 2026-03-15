@@ -33,6 +33,8 @@ from app.simulation.clock import SimulationClock
 from app.services.city_state_augmentor import augment_city_state_step, maybe_inject_route_hazard
 from app.services.timestep_dataset import TimestepDataset
 
+COMMUNITY_DATA_FILENAME = "goma_community_relationships_mock.json"
+
 logger = logging.getLogger(__name__)
 
 # Agent processing concurrency limit
@@ -64,6 +66,20 @@ def _is_valid_spawn(lat: float, lng: float) -> bool:
     """Return True if the coordinate falls on land (inside the habitable polygon)."""
     pt = Point(lng, lat)
     return _VILANKULO_LAND_POLYGON.contains(pt)
+
+
+def _load_community_data() -> list[dict]:
+    """Load the community relationships dataset. Returns empty list on failure."""
+    import json
+    try:
+        root = Path(__file__).resolve().parents[3]
+        path = root / "data" / COMMUNITY_DATA_FILENAME
+        with open(path) as f:
+            data = json.load(f)
+        return data.get("persons", [])
+    except Exception:
+        logger.debug("Community data not available at %s", COMMUNITY_DATA_FILENAME)
+        return []
 
 
 def _load_timeline_total_steps() -> int:
@@ -104,53 +120,203 @@ class SimulationOrchestrator:
         self._init_agents()
 
     def _init_agents(self) -> None:
-        """Generate randomized evacuee agents within the bounding box.
+        """Create agents from community data, falling back to random generation.
 
-        Each agent is routed to the nearest evacuation point based on
-        their spawn location.
+        Uses the community relationships dataset for real names, positions,
+        scenarios, and social connections. If the dataset isn't available or
+        more agents are requested than people in the dataset, fills remaining
+        slots with random agents.
         """
         cfg = self.config
-        for i in range(cfg.num_evacuees):
-            lat = random.uniform(cfg.bbox_min_lat, cfg.bbox_max_lat)
-            lng = random.uniform(cfg.bbox_min_lng, cfg.bbox_max_lng)
-            for _ in range(_MAX_SPAWN_RETRIES):
-                if _is_valid_spawn(lat, lng):
-                    break
-                lat = random.uniform(cfg.bbox_min_lat, cfg.bbox_max_lat)
-                lng = random.uniform(cfg.bbox_min_lng, cfg.bbox_max_lng)
-            else:
-                logger.warning(
-                    "Agent %d: could not find valid spawn after %d retries, using last attempt",
-                    i, _MAX_SPAWN_RETRIES,
-                )
+        community = _load_community_data()
+
+        # Build agents from community data (up to num_evacuees)
+        person_to_agent: dict[str, EvacueeAgent] = {}
+        used = 0
+        for i, person in enumerate(community):
+            if used >= cfg.num_evacuees:
+                break
+            # Position is [lat, lng] in the dataset
+            pos = person.get("current_position", [])
+            if len(pos) < 2:
+                continue
+            lat, lng = float(pos[0]), float(pos[1])
+
+            # Map scenario to profile flags
+            scenario = person.get("scenario", "")
+            seats = person.get("seats_available", 0)
+            has_mobility = "limited mobility" in scenario.lower()
+            has_health = "health" in scenario.lower()
+            profile = EvacuationProfileInput(
+                family_size=1 + len([
+                    c for c in person.get("connections", [])
+                    if c["relationship"] in ("dependent", "guardian")
+                ]),
+                vehicles=max(1, seats),
+                has_children=any(
+                    c["relationship"] == "guardian"
+                    for c in person.get("connections", [])
+                ),
+                has_elderly=has_health,
+                has_mobility_needs=has_mobility,
+            )
 
             evac_point = nearest_evacuation_point(lat, lng)
-
-            profile = EvacuationProfileInput(
-                family_size=random.randint(1, 5),
-                vehicles=random.randint(1, 2),
-                has_children=random.random() < 0.3,
-                has_elderly=random.random() < 0.2,
-                has_mobility_needs=random.random() < 0.1,
-            )
             agent = EvacueeAgent(
-                agent_id=f"agent-{i:03d}",
+                agent_id=person.get("person_id", f"agent-{i:03d}"),
                 lat=lat,
                 lng=lng,
                 dest_lat=evac_point.lat,
                 dest_lng=evac_point.lng,
                 dest_name=evac_point.name,
+                name=person.get("name", ""),
+                scenario=scenario,
                 profile=profile,
                 watsonx_model_id=cfg.watsonx_model_id,
             )
             self.agents.append(agent)
-        self._form_clusters()
+            person_to_agent[person["person_id"]] = agent
+            used += 1
 
-    def _form_clusters(self) -> None:
-        """Greedy one-pass proximity clustering at spawn time."""
-        radius = self.config.cluster_radius_m / 111_320  # metres → degrees
-        unassigned = list(self.agents)
+        # Fill remaining slots using the CommunityGeneratorAgent
+        remaining_count = cfg.num_evacuees - used
+        if remaining_count > 0:
+            from app.services.agents.community_agent import CommunityGeneratorAgent
+            gen = CommunityGeneratorAgent()
+            existing_ids = list(person_to_agent.keys())
+            bbox = {
+                "min_lat": cfg.bbox_min_lat, "max_lat": cfg.bbox_max_lat,
+                "min_lng": cfg.bbox_min_lng, "max_lng": cfg.bbox_max_lng,
+            }
+
+            # Generate in batches of 20 (fallback is synchronous)
+            generated_persons: list[dict] = []
+            batch_start = used + 1
+            while len(generated_persons) < remaining_count:
+                batch_size = min(20, remaining_count - len(generated_persons))
+                batch = gen.fallback({
+                    "count": batch_size,
+                    "start_index": batch_start + len(generated_persons),
+                    "existing_ids": existing_ids + [
+                        p["person_id"] for p in generated_persons
+                    ],
+                    "bbox": bbox,
+                })
+                generated_persons.extend([p.model_dump() for p in batch.persons])
+
+            logger.info(
+                "Generated %d synthetic community members via CommunityGeneratorAgent",
+                len(generated_persons),
+            )
+
+            # Add generated community data to the full community list for clustering
+            for person in generated_persons[:remaining_count]:
+                pos = person.get("current_position", [])
+                if len(pos) < 2:
+                    continue
+                lat, lng = float(pos[0]), float(pos[1])
+
+                # Validate spawn on land
+                if not _is_valid_spawn(lat, lng):
+                    for _ in range(_MAX_SPAWN_RETRIES):
+                        lat = random.uniform(cfg.bbox_min_lat, cfg.bbox_max_lat)
+                        lng = random.uniform(cfg.bbox_min_lng, cfg.bbox_max_lng)
+                        if _is_valid_spawn(lat, lng):
+                            break
+
+                scenario = person.get("scenario", "")
+                seats = person.get("seats_available", 0)
+                has_mobility = "limited mobility" in scenario.lower()
+                has_health = "health" in scenario.lower()
+                profile = EvacuationProfileInput(
+                    family_size=1 + len([
+                        c for c in person.get("connections", [])
+                        if c["relationship"] in ("dependent", "guardian")
+                    ]),
+                    vehicles=max(1, seats),
+                    has_children=any(
+                        c["relationship"] == "guardian"
+                        for c in person.get("connections", [])
+                    ),
+                    has_elderly=has_health,
+                    has_mobility_needs=has_mobility,
+                )
+
+                evac_point = nearest_evacuation_point(lat, lng)
+                agent = EvacueeAgent(
+                    agent_id=person.get("person_id", f"agent-{used:03d}"),
+                    lat=lat,
+                    lng=lng,
+                    dest_lat=evac_point.lat,
+                    dest_lng=evac_point.lng,
+                    dest_name=evac_point.name,
+                    name=person.get("name", ""),
+                    scenario=scenario,
+                    profile=profile,
+                    watsonx_model_id=cfg.watsonx_model_id,
+                )
+                self.agents.append(agent)
+                person_to_agent[person["person_id"]] = agent
+                used += 1
+
+            # Merge generated persons into community list for clustering
+            community.extend(generated_persons[:remaining_count])
+
+        self._form_clusters(community, person_to_agent)
+
+    def _form_clusters(
+        self,
+        community: list[dict],
+        person_to_agent: dict[str, EvacueeAgent],
+    ) -> None:
+        """Form clusters from social connections, then proximity for the rest.
+
+        Dependent/guardian relationships from the community data form natural
+        clusters (families). Remaining agents are clustered by proximity.
+        """
+        clustered: set[str] = set()
         idx = 0
+
+        # Phase 1: relationship-based clusters from community data
+        for person in community:
+            pid = person.get("person_id", "")
+            if pid not in person_to_agent or pid in clustered:
+                continue
+            agent = person_to_agent[pid]
+
+            # Find dependents/guardians that are also agents
+            family_ids = [pid]
+            for conn in person.get("connections", []):
+                if conn["relationship"] in ("dependent", "guardian"):
+                    tid = conn["target_person_id"]
+                    if tid in person_to_agent and tid not in clustered:
+                        family_ids.append(tid)
+
+            if len(family_ids) < 2:
+                continue
+
+            # Form cluster — person with most seats is leader
+            family_agents = [person_to_agent[fid] for fid in family_ids]
+            leader = max(family_agents, key=lambda a: a.profile.vehicles)
+            cid = f"cluster-{idx:03d}"
+            leader.is_leader = True
+            leader.cluster_id = cid
+            for a in family_agents:
+                if a is not leader:
+                    a.cluster_id = cid
+                    dlat = a.lat - leader.lat
+                    dlng = a.lng - leader.lng
+                    a._leader_offset = (dlat * 0.1, dlng * 0.1)
+                clustered.add(a.agent_id)
+            idx += 1
+            logger.info(
+                "Cluster %s: %s (leader) + %d family members",
+                cid, leader.name or leader.agent_id, len(family_agents) - 1,
+            )
+
+        # Phase 2: proximity clustering for unclustered agents
+        radius = self.config.cluster_radius_m / 111_320
+        unassigned = [a for a in self.agents if a.agent_id not in clustered]
         while unassigned:
             leader = unassigned[0]
             leader.is_leader = True
@@ -162,15 +328,17 @@ class SimulationOrchestrator:
                 dlng = (agent.lng - leader.lng) * math.cos(math.radians(leader.lat))
                 if math.hypot(dlat, dlng) <= radius:
                     agent.cluster_id = cid
-                    # Small offset so followers don't stack exactly on the leader's route
                     agent._leader_offset = (dlat * 0.1, dlng * 0.1)
                 else:
                     remaining.append(agent)
             unassigned = remaining
             idx += 1
+
         logger.info(
-            "Simulation %s: %d agents → %d clusters (radius=%.0fm)",
-            self.sim_id, len(self.agents), idx, self.config.cluster_radius_m,
+            "Simulation %s: %d agents → %d clusters (%d relationship-based)",
+            self.sim_id, len(self.agents), idx, sum(
+                1 for a in self.agents if a.agent_id in clustered and a.is_leader
+            ),
         )
 
     # ── Lifecycle ──────────────────────────────────────────────

@@ -33,10 +33,14 @@ class EvacueeAgent:
         dest_lat: float,
         dest_lng: float,
         dest_name: str = "",
+        name: str = "",
+        scenario: str = "",
         profile: EvacuationProfileInput | None = None,
         watsonx_model_id: str = "meta-llama/llama-3-3-70b-instruct",
     ) -> None:
         self.agent_id = agent_id
+        self.name = name
+        self.scenario = scenario
         self.lat = lat
         self.lng = lng
         self.dest_lat = dest_lat
@@ -76,6 +80,8 @@ class EvacueeAgent:
     def snapshot(self) -> AgentSnapshot:
         return AgentSnapshot(
             agent_id=self.agent_id,
+            name=self.name,
+            scenario=self.scenario,
             state=self.state,
             lat=self.lat,
             lng=self.lng,
@@ -348,6 +354,7 @@ class EvacueeAgent:
             self.events_this_tick.append({
                 "type": "depart",
                 "agent_id": self.agent_id,
+                "agent_name": self.name,
                 "reasoning": decision.reasoning,
                 "urgency": decision.urgency,
                 "dest_name": self.dest_name,
@@ -387,6 +394,7 @@ class EvacueeAgent:
                 self.events_this_tick.append({
                     "type": "reroute",
                     "agent_id": self.agent_id,
+                "agent_name": self.name,
                     "reasoning": reasoning,
                     "urgency": decision.urgency,
                     "dest_name": self.dest_name,
@@ -409,6 +417,7 @@ class EvacueeAgent:
             self.events_this_tick.append({
                 "type": "shelter_in_place",
                 "agent_id": self.agent_id,
+                "agent_name": self.name,
                 "reasoning": decision.reasoning,
                 "urgency": decision.urgency,
             })
@@ -503,6 +512,7 @@ class EvacueeAgent:
             self.events_this_tick.append({
                 "type": "depart",
                 "agent_id": self.agent_id,
+                "agent_name": self.name,
                 "reasoning": decision.reasoning,
                 "urgency": decision.urgency,
                 "dest_name": self.dest_name,
@@ -523,6 +533,7 @@ class EvacueeAgent:
                 self.events_this_tick.append({
                     "type": "reroute",
                     "agent_id": self.agent_id,
+                "agent_name": self.name,
                     "reasoning": decision.reasoning,
                     "urgency": decision.urgency,
                     "dest_name": self.dest_name,
@@ -541,6 +552,7 @@ class EvacueeAgent:
             self.events_this_tick.append({
                 "type": "shelter_in_place",
                 "agent_id": self.agent_id,
+                "agent_name": self.name,
                 "reasoning": decision.reasoning,
                 "urgency": decision.urgency,
             })
@@ -562,6 +574,7 @@ class EvacueeAgent:
             self.events_this_tick.append({
                 "type": "arrived",
                 "agent_id": self.agent_id,
+                "agent_name": self.name,
                 "dest_name": self.dest_name,
             })
             # Snap to destination

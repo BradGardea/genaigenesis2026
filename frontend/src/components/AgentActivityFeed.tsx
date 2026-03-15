@@ -116,7 +116,7 @@ export function AgentActivityFeed({ theme, events }: Props) {
                   style={{ color: textColor, fontSize: 11, flex: 1, lineHeight: 16 }}
                   numberOfLines={2}
                 >
-                  <Text style={{ fontWeight: "600" }}>{ev.agent_id}</Text>{" "}
+                  <Text style={{ fontWeight: "600" }}>{ev.agent_name || ev.agent_id}</Text>{" "}
                   {formatEvent(ev)}
                 </Text>
               </View>
