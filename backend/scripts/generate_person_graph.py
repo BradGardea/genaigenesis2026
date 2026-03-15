@@ -44,11 +44,11 @@ BASE_LON = -21.994847
 BASE_LAT = 35.324774
 PERSON_SCENARIO = "Severe storm evacuation support network"
 PERSON_SCENARIOS = [
-    "Severe storm evacuation support network",
-    "Volcanic ash avoidance and mutual aid",
-    "Flooded roads rideshare coordination",
-    "Power outage welfare checks and pooling",
-    "Wildfire smoke relocation carpool",
+    "Has a car and can offer rides to others in need",
+    "Needs a ride to evacuate",
+    "Has limited mobility and needs assistance with evacuation",
+    "Has health complications",
+    "Need to make a stop for supplies"
 ]
 
 

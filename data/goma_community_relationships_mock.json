@@ -1,7 +1,7 @@
 {
   "dataset_name": "goma_community_relationships_mock",
   "version": "2.0",
-  "generated_at": "2026-03-15T02:09:29+00:00",
+  "generated_at": "2026-03-15T05:18:49+00:00",
   "scenario_note": "Algorithmically generated many-to-many social connections for evacuation and carpool planning near Goma, DR Congo, using American-style names.",
   "scenario": "Severe storm evacuation support network",
   "location": {
@@ -24,8 +24,8 @@
     {
       "person_id": "p-001",
       "name": "Cristina Net",
-      "seats_available": 0,
-      "scenario": "Volcanic ash avoidance and mutual aid",
+      "seats_available": 1,
+      "scenario": "Has a car and can offer rides to others in need",
       "current_position": [
         -22.008686,
         35.306362
@@ -36,7 +36,7 @@
           "relationship": "dependent"
         },
         {
-          "target_person_id": "p-012",
+          "target_person_id": "p-010",
           "relationship": "friend"
         },
         {
@@ -48,7 +48,7 @@
           "relationship": "dependent"
         },
         {
-          "target_person_id": "p-028",
+          "target_person_id": "p-038",
           "relationship": "friend"
         }
       ]
@@ -57,7 +57,7 @@
       "person_id": "p-002",
       "name": "Barbara Nguyen",
       "seats_available": 2,
-      "scenario": "Severe storm evacuation support network",
+      "scenario": "Has a car and can offer rides to others in need",
       "current_position": [
         -22.015162,
         35.318957
@@ -101,7 +101,7 @@
       "person_id": "p-003",
       "name": "Patricia Scott",
       "seats_available": 0,
-      "scenario": "Wildfire smoke relocation carpool",
+      "scenario": "Need to make a stop for supplies",
       "current_position": [
         -21.998871,
         35.313544
@@ -137,7 +137,7 @@
       "person_id": "p-004",
       "name": "Emily Phillips",
       "seats_available": 0,
-      "scenario": "Volcanic ash avoidance and mutual aid",
+      "scenario": "Needs a ride to evacuate",
       "current_position": [
         -21.98494,
         35.316268
@@ -177,7 +177,7 @@
       "person_id": "p-005",
       "name": "Karen Wilson",
       "seats_available": 0,
-      "scenario": "Flooded roads rideshare coordination",
+      "scenario": "Has limited mobility and needs assistance with evacuation",
       "current_position": [
         -22.014736,
         35.315276
@@ -225,7 +225,7 @@
       "person_id": "p-006",
       "name": "Melissa Diaz",
       "seats_available": 0,
-      "scenario": "Flooded roads rideshare coordination",
+      "scenario": "Has limited mobility and needs assistance with evacuation",
       "current_position": [
         -21.979491,
         35.306531
@@ -265,7 +265,7 @@
       "person_id": "p-007",
       "name": "Jessica Morales",
       "seats_available": 0,
-      "scenario": "Severe storm evacuation support network",
+      "scenario": "Has a car and can offer rides to others in need",
       "current_position": [
         -21.992245,
         35.304039
@@ -305,7 +305,7 @@
       "person_id": "p-008",
       "name": "George Torres",
       "seats_available": 0,
-      "scenario": "Severe storm evacuation support network",
+      "scenario": "Has a car and can offer rides to others in need",
       "current_position": [
         -22.017556,
         35.319077
@@ -369,7 +369,7 @@
       "person_id": "p-009",
       "name": "Donna Garcia",
       "seats_available": 0,
-      "scenario": "Severe storm evacuation support network",
+      "scenario": "Has a car and can offer rides to others in need",
       "current_position": [
         -22.000841,
         35.313439
@@ -413,7 +413,7 @@
       "person_id": "p-010",
       "name": "George Hernandez",
       "seats_available": 2,
-      "scenario": "Volcanic ash avoidance and mutual aid",
+      "scenario": "Has a car and can offer rides to others in need",
       "current_position": [
         -21.986338,
         35.307228
@@ -461,7 +461,7 @@
       "person_id": "p-011",
       "name": "Elizabeth Hill",
       "seats_available": 3,
-      "scenario": "Wildfire smoke relocation carpool",
+      "scenario": "Need to make a stop for supplies",
       "current_position": [
         -21.983391,
         35.320689
@@ -513,7 +513,7 @@
       "person_id": "p-012",
       "name": "Timothy Moore",
       "seats_available": 0,
-      "scenario": "Wildfire smoke relocation carpool",
+      "scenario": "Need to make a stop for supplies",
       "current_position": [
         -22.008866,
         35.316667
@@ -553,7 +553,7 @@
       "person_id": "p-013",
       "name": "Linda Anderson",
       "seats_available": 0,
-      "scenario": "Flooded roads rideshare coordination",
+      "scenario": "Has limited mobility and needs assistance with evacuation",
       "current_position": [
         -21.999789,
         35.323119
@@ -601,7 +601,7 @@
       "person_id": "p-014",
       "name": "Kenneth Wilson",
       "seats_available": 3,
-      "scenario": "Power outage welfare checks and pooling",
+      "scenario": "Has health complications",
       "current_position": [
         -21.975613,
         35.308703
@@ -645,7 +645,7 @@
       "person_id": "p-015",
       "name": "Charles Taylor",
       "seats_available": 0,
-      "scenario": "Wildfire smoke relocation carpool",
+      "scenario": "Need to make a stop for supplies",
       "current_position": [
         -21.992898,
         35.306099
@@ -709,7 +709,7 @@
       "person_id": "p-016",
       "name": "Ryan Edwards",
       "seats_available": 0,
-      "scenario": "Flooded roads rideshare coordination",
+      "scenario": "Has limited mobility and needs assistance with evacuation",
       "current_position": [
         -22.008881,
         35.299836
@@ -745,7 +745,7 @@
       "person_id": "p-017",
       "name": "Shirley Garcia",
       "seats_available": 0,
-      "scenario": "Severe storm evacuation support network",
+      "scenario": "Has a car and can offer rides to others in need",
       "current_position": [
         -22.012205,
         35.320774
@@ -793,7 +793,7 @@
       "person_id": "p-018",
       "name": "Ryan Hill",
       "seats_available": 0,
-      "scenario": "Power outage welfare checks and pooling",
+      "scenario": "Has health complications",
       "current_position": [
         -21.990053,
         35.313073
@@ -833,7 +833,7 @@
       "person_id": "p-019",
       "name": "Steven Morales",
       "seats_available": 0,
-      "scenario": "Severe storm evacuation support network",
+      "scenario": "Has a car and can offer rides to others in need",
       "current_position": [
         -21.985833,
         35.32191
@@ -885,7 +885,7 @@
       "person_id": "p-020",
       "name": "Paul Roberts",
       "seats_available": 3,
-      "scenario": "Severe storm evacuation support network",
+      "scenario": "Has a car and can offer rides to others in need",
       "current_position": [
         -22.005172,
         35.32082
@@ -933,7 +933,7 @@
       "person_id": "p-021",
       "name": "James Morris",
       "seats_available": 0,
-      "scenario": "Flooded roads rideshare coordination",
+      "scenario": "Has limited mobility and needs assistance with evacuation",
       "current_position": [
         -21.971253,
         35.305725
@@ -997,7 +997,7 @@
       "person_id": "p-022",
       "name": "Susan Parker",
       "seats_available": 0,
-      "scenario": "Wildfire smoke relocation carpool",
+      "scenario": "Need to make a stop for supplies",
       "current_position": [
         -21.989398,
         35.320953
@@ -1041,7 +1041,7 @@
       "person_id": "p-023",
       "name": "Christopher Wright",
       "seats_available": 0,
-      "scenario": "Wildfire smoke relocation carpool",
+      "scenario": "Need to make a stop for supplies",
       "current_position": [
         -21.973922,
         35.3098
@@ -1085,7 +1085,7 @@
       "person_id": "p-024",
       "name": "Eric Johnson",
       "seats_available": 0,
-      "scenario": "Flooded roads rideshare coordination",
+      "scenario": "Has limited mobility and needs assistance with evacuation",
       "current_position": [
         -21.975911,
         35.303982
@@ -1141,7 +1141,7 @@
       "person_id": "p-025",
       "name": "Michelle Thomas",
       "seats_available": 0,
-      "scenario": "Wildfire smoke relocation carpool",
+      "scenario": "Need to make a stop for supplies",
       "current_position": [
         -21.9725,
         35.322633
@@ -1177,7 +1177,7 @@
       "person_id": "p-026",
       "name": "Eric Evans",
       "seats_available": 0,
-      "scenario": "Wildfire smoke relocation carpool",
+      "scenario": "Need to make a stop for supplies",
       "current_position": [
         -21.981555,
         35.321564
@@ -1217,7 +1217,7 @@
       "person_id": "p-027",
       "name": "Nicholas Stewart",
       "seats_available": 0,
-      "scenario": "Flooded roads rideshare coordination",
+      "scenario": "Has limited mobility and needs assistance with evacuation",
       "current_position": [
         -21.993463,
         35.309609
@@ -1269,7 +1269,7 @@
       "person_id": "p-028",
       "name": "Margaret Reyes",
       "seats_available": 0,
-      "scenario": "Volcanic ash avoidance and mutual aid",
+      "scenario": "Needs a ride to evacuate",
       "current_position": [
         -21.9842,
         35.314799
@@ -1329,7 +1329,7 @@
       "person_id": "p-029",
       "name": "Deborah Lewis",
       "seats_available": 0,
-      "scenario": "Power outage welfare checks and pooling",
+      "scenario": "Has health complications",
       "current_position": [
         -22.013797,
         35.319157
@@ -1377,7 +1377,7 @@
       "person_id": "p-030",
       "name": "Amanda Johnson",
       "seats_available": 3,
-      "scenario": "Volcanic ash avoidance and mutual aid",
+      "scenario": "Needs a ride to evacuate",
       "current_position": [
         -21.990425,
         35.324594
@@ -1421,7 +1421,7 @@
       "person_id": "p-031",
       "name": "William Edwards",
       "seats_available": 0,
-      "scenario": "Flooded roads rideshare coordination",
+      "scenario": "Has limited mobility and needs assistance with evacuation",
       "current_position": [
         -22.016304,
         35.318824
@@ -1461,7 +1461,7 @@
       "person_id": "p-032",
       "name": "Eric Wilson",
       "seats_available": 0,
-      "scenario": "Wildfire smoke relocation carpool",
+      "scenario": "Need to make a stop for supplies",
       "current_position": [
         -21.991036,
         35.318699
@@ -1501,7 +1501,7 @@
       "person_id": "p-033",
       "name": "Nicholas Phillips",
       "seats_available": 2,
-      "scenario": "Severe storm evacuation support network",
+      "scenario": "Has a car and can offer rides to others in need",
       "current_position": [
         -22.015,
         35.313998
@@ -1533,7 +1533,7 @@
       "person_id": "p-034",
       "name": "Ryan Clark",
       "seats_available": 2,
-      "scenario": "Severe storm evacuation support network",
+      "scenario": "Has a car and can offer rides to others in need",
       "current_position": [
         -21.986179,
         35.30017
@@ -1561,7 +1561,7 @@
       "person_id": "p-035",
       "name": "Richard Brown",
       "seats_available": 2,
-      "scenario": "Flooded roads rideshare coordination",
+      "scenario": "Has limited mobility and needs assistance with evacuation",
       "current_position": [
         -21.979817,
         35.322042
@@ -1597,7 +1597,7 @@
       "person_id": "p-036",
       "name": "Matthew Gonzalez",
       "seats_available": 0,
-      "scenario": "Volcanic ash avoidance and mutual aid",
+      "scenario": "Needs a ride to evacuate",
       "current_position": [
         -21.998753,
         35.31781
@@ -1641,7 +1641,7 @@
       "person_id": "p-037",
       "name": "Ashley Parker",
       "seats_available": 0,
-      "scenario": "Power outage welfare checks and pooling",
+      "scenario": "Has health complications",
       "current_position": [
         -21.979446,
         35.303375
@@ -1673,7 +1673,7 @@
       "person_id": "p-038",
       "name": "Mary Morales",
       "seats_available": 1,
-      "scenario": "Volcanic ash avoidance and mutual aid",
+      "scenario": "Has a car and can offer rides to others in need",
       "current_position": [
         -22.011531,
         35.312633
@@ -1720,7 +1720,7 @@
           "relationship": "acquaintance"
         },
         {
-          "target_person_id": "p-041",
+          "target_person_id": "p-001",
           "relationship": "friend"
         },
         {
@@ -1733,7 +1733,7 @@
       "person_id": "p-039",
       "name": "Margaret Parker",
       "seats_available": 0,
-      "scenario": "Severe storm evacuation support network",
+      "scenario": "Has a car and can offer rides to others in need",
       "current_position": [
         -22.011615,
         35.32472
@@ -1769,7 +1769,7 @@
       "person_id": "p-040",
       "name": "Stephanie Taylor",
       "seats_available": 0,
-      "scenario": "Power outage welfare checks and pooling",
+      "scenario": "Has health complications",
       "current_position": [
         -22.005585,
         35.307359
@@ -1809,7 +1809,7 @@
       "person_id": "p-041",
       "name": "Eric Martinez",
       "seats_available": 0,
-      "scenario": "Volcanic ash avoidance and mutual aid",
+      "scenario": "Needs a ride to evacuate",
       "current_position": [
         -21.971412,
         35.310294
@@ -1853,7 +1853,7 @@
       "person_id": "p-042",
       "name": "Linda Mitchell",
       "seats_available": 0,
-      "scenario": "Severe storm evacuation support network",
+      "scenario": "Has a car and can offer rides to others in need",
       "current_position": [
         -21.990638,
         35.312203
@@ -1897,7 +1897,7 @@
       "person_id": "p-043",
       "name": "Christopher Brown",
       "seats_available": 0,
-      "scenario": "Severe storm evacuation support network",
+      "scenario": "Has a car and can offer rides to others in need",
       "current_position": [
         -21.97728,
         35.323061
@@ -1957,7 +1957,7 @@
       "person_id": "p-044",
       "name": "William Baker",
       "seats_available": 5,
-      "scenario": "Power outage welfare checks and pooling",
+      "scenario": "Has health complications",
       "current_position": [
         -22.013853,
         35.302517
@@ -2009,7 +2009,7 @@
       "person_id": "p-045",
       "name": "Ashley Nguyen",
       "seats_available": 3,
-      "scenario": "Wildfire smoke relocation carpool",
+      "scenario": "Need to make a stop for supplies",
       "current_position": [
         -22.015748,
         35.30834
@@ -2057,7 +2057,7 @@
       "person_id": "p-046",
       "name": "Kenneth Reyes",
       "seats_available": 0,
-      "scenario": "Flooded roads rideshare coordination",
+      "scenario": "Has limited mobility and needs assistance with evacuation",
       "current_position": [
         -22.007913,
         35.314879
@@ -2097,7 +2097,7 @@
       "person_id": "p-047",
       "name": "Joshua Robinson",
       "seats_available": 0,
-      "scenario": "Severe storm evacuation support network",
+      "scenario": "Has a car and can offer rides to others in need",
       "current_position": [
         -22.019381,
         35.309245
@@ -2145,7 +2145,7 @@
       "person_id": "p-048",
       "name": "Richard Jones",
       "seats_available": 0,
-      "scenario": "Wildfire smoke relocation carpool",
+      "scenario": "Need to make a stop for supplies",
       "current_position": [
         -22.006587,
         35.301443
@@ -2201,7 +2201,7 @@
       "person_id": "p-049",
       "name": "William Cruz",
       "seats_available": 0,
-      "scenario": "Flooded roads rideshare coordination",
+      "scenario": "Has limited mobility and needs assistance with evacuation",
       "current_position": [
         -22.01196,
         35.30393
@@ -2265,7 +2265,7 @@
       "person_id": "p-050",
       "name": "Joshua Flores",
       "seats_available": 0,
-      "scenario": "Wildfire smoke relocation carpool",
+      "scenario": "Need to make a stop for supplies",
       "current_position": [
         -22.019456,
         35.304346
@@ -2305,7 +2305,7 @@
       "person_id": "p-051",
       "name": "Joshua Reyes",
       "seats_available": 0,
-      "scenario": "Volcanic ash avoidance and mutual aid",
+      "scenario": "Needs a ride to evacuate",
       "current_position": [
         -22.006624,
         35.302531
@@ -2357,7 +2357,7 @@
       "person_id": "p-052",
       "name": "Karen Moore",
       "seats_available": 0,
-      "scenario": "Volcanic ash avoidance and mutual aid",
+      "scenario": "Needs a ride to evacuate",
       "current_position": [
         -21.983966,
         35.319684
@@ -2413,7 +2413,7 @@
       "person_id": "p-053",
       "name": "Kimberly Allen",
       "seats_available": 3,
-      "scenario": "Severe storm evacuation support network",
+      "scenario": "Has a car and can offer rides to others in need",
       "current_position": [
         -22.015232,
         35.314185
@@ -2457,7 +2457,7 @@
       "person_id": "p-054",
       "name": "Emily Williams",
       "seats_available": 0,
-      "scenario": "Volcanic ash avoidance and mutual aid",
+      "scenario": "Needs a ride to evacuate",
       "current_position": [
         -21.987991,
         35.318225
@@ -2505,7 +2505,7 @@
       "person_id": "p-055",
       "name": "Jacob Scott",
       "seats_available": 4,
-      "scenario": "Wildfire smoke relocation carpool",
+      "scenario": "Need to make a stop for supplies",
       "current_position": [
         -22.019364,
         35.322893
@@ -2541,7 +2541,7 @@
       "person_id": "p-056",
       "name": "Karen Wright",
       "seats_available": 0,
-      "scenario": "Flooded roads rideshare coordination",
+      "scenario": "Has limited mobility and needs assistance with evacuation",
       "current_position": [
         -21.990722,
         35.321072
@@ -2581,7 +2581,7 @@
       "person_id": "p-057",
       "name": "Thomas Williams",
       "seats_available": 2,
-      "scenario": "Severe storm evacuation support network",
+      "scenario": "Has a car and can offer rides to others in need",
       "current_position": [
         -21.974901,
         35.319522
@@ -2613,7 +2613,7 @@
       "person_id": "p-058",
       "name": "Ashley Nelson",
       "seats_available": 0,
-      "scenario": "Wildfire smoke relocation carpool",
+      "scenario": "Need to make a stop for supplies",
       "current_position": [
         -21.97564,
         35.314615
@@ -2653,7 +2653,7 @@
       "person_id": "p-059",
       "name": "Karen Reyes",
       "seats_available": 0,
-      "scenario": "Volcanic ash avoidance and mutual aid",
+      "scenario": "Needs a ride to evacuate",
       "current_position": [
         -21.971037,
         35.304505
@@ -2693,7 +2693,7 @@
       "person_id": "p-060",
       "name": "Jeffrey Johnson",
       "seats_available": 0,
-      "scenario": "Flooded roads rideshare coordination",
+      "scenario": "Has limited mobility and needs assistance with evacuation",
       "current_position": [
         -21.980728,
         35.314481
