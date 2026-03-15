@@ -168,7 +168,7 @@ export function AppTabs() {
 
   return (
     <View className={`flex-1 ${isDark ? "bg-brand-darkSurface" : "bg-brand-surface"}`}>
-      {visibleAlertBanner ? (
+      {visibleAlertBanner && activeTab !== "map" ? (
         <View
           className={`absolute left-3 right-3 top-10 z-20 rounded-xl border px-3 py-2 ${
             isDark ? "border-red-400 bg-red-900" : "border-red-300 bg-red-50"
@@ -224,11 +224,12 @@ export function AppTabs() {
           />
         </View>
       </View>
-      <View
-        className="absolute left-4 flex-row gap-2"
-        style={{ bottom: Math.max(insets.bottom, 6) + 64 }}
-      >
-        {!disasterStarted && requireStart ? (
+      {activeTab !== "map" ? (
+        <View
+          className="absolute left-4 flex-row gap-2"
+          style={{ bottom: Math.max(insets.bottom, 6) + 64 }}
+        >
+          {!disasterStarted && requireStart ? (
           <Pressable
             className={`rounded-xl border px-4 py-2 ${
               countdown !== null
@@ -320,7 +321,8 @@ export function AppTabs() {
             </Pressable>
           </>
         ) : null}
-      </View>
+        </View>
+      ) : null}
 
       <View
         className={`border-t px-3 ${
