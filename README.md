@@ -1,4 +1,8 @@
-# CrisisNet
+<p align="center">
+  <img src="frontend/src/assets/logos/crisis-net-logo-rainbow.png" alt="CrisisNet Logo" width="180" />
+</p>
+
+<h1 align="center">CrisisNet</h1>
 
 A full-stack emergency evacuation planning platform that combines real-time hazard tracking, AI-driven multi-agent decision-making, and dynamic route planning to help people navigate disasters safely. Built with a FastAPI backend and an Expo React Native (TypeScript) frontend.
 
