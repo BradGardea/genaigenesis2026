@@ -12,7 +12,7 @@ from app.services.hazard_store import hazard_store
 BASE_SEED = 20260314
 DEFAULT_CITY_CENTER = (-1.679, 29.222)
 DEFAULT_ROUTE_SPAN_M = 4_000.0
-NOISE_RADIUS_MULTIPLIER = 2.0
+NOISE_RADIUS_MULTIPLIER = 1.3
 NOISE_GROWTH_EVERY_STEPS = 3
 BASE_NOISE_POINTS_PER_TYPE = 5
 NOISE_POINTS_PER_GROWTH = 2
@@ -76,6 +76,7 @@ def _impact_priority(impact_type: str) -> int:
     priorities = {
         "road_closure": 5,
         "flooding": 4,
+        "structure_damage": 3,
         "high_wind": 3,
         "rain": 2,
         "debris": 1,
@@ -384,6 +385,8 @@ def _recompute_metadata(city_state: dict[str, Any]) -> None:
         "high_wind_points": 0,
         "flooding_points": 0,
         "road_closure_points": 0,
+        "debris_points": 0,
+        "structure_damage_points": 0,
     }
     weighted = 0.0
     dominant_counts: dict[str, int] = {}
@@ -397,6 +400,8 @@ def _recompute_metadata(city_state: dict[str, Any]) -> None:
             "high_wind": 0.85,
             "flooding": 1.1,
             "road_closure": 1.35,
+            "debris": 0.9,
+            "structure_damage": 1.2,
         }.get(impact_type, 0.7)
         weighted += int(area.get("severity", 0)) * multiplier
 
@@ -564,10 +569,44 @@ def augment_city_state_step(raw_step: dict[str, Any], step_index: int, total_ste
             )
         )
 
+    # Derive secondary impacts (debris + structure damage)
+    secondary_rnd = _seeded_random(seed_key, step_index, "secondary-impacts")
+    secondary_raw: list[dict[str, Any]] = []
+    for event in rain_raw + wind_raw:
+        sev = int(event["severity"])
+        if secondary_rnd.random() < 0.10:
+            dx = secondary_rnd.uniform(-80, 80)
+            dy = secondary_rnd.uniform(-80, 80)
+            d_lat, d_lon = _offset_lat_lon(float(event["lat"]), float(event["lon"]), dx, dy)
+            secondary_raw.append(_event(
+                lat=d_lat, lon=d_lon,
+                impact_type="debris",
+                severity=int(_clamp(sev * 0.7 + secondary_rnd.uniform(-5, 10), 15, 90)),
+                radius_m=int(70 + secondary_rnd.uniform(0, 40)),
+                status=event["status"],
+                source_kind="simulated_debris",
+                source_refs=event.get("source_refs", []),
+                node_id=f"debris-{step_index}-{abs(int(d_lat * 1e6))}-{abs(int(d_lon * 1e6))}",
+            ))
+        if secondary_rnd.random() < 0.03:
+            dx = secondary_rnd.uniform(-60, 60)
+            dy = secondary_rnd.uniform(-60, 60)
+            s_lat, s_lon = _offset_lat_lon(float(event["lat"]), float(event["lon"]), dx, dy)
+            secondary_raw.append(_event(
+                lat=s_lat, lon=s_lon,
+                impact_type="structure_damage",
+                severity=int(_clamp(sev * 0.8 + secondary_rnd.uniform(-3, 15), 20, 95)),
+                radius_m=int(50 + secondary_rnd.uniform(0, 30)),
+                status=event["status"],
+                source_kind="simulated_structure_damage",
+                source_refs=event.get("source_refs", []),
+                node_id=f"struct-{step_index}-{abs(int(s_lat * 1e6))}-{abs(int(s_lon * 1e6))}",
+            ))
+
     floods = _derive_floods(rain_raw, wind_raw, step_index=step_index, route_target=target)
     closures = _derive_route_closures(floods, step_index=step_index)
 
-    areas = rain_raw + wind_raw + floods + closures
+    areas = rain_raw + wind_raw + floods + closures + secondary_raw
     areas.sort(key=lambda area: (_impact_priority(str(area.get("impact_type", ""))), int(area.get("severity", 0))), reverse=True)
     city_state["affected_areas"] = areas[:MAX_AFFECTED_AREAS]
     _recompute_metadata(city_state)

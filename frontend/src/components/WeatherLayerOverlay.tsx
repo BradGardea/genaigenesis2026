@@ -882,8 +882,8 @@ function buildStormPaint(r34Km: number) {
 const FLOOD_PAINT_BASE = {
   "heatmap-weight": ["interpolate", ["linear"], ["get", "weight"], 0, 0, 1, 1],
   "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 1, 9, 3],
-  // Larger radius than storm so neighbouring flood points blend into a solid zone
-  "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 8, 5, 25, 9, 55],
+  // Fixed geographic radius so flood zones don't scale with zoom
+  "heatmap-radius": ["interpolate", ["exponential", 2], ["zoom"], 8, 0.5, 9, 1, 10, 2, 11, 4, 12, 8, 13, 16, 14, 32],
   "heatmap-opacity": 0.75,
 } as const;
 
@@ -1264,8 +1264,8 @@ export function WeatherLayerOverlay({
     <View
       style={{
         position: "absolute" as any,
-        top: offsetTop,
-        left: 12,
+        top: 10,
+        left: 58,
         zIndex: 20,
       }}
     >

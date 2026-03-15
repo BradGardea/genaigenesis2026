@@ -94,7 +94,8 @@ function toHazardType(impactType: string, severity: number): string | null {
   if (impactType === "road_closure") return "roadblock";
   if (impactType === "flooding") return "flood";
   if (impactType === "high_wind" && severity >= 82) return "wind";
-  if (impactType === "structure_damage" && severity >= 88) return "roadblock";
+  if (impactType === "structure_damage" && severity >= 65) return "roadblock";
+  if (impactType === "debris" && severity >= 30) return "roadblock";
   return null;
 }
 
@@ -323,7 +324,7 @@ export function MapScreen({ theme }: MapScreenProps) {
   const [hazardModalVisible, setHazardModalVisible] = useState(false);
   const [mapClickMode, setMapClickMode] = useState<"origin" | "destination" | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
-  const [plannerCollapsed, setPlannerCollapsed] = useState(false);
+  const [plannerCollapsed, setPlannerCollapsed] = useState(true);
   const [mapReadyVersion, setMapReadyVersion] = useState(0);
   const [mapIsLoaded, setMapIsLoaded] = useState(false);
 
@@ -417,6 +418,12 @@ export function MapScreen({ theme }: MapScreenProps) {
       map.on("load", () => {
         setMapReadyVersion((value) => value + 1);
         setMapIsLoaded(true);
+        // Ensure map fills container after layout settles
+        requestAnimationFrame(() => map.resize());
+        setTimeout(() => map.resize(), 100);
+        setTimeout(() => map.resize(), 300);
+        setTimeout(() => map.resize(), 600);
+        setTimeout(() => map.resize(), 1200);
         map.addSource(ROUTE_SOURCE, {
           type: "geojson",
           data: { type: "FeatureCollection", features: [] },
@@ -495,21 +502,25 @@ export function MapScreen({ theme }: MapScreenProps) {
               0, 0,
               100, 1,
             ],
-            // Increase intensity at higher zoom levels
             "heatmap-intensity": [
               "interpolate",
               ["linear"],
               ["zoom"],
-              8, 0.6,
-              14, 2,
+              8, 0.8,
+              14, 1.4,
             ],
-            // Radius grows with zoom
+            // Tight fixed geographic radius (~40m)
             "heatmap-radius": [
               "interpolate",
-              ["linear"],
+              ["exponential", 2],
               ["zoom"],
-              8, 18,
-              14, 48,
+              8, 1,
+              9, 2,
+              10, 4,
+              11, 8,
+              12, 16,
+              13, 32,
+              14, 64,
             ],
             // Severity gradient: transparent → blue → cyan → green → yellow → orange → red
             "heatmap-color": [
@@ -737,14 +748,26 @@ export function MapScreen({ theme }: MapScreenProps) {
     const raf = requestAnimationFrame(() => {
       map.resize();
     });
-    const timeout = setTimeout(() => {
-      map.resize();
-    }, 120);
+    const t1 = setTimeout(() => map.resize(), 120);
+    const t2 = setTimeout(() => map.resize(), 500);
     return () => {
       cancelAnimationFrame(raf);
-      clearTimeout(timeout);
+      clearTimeout(t1);
+      clearTimeout(t2);
     };
   }, [plannerCollapsed]);
+
+  // ResizeObserver: auto-resize map when container dimensions change
+  useEffect(() => {
+    const container = containerRef.current;
+    const map = mapRef.current;
+    if (!container || !map) return;
+    const observer = new ResizeObserver(() => {
+      map.resize();
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [mapIsLoaded]);
 
   // â”€â”€ Map click listener â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
@@ -1550,58 +1573,12 @@ export function MapScreen({ theme }: MapScreenProps) {
               <View className={`mb-1 h-0.5 w-4 rounded ${isDark ? "bg-slate-200" : "bg-slate-700"}`} />
               <View className={`h-0.5 w-4 rounded ${isDark ? "bg-slate-200" : "bg-slate-700"}`} />
             </Pressable>
-            <View className={`mt-1 rounded-md px-2 py-1 ${isDark ? "bg-slate-900/90" : "bg-white/90"}`}>
+            {/* <View className={`mt-1 rounded-md px-2 py-1 ${isDark ? "bg-slate-900/90" : "bg-white/90"}`}>
               <Text className={`text-[10px] ${isDark ? "text-slate-300" : "text-slate-600"}`}>
                 Disaster step {currentStepIndex + 1}/{totalSteps}
               </Text>
-            </View>
+            </View> */}
           </View>
-          {/* Weather controls overlay */}
-          {MAPBOX_PUBLIC_TOKEN && !mapError && (
-            <View
-              style={{
-                position: "absolute" as any,
-                top: 64,
-                left: 10,
-                zIndex: 10,
-              }}
-            >
-              <View
-                className={`rounded-lg ${isDark ? "bg-slate-900/90" : "bg-white/90"}`}
-                style={{ paddingHorizontal: 10, paddingVertical: 6, gap: 4, backdropFilter: "blur(6px)" } as any}
-              >
-                <Text className={`text-xs font-semibold uppercase tracking-wide ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                  Layers
-                </Text>
-                <Pressable
-                  onPress={() => setShowWind((v) => !v)}
-                  className={`flex-row items-center rounded px-2 py-1 ${showWind ? (isDark ? "bg-sky-900/50" : "bg-sky-100") : ""}`}
-                >
-                  <Text className={`text-xs ${showWind ? (isDark ? "text-sky-300" : "text-sky-700") : (isDark ? "text-slate-300" : "text-slate-600")}`}>
-                    {showWind ? "[on]" : "[off]"} Wind
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setShowWeatherAlerts((v) => !v)}
-                  className={`flex-row items-center rounded px-2 py-1 ${showWeatherAlerts ? (isDark ? "bg-amber-900/50" : "bg-amber-100") : ""}`}
-                >
-                  <Text className={`text-xs ${showWeatherAlerts ? (isDark ? "text-amber-300" : "text-amber-700") : (isDark ? "text-slate-300" : "text-slate-600")}`}>
-                    {showWeatherAlerts ? "[on]" : "[off]"} Alerts
-                  </Text>
-                </Pressable>
-                {route && (
-                  <Pressable
-                    onPress={() => setShowRouteWeather((v) => !v)}
-                    className={`flex-row items-center rounded px-2 py-1 ${showRouteWeather ? (isDark ? "bg-emerald-900/50" : "bg-emerald-100") : ""}`}
-                  >
-                    <Text className={`text-xs ${showRouteWeather ? (isDark ? "text-emerald-300" : "text-emerald-700") : (isDark ? "text-slate-300" : "text-slate-600")}`}>
-                      {showRouteWeather ? "[on]" : "[off]"} Route Wx
-                    </Text>
-                  </Pressable>
-                )}
-              </View>
-            </View>
-          )}
           {mapError ? (
             <View className={`flex-1 items-center justify-center px-4 ${isDark ? "bg-slate-800" : "bg-slate-50"}`}>
               <Text className={`mb-2 text-center text-sm font-medium ${isDark ? "text-red-400" : "text-red-600"}`}>
