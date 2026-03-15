@@ -1,0 +1,22 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "frontend",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "npm run web:preview"],
+      "port": 8082,
+      "cwd": "frontend",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "http://127.0.0.1:8001/api/v1"
+      }
+    },
+    {
+      "name": "backend",
+      "runtimeExecutable": "uvicorn",
+      "runtimeArgs": ["app.main:app", "--reload", "--port", "8001"],
+      "port": 8001,
+      "cwd": "backend"
+    }
+  ]
+}

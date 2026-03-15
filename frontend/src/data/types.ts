@@ -19,6 +19,7 @@ export type InfoCategory =
   | "family notification"
   | "shelter"
   | "hazard update"
+  | "advisory"
   | "general";
 
 export interface InfoBubble {
@@ -30,7 +31,9 @@ export interface InfoBubble {
   occurredAt: string;
   updatedAt: string;
   area: string;
-  source: string;
+  status: string;
+  lat?: number;
+  lon?: number;
 }
 
 export interface EvacuationPlan {
