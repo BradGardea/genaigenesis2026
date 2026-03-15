@@ -3,6 +3,7 @@ import json
 import httpx
 from dotenv import load_dotenv
 
+from app.services.person_relationships_service import get_first_person_help_needed
 from app.services.weather_steps_service import get_weather_current_step
 from app.services.city_state_steps_service import get_city_state_current_step
 
@@ -10,8 +11,29 @@ load_dotenv()
 API_KEY = os.getenv("OPENAI_API_KEY")
 
 async def get_community_current_step(step: int):
-    # Placeholder for a function that would fetch community-level data for the current step
-    return "You must choose one of the following people and SAY you are contacting them because they are availible and have space in their car to help with pickup. The following people can help: your neighbor Alice, your coworker Bob."
+    help_needed = await get_first_person_help_needed(step)
+    if not help_needed.help_needed:
+        return {
+            "step_index": step,
+            "summary": "None of your direct connections are currently flagged as needing help.",
+            "help_needed": [],
+        }
+
+    return {
+        "step_index": step,
+        "summary": "These direct connections currently need help.",
+        "help_needed": [
+            {
+                "name": node.person.name,
+                "relationship": node.relationship,
+                "scenario": node.person.scenario,
+                "seats_available": node.person.seats_available,
+                "current_position": node.person.current_position,
+                "event": node.emergency_event.model_dump() if node.emergency_event else None,
+            }
+            for node in help_needed.help_needed
+        ],
+    }
 
 # Register your functions in a dictionary
 TOOLS = {
@@ -21,8 +43,6 @@ TOOLS = {
 }
 
 async def handle_message(message: str, step: int):
-    step+=1
-
     url = "https://api.openai.com/v1/chat/completions"
 
     headers = {
@@ -67,7 +87,7 @@ async def handle_message(message: str, step: int):
             "type": "function",
             "function": {
                 "name": "get_community_current_step",
-                "description": "Get information about nearby community members who can help pickup family members who cannot drive.",
+                "description": "Get which of the user's direct connections currently need help, especially evacuation ride requests.",
                 "parameters": {
                     "type": "object",
                     "properties": {

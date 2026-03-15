@@ -2,6 +2,7 @@ import {
   CityStateStepResponse,
   ConnectionCreatePayload,
   EvacuationPlan,
+  HelpNeededConnectionsResponse,
   InfoBubble,
   PersonConnectionsResponse,
   SavedInformation,
@@ -91,6 +92,10 @@ export async function fetchCityStateNextStep(
   );
 }
 
-export async function fetchFirstPersonConnections(): Promise<PersonConnectionsResponse> {
-  return fetchJson<PersonConnectionsResponse>("/connections/first");
+export async function fetchFirstPersonConnections(step = 0): Promise<PersonConnectionsResponse> {
+  return fetchJson<PersonConnectionsResponse>(`/connections/first?step=${step}`);
+}
+
+export async function fetchConnectionsNeedingHelp(step = 0): Promise<HelpNeededConnectionsResponse> {
+  return fetchJson<HelpNeededConnectionsResponse>(`/connections/help-needed?step=${step}`);
 }

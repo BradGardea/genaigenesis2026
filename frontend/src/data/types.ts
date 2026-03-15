@@ -93,12 +93,28 @@ export interface PersonGraphMetadata {
 export interface PersonConnectionNode {
   relationship: ConnectionRelationship;
   person: PersonSummary;
+  emergency_event?: ConnectionEmergencyEvent | null;
+}
+
+export interface ConnectionEmergencyEvent {
+  event_type: "needs_help";
+  active: boolean;
+  activated_at_step: number;
+  title: string;
+  detail: string;
 }
 
 export interface PersonConnectionsResponse {
+  step_index: number;
   metadata: PersonGraphMetadata;
   focal_person: PersonWithConnections;
   connections: PersonConnectionNode[];
+}
+
+export interface HelpNeededConnectionsResponse {
+  step_index: number;
+  focal_person: PersonSummary;
+  help_needed: PersonConnectionNode[];
 }
 
 export type SavedDocType =

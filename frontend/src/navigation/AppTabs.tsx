@@ -192,7 +192,12 @@ export function AppTabs() {
         <View
           style={{ display: activeTab === "info" ? "flex" : "none", flex: 1 }}
         >
-          <InfoScreen theme={theme} />
+          <InfoScreen
+            theme={theme}
+            fullName={fullName}
+            phoneNumber={phoneNumber}
+            homeArea={homeArea}
+          />
         </View>
         <View
           style={{ display: activeTab === "map" ? "flex" : "none", flex: 1 }}

@@ -39,9 +39,25 @@ class PersonGraphMetadata(BaseModel):
 class PersonConnectionNode(BaseModel):
     relationship: RelationshipType
     person: PersonSummary
+    emergency_event: "ConnectionEmergencyEvent | None" = None
+
+
+class ConnectionEmergencyEvent(BaseModel):
+    event_type: Literal["needs_help"]
+    active: bool
+    activated_at_step: int
+    title: str
+    detail: str
 
 
 class PersonConnectionsResponse(BaseModel):
+    step_index: int
     metadata: PersonGraphMetadata
     focal_person: PersonWithConnections
     connections: list[PersonConnectionNode]
+
+
+class HelpNeededConnectionsResponse(BaseModel):
+    step_index: int
+    focal_person: PersonSummary
+    help_needed: list[PersonConnectionNode]

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { FlatList, Image, Modal, Pressable, Text, View } from "react-native";
+import { ConnectionsKnowledgeGraph } from "../components/ConnectionsKnowledgeGraph";
 import {
   DISASTER_STEP_INTERVAL_MINUTES,
   EvacuationPlan,
   InfoBubble,
   disasterStepsMock,
   fetchFirstPersonConnections,
-  URGENCY_CARD_COLORS,
   URGENCY_WEIGHT,
 } from "../data";
 import {
@@ -30,6 +30,9 @@ type InfoSection =
 
 interface InfoScreenProps {
   theme: AppTheme;
+  fullName: string;
+  phoneNumber: string;
+  homeArea: string;
 }
 
 const SECTION_OPTIONS: InfoSection[] = [
@@ -90,7 +93,7 @@ const urgencyToken = (urgency: string): string => {
   }
 };
 
-export function InfoScreen({ theme }: InfoScreenProps) {
+export function InfoScreen({ theme, fullName, phoneNumber, homeArea }: InfoScreenProps) {
   const isDark = theme === "dark";
   const {
     currentStepIndex,
@@ -105,6 +108,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
   const [connectionsPayload, setConnectionsPayload] = useState<PersonConnectionsResponse | null>(null);
   const [connectionsError, setConnectionsError] = useState<string | null>(null);
   const [connectionsLoading, setConnectionsLoading] = useState(false);
+  const [selectedConnection, setSelectedConnection] = useState<PersonConnectionNode | null>(null);
   const stepHistoryNewestFirst = useMemo(
     () => [...stepHistory].filter(({ stepIndex }) => stepIndex >= 0).reverse(),
     [stepHistory],
@@ -316,15 +320,16 @@ export function InfoScreen({ theme }: InfoScreenProps) {
   );
 
   useEffect(() => {
-    if (connectionsPayload || connectionsLoading) return;
     setConnectionsLoading(true);
-    fetchFirstPersonConnections()
+    setConnectionsError(null);
+    setSelectedConnection(null);
+    fetchFirstPersonConnections(Math.max(currentStepIndex, 0))
       .then(setConnectionsPayload)
       .catch((error: unknown) => {
         setConnectionsError(error instanceof Error ? error.message : "Failed to load connections");
       })
       .finally(() => setConnectionsLoading(false));
-  }, [connectionsPayload, connectionsLoading]);
+  }, [currentStepIndex]);
 
   const renderPersonCard = (title: string, person: PersonSummary, accent?: string) => (
     <View className={`mt-3 rounded-xl p-4 ${isDark ? "bg-slate-800" : "bg-slate-100"}`}>
@@ -348,6 +353,14 @@ export function InfoScreen({ theme }: InfoScreenProps) {
 
   const renderConnections = () => {
     const updatedAt = connectionsPayload?.metadata.generated_at ?? latestStep.sectionUpdatedAt.connections;
+    const helpNeededConnections =
+      connectionsPayload?.connections.filter((node) => node.emergency_event?.active) ?? [];
+    const profileBackedFocalPerson = connectionsPayload
+      ? {
+          ...connectionsPayload.focal_person,
+          name: fullName.trim().length > 0 ? fullName : connectionsPayload.focal_person.name,
+        }
+      : null;
 
     return (
       <View>
@@ -362,8 +375,57 @@ export function InfoScreen({ theme }: InfoScreenProps) {
             <Text className="mt-3 text-status-danger">Error: {connectionsError}</Text>
           ) : connectionsPayload ? (
             <>
-              {renderPersonCard("You", connectionsPayload.focal_person, isDark ? "text-emerald-200" : "text-emerald-700")}
-              <Text className={`mt-4 text-sm font-semibold uppercase ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+              {profileBackedFocalPerson
+                ? renderPersonCard("You", profileBackedFocalPerson, isDark ? "text-emerald-200" : "text-emerald-700")
+                : null}
+              <View className={`mt-3 rounded-xl p-4 ${isDark ? "bg-slate-900" : "bg-white"}`}>
+                <Text className={`text-xs font-semibold uppercase ${isDark ? "text-slate-300" : "text-slate-600"}`}>
+                  Account profile
+                </Text>
+                <Text className={`mt-1 text-sm ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+                  Name: {fullName.trim().length > 0 ? fullName : "Not set"}
+                </Text>
+                <Text className={`mt-1 text-sm ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+                  Phone: {phoneNumber.trim().length > 0 ? phoneNumber : "Not set"}
+                </Text>
+                <Text className={`mt-1 text-sm ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+                  Home area: {homeArea.trim().length > 0 ? homeArea : "Not set"}
+                </Text>
+              </View>
+              <View
+                className={`mt-4 rounded-xl border p-3 ${
+                  helpNeededConnections.length > 0
+                    ? isDark ? "border-red-500/60 bg-red-950/40" : "border-red-200 bg-red-50"
+                    : isDark ? "border-emerald-700/60 bg-emerald-950/30" : "border-emerald-200 bg-emerald-50"
+                }`}
+              >
+                <Text className={`text-sm font-semibold uppercase ${isDark ? "text-slate-100" : "text-slate-900"}`}>
+                  Knowledge graph
+                </Text>
+                <Text className={`mt-1 text-sm ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                  You are the center node. Each edge is the relationship, and each outer node is one of your direct connections.
+                </Text>
+                <Text
+                  className={`mt-2 text-xs font-semibold ${
+                    helpNeededConnections.length > 0
+                      ? isDark ? "text-red-300" : "text-red-700"
+                      : isDark ? "text-emerald-300" : "text-emerald-700"
+                  }`}
+                >
+                  {helpNeededConnections.length > 0
+                    ? `${helpNeededConnections.length} connection currently needs help. Flashing red nodes are active emergency events.`
+                    : "No direct connections are currently flagged as needing help."}
+                </Text>
+              </View>
+
+              <ConnectionsKnowledgeGraph
+                focalPerson={profileBackedFocalPerson ?? connectionsPayload.focal_person}
+                connections={connectionsPayload.connections}
+                isDark={isDark}
+                onSelectConnection={setSelectedConnection}
+              />
+
+              <Text className={`mt-2 text-sm font-semibold uppercase ${isDark ? "text-slate-200" : "text-slate-700"}`}>
                 Connections ({connectionsPayload.connections.length})
               </Text>
               {connectionsPayload.connections.length === 0 ? (
@@ -374,11 +436,24 @@ export function InfoScreen({ theme }: InfoScreenProps) {
                 connectionsPayload.connections.map((node: PersonConnectionNode, index: number) => (
                   <View
                     key={`connection-${node.person.person_id}-${index}`}
-                    className={`mt-3 rounded-xl p-3 ${isDark ? "bg-slate-900" : "bg-white"}`}
+                    className={`mt-3 rounded-xl border p-3 ${
+                      node.emergency_event?.active
+                        ? isDark ? "border-red-500/70 bg-red-950/30" : "border-red-200 bg-red-50"
+                        : isDark ? "border-slate-700 bg-slate-900" : "border-slate-200 bg-white"
+                    }`}
                   >
-                    <Text className={`text-base font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
-                      {node.person.name}
-                    </Text>
+                    <View className="flex-row items-center justify-between">
+                      <Text className={`text-base font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
+                        {node.person.name}
+                      </Text>
+                      {node.emergency_event?.active ? (
+                        <View className={`rounded-full px-2 py-1 ${isDark ? "bg-red-900/70" : "bg-red-100"}`}>
+                          <Text className={`text-[10px] font-bold uppercase ${isDark ? "text-red-200" : "text-red-700"}`}>
+                            Needs help
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
                     <Text className={`mt-1 text-sm capitalize ${isDark ? "text-slate-200" : "text-slate-700"}`}>
                       Relationship: {node.relationship}
                     </Text>
@@ -388,9 +463,22 @@ export function InfoScreen({ theme }: InfoScreenProps) {
                     <Text className={`mt-1 text-sm ${isDark ? "text-slate-200" : "text-slate-700"}`}>
                       Scenario: {node.person.scenario}
                     </Text>
+                    {node.emergency_event?.active ? (
+                      <Text className={`mt-1 text-sm ${isDark ? "text-red-200" : "text-red-700"}`}>
+                        Emergency: {node.emergency_event.detail}
+                      </Text>
+                    ) : null}
                     <Text className={`mt-1 text-xs ${isDark ? "text-slate-400" : "text-slate-600"}`}>
                       Position: {node.person.current_position[1].toFixed(3)}, {node.person.current_position[0].toFixed(3)}
                     </Text>
+                    <Pressable
+                      className={`mt-3 self-start rounded-lg px-3 py-2 ${isDark ? "bg-slate-800" : "bg-slate-100"}`}
+                      onPress={() => setSelectedConnection(node)}
+                    >
+                      <Text className={`text-xs font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
+                        View details
+                      </Text>
+                    </Pressable>
                   </View>
                 ))
               )}
@@ -427,7 +515,7 @@ export function InfoScreen({ theme }: InfoScreenProps) {
       }
     }
     return docs;
-  }, [stepHistory]);
+  }, [latestStep, stepHistory]);
 
   const renderSavedInformation = () => (
     <View>
@@ -661,32 +749,14 @@ export function InfoScreen({ theme }: InfoScreenProps) {
 
   return (
     <>
-      <FlatList
-        className={`flex-1 ${isDark ? "bg-brand-darkSurface" : "bg-brand-surface"}`}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 18 }}
-        data={[section]}
-        keyExtractor={(item) => item}
-        renderItem={() => {
-          if (section === "alerts") {
-            return renderAlerts();
-          }
-
-          if (section === "evacuation plans") {
-            return renderPlans();
-          }
-
-          if (section === "my connections") {
-            return renderConnections();
-          }
-
-          if (section === "saved information") {
-            return renderSavedInformation();
-          }
-
-          return renderWeather();
-        }}
-        ListHeaderComponent={
-          <View className="mb-3">
+      <View className={`flex-1 ${isDark ? "bg-brand-darkSurface" : "bg-brand-surface"}`}>
+        <View
+          className={`px-4 pb-3 pt-4 ${
+            isDark ? "border-b border-brand-darkBorder bg-brand-darkSurface" : "border-b border-brand-border bg-brand-surface"
+          }`}
+          style={{ zIndex: 10 }}
+        >
+          <View>
             <View className="flex-row items-center">
               <Pressable
                 className={`relative h-10 w-10 items-center justify-center rounded-xl border ${
@@ -724,8 +794,34 @@ export function InfoScreen({ theme }: InfoScreenProps) {
               </Text>
             </Text>
           </View>
-        }
-      />
+        </View>
+
+        <FlatList
+          className="flex-1"
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 18 }}
+          data={[section]}
+          keyExtractor={(item) => item}
+          renderItem={() => {
+            if (section === "alerts") {
+              return renderAlerts();
+            }
+
+            if (section === "evacuation plans") {
+              return renderPlans();
+            }
+
+            if (section === "my connections") {
+              return renderConnections();
+            }
+
+            if (section === "saved information") {
+              return renderSavedInformation();
+            }
+
+            return renderWeather();
+          }}
+        />
+      </View>
 
       <Modal transparent visible={menuOpen} animationType="fade" onRequestClose={() => setMenuOpen(false)}>
         <Pressable className="flex-1 bg-black/20" onPress={() => setMenuOpen(false)}>
@@ -765,6 +861,80 @@ export function InfoScreen({ theme }: InfoScreenProps) {
               );
             })}
           </View>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        transparent
+        visible={selectedConnection !== null}
+        animationType="fade"
+        onRequestClose={() => setSelectedConnection(null)}
+      >
+        <Pressable
+          className="flex-1 items-center justify-center bg-black/40 px-5"
+          onPress={() => setSelectedConnection(null)}
+        >
+          <Pressable
+            className={`w-full max-w-md rounded-3xl border p-5 ${
+              isDark ? "border-slate-700 bg-slate-950" : "border-slate-200 bg-white"
+            }`}
+            onPress={() => undefined}
+          >
+            {selectedConnection ? (
+              <>
+                <View className="flex-row items-start justify-between">
+                  <View className="flex-1 pr-3">
+                    <Text className={`text-xl font-semibold ${isDark ? "text-slate-50" : "text-slate-900"}`}>
+                      {selectedConnection.person.name}
+                    </Text>
+                    <Text className={`mt-1 text-sm capitalize ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                      Relationship: {selectedConnection.relationship}
+                    </Text>
+                  </View>
+                  {selectedConnection.emergency_event?.active ? (
+                    <View className={`rounded-full px-3 py-1 ${isDark ? "bg-red-900/70" : "bg-red-100"}`}>
+                      <Text className={`text-[10px] font-bold uppercase ${isDark ? "text-red-200" : "text-red-700"}`}>
+                        Needs help
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                <Text className={`mt-4 text-sm ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+                  Scenario: {selectedConnection.person.scenario}
+                </Text>
+                <Text className={`mt-2 text-sm ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+                  Seats available: {selectedConnection.person.seats_available}
+                </Text>
+                <Text className={`mt-2 text-sm ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+                  Position: {selectedConnection.person.current_position[1].toFixed(3)}, {selectedConnection.person.current_position[0].toFixed(3)}
+                </Text>
+
+                {selectedConnection.emergency_event?.active ? (
+                  <View className={`mt-4 rounded-2xl border p-4 ${isDark ? "border-red-500/50 bg-red-950/40" : "border-red-200 bg-red-50"}`}>
+                    <Text className={`text-sm font-semibold ${isDark ? "text-red-200" : "text-red-800"}`}>
+                      {selectedConnection.emergency_event.title}
+                    </Text>
+                    <Text className={`mt-2 text-sm ${isDark ? "text-red-100" : "text-red-700"}`}>
+                      {selectedConnection.emergency_event.detail}
+                    </Text>
+                    <Text className={`mt-2 text-xs ${isDark ? "text-red-300" : "text-red-600"}`}>
+                      Active since step {selectedConnection.emergency_event.activated_at_step}
+                    </Text>
+                  </View>
+                ) : null}
+
+                <Pressable
+                  className={`mt-5 self-end rounded-xl px-4 py-2 ${isDark ? "bg-slate-800" : "bg-slate-100"}`}
+                  onPress={() => setSelectedConnection(null)}
+                >
+                  <Text className={`text-sm font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
+                    Close
+                  </Text>
+                </Pressable>
+              </>
+            ) : null}
+          </Pressable>
         </Pressable>
       </Modal>
     </>
