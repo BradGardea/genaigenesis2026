@@ -71,6 +71,43 @@ const CLUSTER_PALETTE = [
 
 const DEFAULT_CENTER: [number, number] = [35.320, -22.000]; // Vilankulo, Mozambique
 const PROTECTED_SEED_STEPS = 30;
+const AUTO_SYNCED_HAZARD_IDS_KEY = "crisisnet_auto_synced_hazard_ids";
+
+function readAutoSyncedHazardIds(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(AUTO_SYNCED_HAZARD_IDS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeAutoSyncedHazardIds(ids: string[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (ids.length === 0) {
+      window.localStorage.removeItem(AUTO_SYNCED_HAZARD_IDS_KEY);
+      return;
+    }
+    window.localStorage.setItem(AUTO_SYNCED_HAZARD_IDS_KEY, JSON.stringify(Array.from(new Set(ids))));
+  } catch {
+    // Ignore storage failures in demo mode.
+  }
+}
+
+function rememberAutoSyncedHazardId(hazardId: string): void {
+  const ids = readAutoSyncedHazardIds();
+  ids.push(hazardId);
+  writeAutoSyncedHazardIds(ids);
+}
+
+function isAutoSyncedStepHazard(description?: string): boolean {
+  if (!description) return false;
+  return /^step\s+\d+:/i.test(description.trim());
+}
 
 function coordFromText(text: string): Coordinate | null {
   const parts = text.split(",").map((s) => s.trim());
@@ -313,6 +350,7 @@ export function MapScreen({ theme }: MapScreenProps) {
   const [mapClickMode, setMapClickMode] = useState<"origin" | "destination" | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
   const [plannerCollapsed, setPlannerCollapsed] = useState(true);
+  const [agentFeedCollapsed, setAgentFeedCollapsed] = useState(false);
   const [mapReadyVersion, setMapReadyVersion] = useState(0);
   const [mapIsLoaded, setMapIsLoaded] = useState(false);
 
@@ -387,6 +425,13 @@ export function MapScreen({ theme }: MapScreenProps) {
   }, [simState]);
 
   useEffect(() => {
+    if (simState === "running" || simState === "completed") {
+      return;
+    }
+    setAgentFeedCollapsed(false);
+  }, [simState]);
+
+  useEffect(() => {
     routeRef.current = route;
   }, [route]);
 
@@ -419,6 +464,37 @@ export function MapScreen({ theme }: MapScreenProps) {
     fetchHazards();
     const interval = setInterval(fetchHazards, 10_000);
     return () => clearInterval(interval);
+  }, [fetchHazards]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function clearAutoSyncedHazardsFromPreviousSession() {
+      const rememberedHazardIds = readAutoSyncedHazardIds();
+      const activeHazards = await getActiveHazards().catch(() => []);
+      const staleStepHazardIds = activeHazards
+        .filter((hazard) => isAutoSyncedStepHazard(hazard.description))
+        .map((hazard) => hazard.hazard_id);
+      const hazardIds = Array.from(new Set([...rememberedHazardIds, ...staleStepHazardIds]));
+
+      if (hazardIds.length === 0) {
+        return;
+      }
+
+      await Promise.all(
+        hazardIds.map((hazardId) => deactivateHazard(hazardId).catch(() => undefined)),
+      );
+      writeAutoSyncedHazardIds([]);
+
+      if (!cancelled) {
+        await fetchHazards();
+      }
+    }
+
+    void clearAutoSyncedHazardsFromPreviousSession();
+    return () => {
+      cancelled = true;
+    };
   }, [fetchHazards]);
 
   // ── Cluster color mapping ────────────────────────────────────────────────
@@ -1315,6 +1391,7 @@ export function MapScreen({ theme }: MapScreenProps) {
             activeAtStart.map((hazard) => deactivateHazard(hazard.hazard_id).catch(() => undefined))
           );
           tracked.clear();
+          writeAutoSyncedHazardIds([]);
         }
         const desired = new Set<string>();
         let changed = false;
@@ -1346,6 +1423,7 @@ export function MapScreen({ theme }: MapScreenProps) {
             persistent,
             hazardType,
           });
+          rememberAutoSyncedHazardId(created.hazard_id);
           changed = true;
         }
 
@@ -1916,8 +1994,65 @@ export function MapScreen({ theme }: MapScreenProps) {
         </View>
         {/* Agent activity sidebar — right */}
         {(simState === "running" || simState === "completed") && (
-          <View style={{ width: 280 }}>
-            <AgentActivityFeed theme={theme} events={simAgentEvents} />
+          <View
+            style={{
+              width: agentFeedCollapsed ? 42 : 280,
+              borderLeftWidth: 1,
+              borderLeftColor: isDark ? "#1E293B" : "#E2E8F0",
+              backgroundColor: isDark ? "#0F172A" : "#F8FAFC",
+              position: "relative" as const,
+            }}
+          >
+            <Pressable
+              onPress={() => setAgentFeedCollapsed((prev) => !prev)}
+              accessibilityLabel={agentFeedCollapsed ? "Expand agent activity panel" : "Collapse agent activity panel"}
+              style={{
+                position: "absolute",
+                top: 12,
+                left: 8,
+                right: 8,
+                zIndex: 2,
+                height: 32,
+                borderRadius: 10,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: isDark ? "#1E293B" : "#E2E8F0",
+              }}
+            >
+              <Text style={{ color: isDark ? "#E2E8F0" : "#1E293B", fontSize: 16, fontWeight: "700" }}>
+                {agentFeedCollapsed ? "‹" : "›"}
+              </Text>
+            </Pressable>
+
+            {agentFeedCollapsed ? (
+              <View
+                style={{
+                  flex: 1,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  paddingTop: 56,
+                  paddingBottom: 16,
+                }}
+              >
+                <Text
+                  style={{
+                    color: isDark ? "#94A3B8" : "#475569",
+                    fontSize: 10,
+                    fontWeight: "700",
+                    letterSpacing: 1,
+                    transform: [{ rotate: "-90deg" }],
+                    width: 120,
+                    textAlign: "center",
+                  }}
+                >
+                  AGENT ACTIVITY
+                </Text>
+              </View>
+            ) : (
+              <View style={{ flex: 1, paddingTop: 48 }}>
+                <AgentActivityFeed theme={theme} events={simAgentEvents} />
+              </View>
+            )}
           </View>
         )}
       </View>

@@ -53,6 +53,8 @@ export interface HazardZone {
   hazard_type: string;
   severity: string;
   radius_meters: number;
+  description?: string;
+  reported_at?: string;
 }
 
 export interface RouteRequest {

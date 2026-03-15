@@ -39,6 +39,8 @@ class HazardStore:
             hazard_type=report.hazard_type,
             severity="high",
             radius_meters=report.radius_meters,
+            description=report.description,
+            reported_at=report.reported_at,
         )
         self._zones[report.id] = zone
         return zone

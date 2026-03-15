@@ -58,12 +58,26 @@ _VILANKULO_LAND_POLYGON = Polygon([
 ])
 
 _MAX_SPAWN_RETRIES = 50
+_SINGLE_AGENT_SPAWN_CENTER = (-22.002411, 35.308834)  # (lat, lng)
+_SINGLE_AGENT_SPAWN_RADIUS_METERS = 120.0
 
 
 def _is_valid_spawn(lat: float, lng: float) -> bool:
     """Return True if the coordinate falls on land (inside the habitable polygon)."""
     pt = Point(lng, lat)
     return _VILANKULO_LAND_POLYGON.contains(pt)
+
+
+def _spawn_within_circle(center_lat: float, center_lng: float, radius_meters: float) -> tuple[float, float]:
+    """Return a random point inside a small circle around the provided center."""
+    radius_deg_lat = radius_meters / 111_000
+    radius_deg_lng = radius_meters / (111_000 * max(math.cos(math.radians(center_lat)), 0.2))
+    theta = random.uniform(0, 2 * math.pi)
+    # sqrt keeps the distribution uniform across the circle area.
+    scale = math.sqrt(random.random())
+    lat = center_lat + math.sin(theta) * radius_deg_lat * scale
+    lng = center_lng + math.cos(theta) * radius_deg_lng * scale
+    return lat, lng
 
 
 def _load_timeline_total_steps() -> int:
@@ -111,13 +125,28 @@ class SimulationOrchestrator:
         """
         cfg = self.config
         for i in range(cfg.num_evacuees):
-            lat = random.uniform(cfg.bbox_min_lat, cfg.bbox_max_lat)
-            lng = random.uniform(cfg.bbox_min_lng, cfg.bbox_max_lng)
+            if cfg.num_evacuees == 1:
+                center_lat, center_lng = _SINGLE_AGENT_SPAWN_CENTER
+                lat, lng = _spawn_within_circle(
+                    center_lat,
+                    center_lng,
+                    _SINGLE_AGENT_SPAWN_RADIUS_METERS,
+                )
+            else:
+                lat = random.uniform(cfg.bbox_min_lat, cfg.bbox_max_lat)
+                lng = random.uniform(cfg.bbox_min_lng, cfg.bbox_max_lng)
             for _ in range(_MAX_SPAWN_RETRIES):
                 if _is_valid_spawn(lat, lng):
                     break
-                lat = random.uniform(cfg.bbox_min_lat, cfg.bbox_max_lat)
-                lng = random.uniform(cfg.bbox_min_lng, cfg.bbox_max_lng)
+                if cfg.num_evacuees == 1:
+                    lat, lng = _spawn_within_circle(
+                        center_lat,
+                        center_lng,
+                        _SINGLE_AGENT_SPAWN_RADIUS_METERS,
+                    )
+                else:
+                    lat = random.uniform(cfg.bbox_min_lat, cfg.bbox_max_lat)
+                    lng = random.uniform(cfg.bbox_min_lng, cfg.bbox_max_lng)
             else:
                 logger.warning(
                     "Agent %d: could not find valid spawn after %d retries, using last attempt",

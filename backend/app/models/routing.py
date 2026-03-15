@@ -29,6 +29,10 @@ class HazardZone(BaseModel):
     hazard_type: str
     severity: str = "high"
     radius_meters: float = 500
+    description: str = ""
+    reported_at: str = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
 
 
 class RouteRequest(BaseModel):
