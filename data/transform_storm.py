@@ -205,6 +205,61 @@ def move_location_and_predictions(data: Dict[str, Any], dlat: float, dlon: float
                     shift_latlon_fields(hazard, "latitude", "longitude", dlat, dlon)
 
 
+def enforce_monotone_nondecreasing(
+    data: Dict[str, Any],
+    field_paths: Optional[List[str]] = None,
+) -> None:
+    """
+    Walk timesteps in order and clamp each tracked field so it never decreases.
+    Applies to intensity/size scalars — spatial/track fields are left alone.
+
+    field_paths: dot-separated paths into a single timestep dict.
+    Defaults to a sensible set of storm intensity and weather fields.
+    """
+    if field_paths is None:
+        field_paths = [
+            "storm_state.radius_of_maximum_wind_km",
+            "storm_state.forecast_cone_km",
+            "storm_state.wind_radii_km.r34",
+            "storm_state.wind_radii_km.r50",
+            "storm_state.wind_radii_km.r64",
+            "weather.wind_speed_kmh",
+            "weather.precipitation_probability",
+            "weather.rainfall_mm_10min",
+        ]
+
+    timesteps = data.get("timesteps", [])
+    if not timesteps:
+        return
+
+    prev_vals: Dict[str, Optional[float]] = {p: None for p in field_paths}
+
+    for timestep in timesteps:
+        for path in field_paths:
+            parts = path.split(".")
+            obj: Any = timestep
+            for part in parts[:-1]:
+                if not isinstance(obj, dict):
+                    obj = None
+                    break
+                obj = obj.get(part)
+
+            if not isinstance(obj, dict):
+                continue
+
+            key = parts[-1]
+            val = obj.get(key)
+            if not isinstance(val, (int, float)):
+                continue
+
+            prev = prev_vals[path]
+            if prev is not None and val < prev:
+                # clamp: preserve the same type (int stays int)
+                obj[key] = int(prev) if isinstance(obj[key], int) else prev
+            else:
+                prev_vals[path] = float(val)
+
+
 def add_transformation_metadata(
     data: Dict[str, Any],
     scale: float,
@@ -263,6 +318,9 @@ def transform_dataset(
 
         if move_location:
             move_location_and_predictions(transformed, dlat, dlon)
+
+    # Ensure intensity/size fields never decrease across timesteps
+    enforce_monotone_nondecreasing(transformed)
 
     add_transformation_metadata(
         transformed,
@@ -453,6 +511,9 @@ def remap_track_to_bezier(
                 else:
                     # fallback: at least preserve local consistency
                     shift_point(fc_center, dlat, dlon)
+
+    # Ensure intensity/size fields never decrease across timesteps
+    enforce_monotone_nondecreasing(transformed)
 
     notes = transformed.setdefault("transformation_notes", {})
     notes["path_mode"] = "bezier"
