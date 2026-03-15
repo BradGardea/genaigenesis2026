@@ -7,6 +7,7 @@ import logging
 import random
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from app.models.routing import Coordinate, EvacuationProfileInput, HazardReport
@@ -24,11 +25,26 @@ from app.services.hazard_store import hazard_store
 from app.services.mapbox_routing import compute_route, CRISIS_TRAFFIC_FACTOR
 from app.simulation.metrics import MetricsCollector
 from app.simulation.clock import SimulationClock
+from app.services.city_state_augmentor import augment_city_state_step, maybe_inject_route_hazard
+from app.services.timestep_dataset import TimestepDataset
 
 logger = logging.getLogger(__name__)
 
 # Agent processing concurrency limit
 _AGENT_SEMAPHORE = asyncio.Semaphore(10)
+
+CITY_STATE_TIMELINE_FILENAME = "goma_severe_storm_12h_72_timesteps.json"
+
+
+def _load_timeline_total_steps() -> int:
+    """Return the number of timesteps in the city state timeline dataset."""
+    try:
+        root = Path(__file__).resolve().parents[3]
+        ds = TimestepDataset(root / "data" / CITY_STATE_TIMELINE_FILENAME)
+        return ds.total_steps
+    except Exception:
+        logger.debug("City state timeline dataset not available")
+        return 0
 
 # In-memory registry of active simulations
 simulations: dict[str, SimulationOrchestrator] = {}
@@ -51,6 +67,8 @@ class SimulationOrchestrator:
         self._task: asyncio.Task | None = None
         self._sse_queues: list[asyncio.Queue] = []
         self._weather_cache: dict[tuple[float, float, int], str] = {}
+        self._city_state_total_steps: int = _load_timeline_total_steps()
+        self._city_state_cache: dict[int, dict] = {}
 
         self._init_agents()
 
@@ -136,15 +154,23 @@ class SimulationOrchestrator:
         # 1. Inject scheduled hazards
         await self._inject_scheduled_hazards(tick)
 
+        # 1b. Advance city state timeline — generate urban impacts and inject route hazards
+        city_state_step = await self._advance_city_state(tick)
+
         # 2. Fetch weather (cached per tick + rounded coords)
         weather_summary = await self._get_weather_for_tick(tick)
 
-        # 3. Get active hazard state
+        # 3. Get active hazard state (includes any hazards injected by city state)
         active_zones = hazard_store.get_active_hazards()
         hazard_polygons = [z.polygon for z in active_zones]
         nearby_hazards = [
             {"id": z.hazard_id, "type": z.hazard_type} for z in active_zones
         ]
+
+        # Merge city state flood/closure impacts as additional nearby hazard context
+        if city_state_step:
+            city_hazards = self._extract_city_state_hazards(city_state_step)
+            nearby_hazards.extend(city_hazards)
 
         # 4. Compute congestion from co-located agents
         self._compute_congestion()
@@ -191,6 +217,91 @@ class SimulationOrchestrator:
         self.event_log.append(event)
         for q in self._sse_queues:
             await q.put(event)
+
+        # 7b. Broadcast city state update if available
+        if city_state_step:
+            cs = city_state_step.get("city_state", {})
+            city_event = {
+                "event": "city_state",
+                "data": {
+                    "tick": tick,
+                    "step_index": self._tick_to_city_step(tick),
+                    "overall_severity": cs.get("overall_severity", 0),
+                    "operational_status": cs.get("operational_status", "unknown"),
+                    "danger_to_remain": cs.get("danger_to_remain", "unknown"),
+                    "dominant_impacts": cs.get("dominant_impacts", []),
+                    "recommended_action": cs.get("recommended_action", ""),
+                    "city_services": cs.get("city_services", {}),
+                },
+            }
+            self.event_log.append(city_event)
+            for q in self._sse_queues:
+                await q.put(city_event)
+
+    def _tick_to_city_step(self, tick: int) -> int:
+        """Map a simulation tick to a city state step index.
+
+        Scales linearly so tick 1 → step 0, tick max_ticks → last step.
+        """
+        if self._city_state_total_steps <= 0:
+            return 0
+        max_ticks = max(self.config.max_ticks, 1)
+        return min(
+            int((tick - 1) / max_ticks * self._city_state_total_steps),
+            self._city_state_total_steps - 1,
+        )
+
+    async def _advance_city_state(self, tick: int) -> dict | None:
+        """Generate city state impacts for this tick's mapped step."""
+        if self._city_state_total_steps <= 0:
+            return None
+
+        step_index = self._tick_to_city_step(tick)
+
+        # Avoid re-processing the same step
+        if step_index in self._city_state_cache:
+            return self._city_state_cache[step_index]
+
+        try:
+            raw_step = {"time": "", "city_state": {}}
+            augmented = augment_city_state_step(
+                raw_step,
+                step_index=step_index,
+                total_steps=self._city_state_total_steps,
+            )
+            await maybe_inject_route_hazard(
+                augmented,
+                step_index=step_index,
+                total_steps=self._city_state_total_steps,
+            )
+            self._city_state_cache[step_index] = augmented
+            logger.info(
+                "City state step %d generated for tick %d: severity=%s",
+                step_index,
+                tick,
+                augmented.get("city_state", {}).get("overall_severity", "?"),
+            )
+            return augmented
+        except Exception:
+            logger.debug("City state augmentation failed for tick %d", tick)
+            return None
+
+    @staticmethod
+    def _extract_city_state_hazards(city_state_step: dict) -> list[dict]:
+        """Extract flood and road closure events from city state as nearby hazard dicts."""
+        cs = city_state_step.get("city_state", {})
+        areas = cs.get("affected_areas", [])
+        hazards: list[dict] = []
+        for area in areas:
+            impact_type = area.get("impact_type", "")
+            if impact_type in ("flooding", "road_closure") and int(area.get("severity", 0)) >= 65:
+                hazards.append({
+                    "id": area.get("node_id", "unknown"),
+                    "type": impact_type,
+                    "severity": area.get("severity", 0),
+                    "source": "city_state",
+                })
+        return hazards
 
     async def _inject_scheduled_hazards(self, tick: int) -> None:
         """Add hazards scheduled for this tick."""

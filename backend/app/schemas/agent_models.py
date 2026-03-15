@@ -1,131 +1,197 @@
-"""Pydantic models for the agent briefing system."""
+"""Pydantic models for the 4-agent pipeline: Assess → Risk → Route → Orchestrate."""
 
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
 
-# ── Request ──────────────────────────────────────────────────────────
-
-class AgentBriefingRequest(BaseModel):
-    """Input parameters for an agent briefing request."""
-
-    location: Optional[str] = None
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    focus: Optional[str] = None  # e.g. "wildfire", "flood", "all"
+# ── Shared geometry types ─────────────────────────────────────────────
 
 
-# ── Domain outputs (typed per-agent) ────────────────────────────────
-
-class MeteorologistOutput(BaseModel):
-    summary: str
-    risk_level: str = Field(description="low / medium / high / extreme")
-    active_alerts_count: int = 0
-    key_threats: list[str] = []
-    forecast_outlook: str = ""
-    recommended_actions: list[str] = []
+class LatLon(BaseModel):
+    lat: float
+    lon: float
 
 
-class HazardAnalystOutput(BaseModel):
-    summary: str
-    wildfire_risk: str = "low"
-    flood_risk: str = "low"
-    severe_weather_risk: str = "low"
-    active_hazard_zones: int = 0
-    evacuation_recommended: bool = False
-    reasoning: str = ""
+class LatLng(BaseModel):
+    lat: float
+    lng: float
 
 
-# ── Routing agent ────────────────────────────────────────────────────
-
-class RouteMatrixRequest(BaseModel):
-    """Input for the routing analyst agent."""
-
-    origin_lat: float
-    origin_lng: float
-    destination_lat: float
-    destination_lng: float
-    max_alternatives: int = Field(default=3, ge=1, le=5)
+# ── Agent 1: Disaster Assessment ──────────────────────────────────────
 
 
-class RouteCandidateOutput(BaseModel):
-    """A single scored route candidate."""
+class AssessRequest(BaseModel):
+    """Input for the disaster assessment agent."""
 
-    label: str = Field(description="e.g. 'Direct', 'Northern bypass'")
-    geometry: dict = Field(description="GeoJSON LineString")
-    distance_meters: float = 0
-    duration_seconds: float = 0
-    feasibility_score: float = Field(default=50, description="0-100, higher is better")
-    hazard_exposure: str = Field(default="unknown", description="none / low / medium / high")
-    weather_impact: str = Field(default="unknown", description="none / low / medium / high")
-    hazards_crossed: list[str] = []
-    weather_risks: list[str] = []
-    reasoning: str = ""
+    weather_step_index: int = Field(ge=0)
+    city_state_step_index: int = Field(ge=0)
 
 
-class RoutingAnalystOutput(BaseModel):
-    """Full output from the routing analyst agent."""
-
-    summary: str
-    recommended_route: str = Field(description="Label of the best candidate")
-    candidates: list[RouteCandidateOutput] = []
-    overall_assessment: str = ""
-    evacuation_urgency: str = Field(default="low", description="low / medium / high / critical")
+class ScenarioSnapshot(BaseModel):
+    step_index: int
+    step_time: str
+    overall_severity: int = 0
+    operational_status: str = "unknown"
+    dominant_impacts: list[str] = Field(default_factory=list)
 
 
-# ── Decision agent ───────────────────────────────────────────────────
+class UnsafeZone(BaseModel):
+    zone_id: str
+    source: Literal["city_state", "storm_focus", "storm_forecast"]
+    impact_type: str
+    danger_to_remain: str = "unknown"
+    severity: int = 0
+    valid_from: str = ""
+    valid_until: str = ""
+    center: LatLon
+    radius_m: int = 0
+    polygon: dict[str, Any] = Field(default_factory=dict)
 
-class DecisionRequest(BaseModel):
-    """User circumstances + origin/destination for the decision agent."""
 
-    # Location
-    origin_lat: float
-    origin_lng: float
-    destination_lat: float
-    destination_lng: float
-    # Personal circumstances
-    family_size: int = Field(default=1, ge=1)
-    vehicles: int = Field(default=1, ge=0)
-    has_children: bool = False
-    has_elderly: bool = False
+class StormMovement(BaseModel):
+    direction_deg: Optional[int] = None
+    speed_kmh: Optional[float] = None
+    current_center: Optional[LatLon] = None
+    forecast_30min: Optional[LatLon] = None
+    forecast_60min: Optional[LatLon] = None
+    wind_speed_kmh: Optional[float] = None
+    rainfall_mm_10min: Optional[float] = None
+
+
+class ActiveAlert(BaseModel):
+    id: str
+    title: str
+    urgency: str = "warning"
+    category: str = ""
+    area: str = ""
+    source: str = ""
+
+
+class DisasterAssessmentOutput(BaseModel):
+    assessment_id: str
+    generated_at: str
+    scenario: ScenarioSnapshot
+    unsafe_zones: list[UnsafeZone] = Field(default_factory=list)
+    storm_movement: Optional[StormMovement] = None
+    active_alerts: list[ActiveAlert] = Field(default_factory=list)
+    total_unsafe_zones: int = 0
+    summary: str = ""
+
+
+# ── Agent 2: Person Risk Evaluation ──────────────────────────────────
+
+
+class PersonContext(BaseModel):
+    user_id: str = "anonymous"
+    origin: LatLng
+    destination: Optional[LatLng] = None
+    vehicle: Literal["car", "motorcycle", "foot", "truck"] = "car"
     has_mobility_needs: bool = False
-    supplies_hours: float = Field(default=24.0, ge=0, description="Hours of supplies on hand")
-    medical_needs: bool = False
-    pets: bool = False
-    # Optional: max alternatives to evaluate
-    max_alternatives: int = Field(default=3, ge=1, le=5)
+    has_medical_equipment: bool = False
+    party_size: int = Field(default=1, ge=1)
+    risk_tolerance: Literal["low", "medium", "high"] = "low"
 
 
-class DecisionOutput(BaseModel):
-    """Final actionable decision tailored to the user's circumstances."""
-
-    action: str = Field(description="evacuate_now / evacuate_soon / shelter_in_place / monitor")
-    chosen_route: str = Field(default="", description="Label of the selected route")
-    chosen_route_geometry: dict = Field(default_factory=dict, description="GeoJSON LineString")
-    chosen_route_distance_meters: float = 0
-    chosen_route_duration_seconds: float = 0
-    departure_window: str = Field(default="not yet", description="immediately / within_1h / within_4h / not_yet")
-    urgency: int = Field(default=5, ge=1, le=10)
-    reasoning: str = ""
-    preparation_steps: list[str] = []
-    warnings: list[str] = []
-    confidence: str = Field(default="medium", description="high / medium / low")
-    hazard_summary: str = ""
-    weather_summary: str = ""
+class EvaluateRiskRequest(BaseModel):
+    assessment: DisasterAssessmentOutput
+    person: PersonContext
 
 
-# ── Unified envelope response ───────────────────────────────────────
+class RelevantZone(BaseModel):
+    zone_id: str
+    impact_type: str
+    danger_to_remain: str = "unknown"
+    severity: int = 0
+    distance_from_origin_km: float = 0.0
+    on_direct_path: bool = False
+    polygon: dict[str, Any] = Field(default_factory=dict)
 
-class AgentBriefingResponse(BaseModel):
-    """Envelope returned by every agent endpoint."""
 
-    agent_type: str
-    status: str = Field(description="ok / fallback / error")
-    briefing: str = ""
-    structured_data: dict[str, Any] = {}
-    data_sources: list[str] = []
-    generated_at: datetime = Field(default_factory=datetime.utcnow)
+class SuggestedDestination(BaseModel):
+    name: str
+    lat: float
+    lng: float
+    type: str = "evacuation_center"
+    distance_from_origin_km: float = 0.0
+    clears_all_avoid_polygons: bool = False
+
+
+class PersonRiskProfile(BaseModel):
+    profile_id: str
+    generated_at: str
+    user_id: str
+    personal_risk_level: Literal["low", "medium", "high", "critical"] = "low"
+    confidence: Literal["low", "medium", "high"] = "medium"
+    should_evacuate_now: bool = False
+    relevant_zones: list[RelevantZone] = Field(default_factory=list)
+    avoid_polygons: list[dict[str, Any]] = Field(default_factory=list)
+    risk_factors: list[str] = Field(default_factory=list)
+    routing_urgency: Literal["low", "medium", "high"] = "low"
+    suggested_destinations: list[SuggestedDestination] = Field(default_factory=list)
+
+
+# ── Agent 3: Routing ──────────────────────────────────────────────────
+
+
+class RouteRequest(BaseModel):
+    risk_profile: PersonRiskProfile
+    check_isochrone: bool = False
+
+
+class RankedRoute(BaseModel):
+    rank: int
+    route_id: str
+    label: str
+    geometry: dict[str, Any] = Field(default_factory=dict)
+    distance_meters: float = 0.0
+    duration_seconds: float = 0.0
+    eta_minutes: float = 0.0
+    risk_score: float = Field(default=0.5, ge=0.0, le=1.0)
+    zones_crossed: list[str] = Field(default_factory=list)
+    zones_avoided: list[str] = Field(default_factory=list)
+    avoidance_waypoints_used: list[LatLng] = Field(default_factory=list)
+    instructions: list[str] = Field(default_factory=list)
+    note: str = ""
+
+
+class MatrixScore(BaseModel):
+    destination_index: int
+    duration_seconds: float
+    destination: LatLng
+
+
+class RoutingOutput(BaseModel):
+    routing_id: str
+    generated_at: str
+    user_id: str
+    origin: LatLng
+    destination_used: LatLng
+    ranked_routes: list[RankedRoute] = Field(default_factory=list)
+    matrix_scores: list[MatrixScore] = Field(default_factory=list)
+    isochrone_30min: Optional[dict[str, Any]] = None
+    recommendation: str = ""
+    zones_on_best_route: int = 0
+    total_zones_in_area: int = 0
+
+
+# ── Agent 4: Orchestrator ─────────────────────────────────────────────
+
+
+class OrchestrateRequest(BaseModel):
+    weather_step_index: int = Field(ge=0)
+    city_state_step_index: int = Field(ge=0)
+    person: PersonContext
+    check_isochrone: bool = False
+
+
+class OrchestratorOutput(BaseModel):
+    run_id: str
+    generated_at: str
+    total_duration_ms: float = 0.0
+    disaster_assessment: DisasterAssessmentOutput
+    person_risk_profile: PersonRiskProfile
+    routing_output: RoutingOutput
