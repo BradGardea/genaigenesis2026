@@ -347,25 +347,7 @@ export function SimulationPanel({
             </>
           )}
 
-          {/* Completed/stopped summary */}
-          {isDone && metrics && (
-            <>
-              <View style={{ backgroundColor: accentBg, borderRadius: 6, padding: 8, gap: 3 }}>
-                <Text style={{ fontSize: 11, fontWeight: "700", color: accentText }}>
-                  {simState === "completed" ? "✓ Completed" : "Stopped"} — {currentTick} ticks
-                </Text>
-                <Text style={{ fontSize: 11, color: textPrimary }}>
-                  {metrics.agents_arrived} arrived · {metrics.agents_sheltering} sheltering
-                </Text>
-              </View>
-              <Pressable
-                onPress={handleStart}
-                style={{ backgroundColor: accentText, borderRadius: 6, paddingVertical: 6, alignItems: "center" }}
-              >
-                <Text style={{ fontSize: 11, fontWeight: "700", color: "#fff" }}>▶ Run Again</Text>
-              </Pressable>
-            </>
-          )}
+          {/* Completed/stopped — show config form after brief summary */}
 
           {/* Idle: config + start */}
           {simState === "idle" && (

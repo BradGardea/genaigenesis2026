@@ -69,6 +69,14 @@ export function useSimulation(): SimulationControls {
 
   useEffect(() => () => { stopPolling(); unsubRef.current?.(); }, [stopPolling]);
 
+  // Auto-reset to idle when simulation ends so config form reappears
+  useEffect(() => {
+    if (simState === "completed" || simState === "stopped") {
+      const timer = setTimeout(() => setSimState("idle"), 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [simState]);
+
   const createAndStart = useCallback(async (config: SimulationConfig) => {
     setError(null);
     try {
