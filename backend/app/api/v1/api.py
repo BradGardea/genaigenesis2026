@@ -4,6 +4,7 @@ from app.api.v1.endpoints import (
     agents,
     alerts,
     city_state_steps,
+    connections,
     events,
     forecasts,
     health,
@@ -30,3 +31,4 @@ api_router.include_router(weather_steps.router)
 api_router.include_router(city_state_steps.router)
 api_router.include_router(agents.router)
 api_router.include_router(simulation_router)
+api_router.include_router(connections.router)

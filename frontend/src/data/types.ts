@@ -60,6 +60,44 @@ export interface ConnectionCreatePayload {
   relationship: ConnectionRelationship;
 }
 
+export interface PersonSummary {
+  person_id: string;
+  name: string;
+  seats_available: number;
+  scenario: string;
+  current_position: [number, number];
+}
+
+export interface PersonConnection {
+  target_person_id: string;
+  relationship: ConnectionRelationship;
+}
+
+export interface PersonWithConnections extends PersonSummary {
+  connections: PersonConnection[];
+}
+
+export interface PersonGraphMetadata {
+  dataset_name: string;
+  version: string;
+  generated_at: string;
+  scenario_note: string;
+  scenario: string;
+  location: Record<string, unknown>;
+  schema_alignment: Record<string, unknown>;
+}
+
+export interface PersonConnectionNode {
+  relationship: ConnectionRelationship;
+  person: PersonSummary;
+}
+
+export interface PersonConnectionsResponse {
+  metadata: PersonGraphMetadata;
+  focal_person: PersonWithConnections;
+  connections: PersonConnectionNode[];
+}
+
 export interface SavedInformation {
   id: string;
   title: string;

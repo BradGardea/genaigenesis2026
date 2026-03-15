@@ -1,0 +1,2733 @@
+{
+  "dataset_name": "goma_community_relationships_mock",
+  "version": "2.0",
+  "generated_at": "2026-03-15T05:18:49+00:00",
+  "scenario_note": "Algorithmically generated many-to-many social connections for evacuation and carpool planning near Goma, DR Congo, using American-style names.",
+  "scenario": "Severe storm evacuation support network",
+  "location": {
+    "name": "Goma, DR Congo",
+    "latitude": 35.324774,
+    "longitude": -21.994847,
+    "timezone": "Africa/Lubumbashi"
+  },
+  "schema_alignment": {
+    "person_schema_base": "PersonWithConnections / PersonConnectionsResponse",
+    "relationship_types": [
+      "dependent",
+      "guardian",
+      "friend",
+      "acquaintance"
+    ],
+    "position_format": "tuple [longitude, latitude] in decimal degrees"
+  },
+  "persons": [
+    {
+      "person_id": "p-001",
+      "name": "Cristina Net",
+      "seats_available": 1,
+      "scenario": "Has a car and can offer rides to others in need",
+      "current_position": [
+        -22.008686,
+        35.306362
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-019",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-010",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-052",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-046",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-038",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-002",
+      "name": "Barbara Nguyen",
+      "seats_available": 2,
+      "scenario": "Has a car and can offer rides to others in need",
+      "current_position": [
+        -22.015162,
+        35.318957
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-023",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-019",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-057",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-006",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-051",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-059",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-011",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-012",
+          "relationship": "guardian"
+        }
+      ]
+    },
+    {
+      "person_id": "p-003",
+      "name": "Patricia Scott",
+      "seats_available": 0,
+      "scenario": "Need to make a stop for supplies",
+      "current_position": [
+        -21.998871,
+        35.313544
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-048",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-052",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-022",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-029",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-040",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-032",
+          "relationship": "dependent"
+        }
+      ]
+    },
+    {
+      "person_id": "p-004",
+      "name": "Emily Phillips",
+      "seats_available": 0,
+      "scenario": "Needs a ride to evacuate",
+      "current_position": [
+        -21.98494,
+        35.316268
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-034",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-021",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-044",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-028",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-022",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-020",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-059",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-005",
+      "name": "Karen Wilson",
+      "seats_available": 0,
+      "scenario": "Has limited mobility and needs assistance with evacuation",
+      "current_position": [
+        -22.014736,
+        35.315276
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-020",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-015",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-029",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-052",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-039",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-009",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-032",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-038",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-054",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-006",
+      "name": "Melissa Diaz",
+      "seats_available": 0,
+      "scenario": "Has limited mobility and needs assistance with evacuation",
+      "current_position": [
+        -21.979491,
+        35.306531
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-053",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-014",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-011",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-002",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-017",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-024",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-037",
+          "relationship": "guardian"
+        }
+      ]
+    },
+    {
+      "person_id": "p-007",
+      "name": "Jessica Morales",
+      "seats_available": 0,
+      "scenario": "Has a car and can offer rides to others in need",
+      "current_position": [
+        -21.992245,
+        35.304039
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-027",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-017",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-011",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-043",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-046",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-001",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-047",
+          "relationship": "dependent"
+        }
+      ]
+    },
+    {
+      "person_id": "p-008",
+      "name": "George Torres",
+      "seats_available": 0,
+      "scenario": "Has a car and can offer rides to others in need",
+      "current_position": [
+        -22.017556,
+        35.319077
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-029",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-055",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-037",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-030",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-012",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-049",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-032",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-014",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-018",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-027",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-048",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-051",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-054",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-009",
+      "name": "Donna Garcia",
+      "seats_available": 0,
+      "scenario": "Has a car and can offer rides to others in need",
+      "current_position": [
+        -22.000841,
+        35.313439
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-005",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-028",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-023",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-036",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-011",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-019",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-040",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-060",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-010",
+      "name": "George Hernandez",
+      "seats_available": 2,
+      "scenario": "Has a car and can offer rides to others in need",
+      "current_position": [
+        -21.986338,
+        35.307228
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-036",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-049",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-059",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-060",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-053",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-040",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-038",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-041",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-055",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-011",
+      "name": "Elizabeth Hill",
+      "seats_available": 3,
+      "scenario": "Need to make a stop for supplies",
+      "current_position": [
+        -21.983391,
+        35.320689
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-006",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-038",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-044",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-002",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-006",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-043",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-029",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-009",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-013",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-025",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-012",
+      "name": "Timothy Moore",
+      "seats_available": 0,
+      "scenario": "Need to make a stop for supplies",
+      "current_position": [
+        -22.008866,
+        35.316667
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-001",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-008",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-050",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-002",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-017",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-052",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-055",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-013",
+      "name": "Linda Anderson",
+      "seats_available": 0,
+      "scenario": "Has limited mobility and needs assistance with evacuation",
+      "current_position": [
+        -21.999789,
+        35.323119
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-015",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-031",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-046",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-018",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-051",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-025",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-011",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-035",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-058",
+          "relationship": "guardian"
+        }
+      ]
+    },
+    {
+      "person_id": "p-014",
+      "name": "Kenneth Wilson",
+      "seats_available": 3,
+      "scenario": "Has health complications",
+      "current_position": [
+        -21.975613,
+        35.308703
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-053",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-008",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-052",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-038",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-058",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-003",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-024",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-043",
+          "relationship": "guardian"
+        }
+      ]
+    },
+    {
+      "person_id": "p-015",
+      "name": "Charles Taylor",
+      "seats_available": 0,
+      "scenario": "Need to make a stop for supplies",
+      "current_position": [
+        -21.992898,
+        35.306099
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-005",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-053",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-036",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-051",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-032",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-031",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-029",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-054",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-017",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-021",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-024",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-034",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-043",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-016",
+      "name": "Ryan Edwards",
+      "seats_available": 0,
+      "scenario": "Has limited mobility and needs assistance with evacuation",
+      "current_position": [
+        -22.008881,
+        35.299836
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-053",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-018",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-023",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-019",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-058",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-032",
+          "relationship": "dependent"
+        }
+      ]
+    },
+    {
+      "person_id": "p-017",
+      "name": "Shirley Garcia",
+      "seats_available": 0,
+      "scenario": "Has a car and can offer rides to others in need",
+      "current_position": [
+        -22.012205,
+        35.320774
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-007",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-052",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-002",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-006",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-020",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-015",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-027",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-031",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-034",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-018",
+      "name": "Ryan Hill",
+      "seats_available": 0,
+      "scenario": "Has health complications",
+      "current_position": [
+        -21.990053,
+        35.313073
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-016",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-008",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-049",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-036",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-050",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-046",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-019",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-019",
+      "name": "Steven Morales",
+      "seats_available": 0,
+      "scenario": "Has a car and can offer rides to others in need",
+      "current_position": [
+        -21.985833,
+        35.32191
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-001",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-001",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-047",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-036",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-009",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-018",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-022",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-037",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-051",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-057",
+          "relationship": "dependent"
+        }
+      ]
+    },
+    {
+      "person_id": "p-020",
+      "name": "Paul Roberts",
+      "seats_available": 3,
+      "scenario": "Has a car and can offer rides to others in need",
+      "current_position": [
+        -22.005172,
+        35.32082
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-005",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-023",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-012",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-004",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-017",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-032",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-008",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-035",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-050",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-021",
+      "name": "James Morris",
+      "seats_available": 0,
+      "scenario": "Has limited mobility and needs assistance with evacuation",
+      "current_position": [
+        -21.971253,
+        35.305725
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-004",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-015",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-051",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-035",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-026",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-030",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-056",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-020",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-025",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-045",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-047",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-050",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-058",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-022",
+      "name": "Susan Parker",
+      "seats_available": 0,
+      "scenario": "Need to make a stop for supplies",
+      "current_position": [
+        -21.989398,
+        35.320953
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-003",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-004",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-003",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-015",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-019",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-047",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-046",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-059",
+          "relationship": "guardian"
+        }
+      ]
+    },
+    {
+      "person_id": "p-023",
+      "name": "Christopher Wright",
+      "seats_available": 0,
+      "scenario": "Need to make a stop for supplies",
+      "current_position": [
+        -21.973922,
+        35.3098
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-009",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-020",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-040",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-049",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-054",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-038",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-060",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-048",
+          "relationship": "dependent"
+        }
+      ]
+    },
+    {
+      "person_id": "p-024",
+      "name": "Eric Johnson",
+      "seats_available": 0,
+      "scenario": "Has limited mobility and needs assistance with evacuation",
+      "current_position": [
+        -21.975911,
+        35.303982
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-014",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-017",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-002",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-006",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-015",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-045",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-055",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-038",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-033",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-044",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-050",
+          "relationship": "dependent"
+        }
+      ]
+    },
+    {
+      "person_id": "p-025",
+      "name": "Michelle Thomas",
+      "seats_available": 0,
+      "scenario": "Need to make a stop for supplies",
+      "current_position": [
+        -21.9725,
+        35.322633
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-021",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-044",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-007",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-056",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-011",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-052",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-026",
+      "name": "Eric Evans",
+      "seats_available": 0,
+      "scenario": "Need to make a stop for supplies",
+      "current_position": [
+        -21.981555,
+        35.321564
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-054",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-001",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-044",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-057",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-036",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-031",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-028",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-027",
+      "name": "Nicholas Stewart",
+      "seats_available": 0,
+      "scenario": "Has limited mobility and needs assistance with evacuation",
+      "current_position": [
+        -21.993463,
+        35.309609
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-028",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-006",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-015",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-055",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-008",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-031",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-056",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-047",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-048",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-059",
+          "relationship": "dependent"
+        }
+      ]
+    },
+    {
+      "person_id": "p-028",
+      "name": "Margaret Reyes",
+      "seats_available": 0,
+      "scenario": "Needs a ride to evacuate",
+      "current_position": [
+        -21.9842,
+        35.314799
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-009",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-026",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-027",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-018",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-054",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-001",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-019",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-048",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-020",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-039",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-051",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-052",
+          "relationship": "dependent"
+        }
+      ]
+    },
+    {
+      "person_id": "p-029",
+      "name": "Deborah Lewis",
+      "seats_available": 0,
+      "scenario": "Has health complications",
+      "current_position": [
+        -22.013797,
+        35.319157
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-003",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-005",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-008",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-011",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-015",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-056",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-051",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-027",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-003",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-030",
+      "name": "Amanda Johnson",
+      "seats_available": 3,
+      "scenario": "Needs a ride to evacuate",
+      "current_position": [
+        -21.990425,
+        35.324594
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-008",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-021",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-057",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-056",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-029",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-035",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-042",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-053",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-031",
+      "name": "William Edwards",
+      "seats_available": 0,
+      "scenario": "Has limited mobility and needs assistance with evacuation",
+      "current_position": [
+        -22.016304,
+        35.318824
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-026",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-027",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-005",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-032",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-052",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-017",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-044",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-032",
+      "name": "Eric Wilson",
+      "seats_available": 0,
+      "scenario": "Need to make a stop for supplies",
+      "current_position": [
+        -21.991036,
+        35.318699
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-008",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-057",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-036",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-003",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-041",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-005",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-016",
+          "relationship": "guardian"
+        }
+      ]
+    },
+    {
+      "person_id": "p-033",
+      "name": "Nicholas Phillips",
+      "seats_available": 2,
+      "scenario": "Has a car and can offer rides to others in need",
+      "current_position": [
+        -22.015,
+        35.313998
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-023",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-024",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-028",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-010",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-016",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-034",
+      "name": "Ryan Clark",
+      "seats_available": 2,
+      "scenario": "Has a car and can offer rides to others in need",
+      "current_position": [
+        -21.986179,
+        35.30017
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-015",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-030",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-042",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-017",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-035",
+      "name": "Richard Brown",
+      "seats_available": 2,
+      "scenario": "Has limited mobility and needs assistance with evacuation",
+      "current_position": [
+        -21.979817,
+        35.322042
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-030",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-056",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-020",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-013",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-025",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-052",
+          "relationship": "dependent"
+        }
+      ]
+    },
+    {
+      "person_id": "p-036",
+      "name": "Matthew Gonzalez",
+      "seats_available": 0,
+      "scenario": "Needs a ride to evacuate",
+      "current_position": [
+        -21.998753,
+        35.31781
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-010",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-026",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-051",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-053",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-015",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-040",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-023",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-049",
+          "relationship": "dependent"
+        }
+      ]
+    },
+    {
+      "person_id": "p-037",
+      "name": "Ashley Parker",
+      "seats_available": 0,
+      "scenario": "Has health complications",
+      "current_position": [
+        -21.979446,
+        35.303375
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-006",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-060",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-019",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-021",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-058",
+          "relationship": "guardian"
+        }
+      ]
+    },
+    {
+      "person_id": "p-038",
+      "name": "Mary Morales",
+      "seats_available": 1,
+      "scenario": "Has a car and can offer rides to others in need",
+      "current_position": [
+        -22.011531,
+        35.312633
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-011",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-014",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-023",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-024",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-053",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-008",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-030",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-005",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-010",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-039",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-001",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-051",
+          "relationship": "dependent"
+        }
+      ]
+    },
+    {
+      "person_id": "p-039",
+      "name": "Margaret Parker",
+      "seats_available": 0,
+      "scenario": "Has a car and can offer rides to others in need",
+      "current_position": [
+        -22.011615,
+        35.32472
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-024",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-045",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-049",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-059",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-017",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-038",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-040",
+      "name": "Stephanie Taylor",
+      "seats_available": 0,
+      "scenario": "Has health complications",
+      "current_position": [
+        -22.005585,
+        35.307359
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-003",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-010",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-023",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-009",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-003",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-020",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-053",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-041",
+      "name": "Eric Martinez",
+      "seats_available": 0,
+      "scenario": "Needs a ride to evacuate",
+      "current_position": [
+        -21.971412,
+        35.310294
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-027",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-038",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-049",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-048",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-010",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-060",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-043",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-056",
+          "relationship": "dependent"
+        }
+      ]
+    },
+    {
+      "person_id": "p-042",
+      "name": "Linda Mitchell",
+      "seats_available": 0,
+      "scenario": "Has a car and can offer rides to others in need",
+      "current_position": [
+        -21.990638,
+        35.312203
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-034",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-013",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-008",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-056",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-054",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-030",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-046",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-058",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-043",
+      "name": "Christopher Brown",
+      "seats_available": 0,
+      "scenario": "Has a car and can offer rides to others in need",
+      "current_position": [
+        -21.97728,
+        35.323061
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-007",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-011",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-041",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-014",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-054",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-057",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-015",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-022",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-051",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-010",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-048",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-060",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-044",
+      "name": "William Baker",
+      "seats_available": 5,
+      "scenario": "Has health complications",
+      "current_position": [
+        -22.013853,
+        35.302517
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-011",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-026",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-008",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-049",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-005",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-031",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-029",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-051",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-024",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-059",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-045",
+      "name": "Ashley Nguyen",
+      "seats_available": 3,
+      "scenario": "Need to make a stop for supplies",
+      "current_position": [
+        -22.015748,
+        35.30834
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-024",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-039",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-047",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-029",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-005",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-006",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-021",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-039",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-060",
+          "relationship": "guardian"
+        }
+      ]
+    },
+    {
+      "person_id": "p-046",
+      "name": "Kenneth Reyes",
+      "seats_available": 0,
+      "scenario": "Has limited mobility and needs assistance with evacuation",
+      "current_position": [
+        -22.007913,
+        35.314879
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-001",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-007",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-018",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-022",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-056",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-042",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-058",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-047",
+      "name": "Joshua Robinson",
+      "seats_available": 0,
+      "scenario": "Has a car and can offer rides to others in need",
+      "current_position": [
+        -22.019381,
+        35.309245
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-019",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-045",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-027",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-048",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-007",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-021",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-028",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-057",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-050",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-048",
+      "name": "Richard Jones",
+      "seats_available": 0,
+      "scenario": "Need to make a stop for supplies",
+      "current_position": [
+        -22.006587,
+        35.301443
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-003",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-028",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-041",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-022",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-043",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-008",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-027",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-023",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-059",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-050",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-052",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-049",
+      "name": "William Cruz",
+      "seats_available": 0,
+      "scenario": "Has limited mobility and needs assistance with evacuation",
+      "current_position": [
+        -22.01196,
+        35.30393
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-008",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-010",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-023",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-039",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-044",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-015",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-053",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-028",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-056",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-036",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-051",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-054",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-055",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-050",
+      "name": "Joshua Flores",
+      "seats_available": 0,
+      "scenario": "Need to make a stop for supplies",
+      "current_position": [
+        -22.019456,
+        35.304346
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-048",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-011",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-024",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-020",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-047",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-021",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-059",
+          "relationship": "guardian"
+        }
+      ]
+    },
+    {
+      "person_id": "p-051",
+      "name": "Joshua Reyes",
+      "seats_available": 0,
+      "scenario": "Needs a ride to evacuate",
+      "current_position": [
+        -22.006624,
+        35.302531
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-002",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-013",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-015",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-029",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-043",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-028",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-008",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-019",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-044",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-038",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-052",
+      "name": "Karen Moore",
+      "seats_available": 0,
+      "scenario": "Needs a ride to evacuate",
+      "current_position": [
+        -21.983966,
+        35.319684
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-001",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-003",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-017",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-048",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-028",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-012",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-009",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-025",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-035",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-053",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-058",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-053",
+      "name": "Kimberly Allen",
+      "seats_available": 3,
+      "scenario": "Has a car and can offer rides to others in need",
+      "current_position": [
+        -22.015232,
+        35.314185
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-006",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-036",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-049",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-011",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-052",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-040",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-030",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-055",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-054",
+      "name": "Emily Williams",
+      "seats_available": 0,
+      "scenario": "Needs a ride to evacuate",
+      "current_position": [
+        -21.987991,
+        35.318225
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-015",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-023",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-026",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-043",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-049",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-005",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-033",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-041",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-008",
+          "relationship": "guardian"
+        }
+      ]
+    },
+    {
+      "person_id": "p-055",
+      "name": "Jacob Scott",
+      "seats_available": 4,
+      "scenario": "Need to make a stop for supplies",
+      "current_position": [
+        -22.019364,
+        35.322893
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-027",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-053",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-012",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-039",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-010",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-049",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-056",
+      "name": "Karen Wright",
+      "seats_available": 0,
+      "scenario": "Has limited mobility and needs assistance with evacuation",
+      "current_position": [
+        -21.990722,
+        35.321072
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-021",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-025",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-042",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-049",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-031",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-029",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-041",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-057",
+      "name": "Thomas Williams",
+      "seats_available": 2,
+      "scenario": "Has a car and can offer rides to others in need",
+      "current_position": [
+        -21.974901,
+        35.319522
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-026",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-030",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-024",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-054",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-019",
+          "relationship": "acquaintance"
+        }
+      ]
+    },
+    {
+      "person_id": "p-058",
+      "name": "Ashley Nelson",
+      "seats_available": 0,
+      "scenario": "Need to make a stop for supplies",
+      "current_position": [
+        -21.97564,
+        35.314615
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-046",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-060",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-052",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-037",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-042",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-013",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-021",
+          "relationship": "friend"
+        }
+      ]
+    },
+    {
+      "person_id": "p-059",
+      "name": "Karen Reyes",
+      "seats_available": 0,
+      "scenario": "Needs a ride to evacuate",
+      "current_position": [
+        -21.971037,
+        35.304505
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-002",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-027",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-050",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-022",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-044",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-039",
+          "relationship": "guardian"
+        },
+        {
+          "target_person_id": "p-004",
+          "relationship": "guardian"
+        }
+      ]
+    },
+    {
+      "person_id": "p-060",
+      "name": "Jeffrey Johnson",
+      "seats_available": 0,
+      "scenario": "Has limited mobility and needs assistance with evacuation",
+      "current_position": [
+        -21.980728,
+        35.314481
+      ],
+      "connections": [
+        {
+          "target_person_id": "p-037",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-058",
+          "relationship": "dependent"
+        },
+        {
+          "target_person_id": "p-053",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-009",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-043",
+          "relationship": "acquaintance"
+        },
+        {
+          "target_person_id": "p-045",
+          "relationship": "friend"
+        },
+        {
+          "target_person_id": "p-054",
+          "relationship": "friend"
+        }
+      ]
+    }
+  ]
+}

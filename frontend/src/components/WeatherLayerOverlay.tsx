@@ -900,6 +900,8 @@ export interface WeatherLayerOverlayProps {
   onToggleWind?: (on: boolean) => void;
   theme?: AppTheme;
   offsetTop?: number;
+  /** When true, renders layer toggles inline (no absolute positioning, no header) for use inside a sidebar */
+  inline?: boolean;
 }
 
 // Static palettes for the pass-through toggles (controlled by MapScreen)
@@ -927,6 +929,7 @@ export function WeatherLayerOverlay({
   onToggleWind,
   theme = "dark",
   offsetTop = 12,
+  inline = false,
 }: WeatherLayerOverlayProps) {
   const isDark = theme === "dark";
   const panelBg = isDark ? "rgba(15,23,42,0.92)" : "rgba(255,255,255,0.95)";
@@ -1251,7 +1254,6 @@ export function WeatherLayerOverlay({
     onToggleAlerts ||
     onToggleWind ||
     Object.keys(alertVisible).length > 0;
-  if (!hasAnyLayer) return null;
 
   const activeCount =
     (showStorm && stormData ? 1 : 0) +
@@ -1259,6 +1261,47 @@ export function WeatherLayerOverlay({
     (showWeatherAlerts ? 1 : 0) +
     (showWind ? 1 : 0) +
     Object.values(alertVisible).filter(Boolean).length;
+
+  // ── Inline mode: render just the toggle rows for use inside a sidebar ────
+  if (inline) {
+    if (!hasAnyLayer) {
+      return (
+        <Text style={{ color: isDark ? "#64748b" : "#94a3b8", fontSize: 13, textAlign: "center", paddingVertical: 16 }}>
+          No active layers
+        </Text>
+      );
+    }
+    return (
+      <View style={{ gap: 12 }}>
+        {stormData && (
+          <LegendRow palette={stormPalette} active={showStorm} isDark={isDark} onToggle={() => setShowStorm((v) => !v)} />
+        )}
+        {floodData && (
+          <LegendRow palette={floodPalette} active={showFlood} isDark={isDark} onToggle={() => setShowFlood((v) => !v)} />
+        )}
+        {onToggleAlerts && (
+          <LegendRow palette={ALERT_LAYER_META} active={showWeatherAlerts} isDark={isDark} onToggle={() => onToggleAlerts(!showWeatherAlerts)} />
+        )}
+        {onToggleWind && (
+          <LegendRow palette={WIND_LAYER_META} active={showWind} isDark={isDark} onToggle={() => onToggleWind(!showWind)} />
+        )}
+        {Object.keys(alertVisible).map((cat) => {
+          const palette = DISASTER_PALETTES[cat as DisasterType] ?? DISASTER_PALETTES.general;
+          return (
+            <LegendRow
+              key={cat}
+              palette={{ ...palette, label: `Live ${palette.label}` }}
+              active={alertVisible[cat]}
+              isDark={isDark}
+              onToggle={() => setAlertVisible((prev) => ({ ...prev, [cat]: !prev[cat] }))}
+            />
+          );
+        })}
+      </View>
+    );
+  }
+
+  if (!hasAnyLayer) return null;
 
   return (
     <View

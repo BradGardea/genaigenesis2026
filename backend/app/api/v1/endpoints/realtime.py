@@ -2,6 +2,7 @@ import os
 import json
 import asyncio
 import websockets
+from app.services.context_service import handle_message
 from fastapi import APIRouter, FastAPI, WebSocket, WebSocketDisconnect
 from dotenv import load_dotenv
 
@@ -12,10 +13,8 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview"
 print("Loaded OpenAI API Key:", OPENAI_API_KEY)
 
-
-
 # ── Replace this with your real data-fetching logic ─────────────────────────
-async def get_context_for_user(user_id: str, transcript: str) -> dict:
+async def get_context_for_user(user_id: str, transcript: str, step_index: int) -> dict:
     """
     Fetch whatever backend data is relevant to this user + what they just said.
     Return a dict — it will be serialized and injected as context to GPT.
@@ -28,6 +27,7 @@ async def get_context_for_user(user_id: str, transcript: str) -> dict:
         "name": "Jane Doe",
         "account_status": "premium",
         "recent_orders": ["Order #1021 - pending"],
+        "current_step_index": step_index,
     }
 # ────────────────────────────────────────────────────────────────────────────
 
@@ -42,10 +42,12 @@ async def realtime_proxy(client_ws: WebSocket):
 
     # The frontend sends a JSON handshake first: {"user_id": "abc123"}
     user_id = "anonymous"
+    step_index = 0
     try:
         handshake_raw = await asyncio.wait_for(client_ws.receive_text(), timeout=5.0)
         handshake = json.loads(handshake_raw)
         user_id = handshake.get("user_id", "anonymous")
+        step_index = int(handshake.get("step_index", 0))
         print(f"User connected: {user_id}")
     except Exception:
         print("No handshake received, using anonymous user")
@@ -62,12 +64,18 @@ async def realtime_proxy(client_ws: WebSocket):
         ) as openai_ws:
             print("Connected to OpenAI Realtime API")
 
+            suppress_responses = True
+            waiting_for_new_response = False
+            expected_response_id = None
+
             session_config = {
                 "type": "session.update",
                 "session": {
                     "modalities": ["audio", "text"],
                     "instructions": (
-                        "You are a helpful voice assistant for our app. "
+                        "You are a helpful voice assistant for our app, where you assist users by providing helpful information and answering questions during a weather event, and potentially emergency scenario."
+                        "Prioritize providing short answers with the most critical information"
+                        "These responses are meant for users who may be in stressful situations, so clarity and brevity are important. You do not need to emphasize numberical metrics unless they are common knowledge."
                         "When you receive a [CONTEXT] block before the user's message, "
                         "use that data to personalize and inform your response. "
                         "Never read out the raw context to the user — just use it naturally."
@@ -85,6 +93,14 @@ async def realtime_proxy(client_ws: WebSocket):
                 try:
                     while True:
                         message = await client_ws.receive_text()
+                        try:
+                            maybe_json = json.loads(message)
+                            if isinstance(maybe_json, dict) and maybe_json.get("type") == "meta.step":
+                                step_index = int(maybe_json.get("step_index", step_index))
+                                print(f"Updated step_index to {step_index} for user {user_id}")
+                                continue
+                        except Exception:
+                            pass
                         await openai_ws.send(message)
                 except WebSocketDisconnect:
                     print(f"Client {user_id} disconnected")
@@ -92,6 +108,7 @@ async def realtime_proxy(client_ws: WebSocket):
                     print(f"client_to_openai error: {e}")
 
             async def openai_to_client():
+                nonlocal suppress_responses, waiting_for_new_response
                 try:
                     async for raw_message in openai_ws:
                         msg = json.loads(raw_message)
@@ -102,8 +119,18 @@ async def realtime_proxy(client_ws: WebSocket):
 
                             await client_ws.send_text(raw_message)
 
-                            context = await get_context_for_user(user_id, transcript)
+                            # 🛑 Cancel any response OpenAI started automatically
+                            await openai_ws.send(json.dumps({
+                                "type": "response.cancel"
+                            }))
+
+                            # Stop forwarding any in-flight response content until context is injected
+                            suppress_responses = True
+                            expected_response_id = None
+
+                            context = await get_context_for_user(user_id, transcript, step_index)
                             context_str = json.dumps(context, indent=2)
+                            extra = await handle_message(transcript, step=step_index)
 
                             inject_event = {
                                 "type": "conversation.item.create",
@@ -114,19 +141,40 @@ async def realtime_proxy(client_ws: WebSocket):
                                         {
                                             "type": "input_text",
                                             "text": (
-                                                f"[CONTEXT — do not read aloud, use to inform your response]\n"
-                                                f"{context_str}"
+                                                "[CONTEXT — do not read aloud]\n"
+                                                f"{context_str}\n"
+                                                f"{extra}\n\n"
+                                                f"User said: {transcript}"
                                             ),
                                         }
                                     ],
                                 },
                             }
+
                             await openai_ws.send(json.dumps(inject_event))
                             print(f"Injected context for user {user_id}")
 
                             await openai_ws.send(json.dumps({"type": "response.create"}))
+                            waiting_for_new_response = True
 
                         else:
+                            # Skip any premature response frames until the contextual response is started
+                            msg_type = msg.get("type", "")
+                            if msg_type.startswith("response."):
+                                # Capture the response id when created
+                                if msg_type == "response.created":
+                                    expected_response_id = msg.get("response_id")
+                                    if waiting_for_new_response:
+                                        suppress_responses = False
+                                        waiting_for_new_response = False
+
+                                if suppress_responses:
+                                    continue
+
+                                # If the response id does not match the expected contextual response, drop it
+                                if expected_response_id and msg.get("response_id") not in (expected_response_id, None):
+                                    continue
+
                             await client_ws.send_text(raw_message)
 
                 except Exception as e:

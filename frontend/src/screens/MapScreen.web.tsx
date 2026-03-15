@@ -1035,11 +1035,23 @@ export function MapScreen({ theme }: MapScreenProps) {
     const container = containerRef.current;
     const map = mapRef.current;
     if (!container || !map) return;
-    const observer = new ResizeObserver(() => {
+    const resizeObs = new ResizeObserver(() => {
       map.resize();
     });
-    observer.observe(container);
-    return () => observer.disconnect();
+    resizeObs.observe(container);
+    // IntersectionObserver: resize map when container becomes visible
+    // (handles display:none → display:flex tab switches)
+    const visObs = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) {
+        requestAnimationFrame(() => map.resize());
+        setTimeout(() => map.resize(), 50);
+      }
+    });
+    visObs.observe(container);
+    return () => {
+      resizeObs.disconnect();
+      visObs.disconnect();
+    };
   }, [mapIsLoaded]);
 
   // â”€â”€ Map click listener â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
