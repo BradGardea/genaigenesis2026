@@ -26,6 +26,16 @@ export interface AgentSnapshot {
   route_geometry: [number, number][] | null;
   progress: number;
   last_decision: { action: string; reasoning: string; urgency: number } | null;
+  cluster_id: string | null;
+  is_leader: boolean;
+}
+
+export interface ClusterSummary {
+  cluster_id: string;
+  leader_id: string;
+  member_count: number;
+  centroid_lat: number;
+  centroid_lng: number;
 }
 
 export interface TickMetrics {
@@ -38,6 +48,7 @@ export interface TickMetrics {
   reroutes_this_tick: number;
   active_hazards: number;
   avg_congestion: number;
+  clusters: ClusterSummary[];
 }
 
 export interface SimulationStatus {
@@ -51,6 +62,7 @@ export interface SimulationStatus {
 
 export interface SimulationConfig {
   num_evacuees: number;
+  cluster_radius_m?: number;
   bbox_min_lat: number;
   bbox_max_lat: number;
   bbox_min_lng: number;

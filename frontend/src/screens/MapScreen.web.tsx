@@ -47,10 +47,17 @@ const SIM_ROUTES_LAYER = "sim-routes-line";
 const SIM_AGENTS_SOURCE = "sim-agents";
 const SIM_AGENTS_LAYER = "sim-agents-circle";
 const SIM_AGENTS_LABEL_LAYER = "sim-agents-label";
+const SIM_CLUSTERS_SOURCE = "sim-clusters";
+const SIM_CLUSTERS_LAYER = "sim-clusters-circle";
+const SIM_CLUSTERS_LABEL_LAYER = "sim-clusters-label";
 
-const DEFAULT_CENTER: [number, number] = [35.321269, -21.992207];
-const DEFAULT_ROUTE_ORIGIN: Coordinate = { lat: -21.992207, lng: 35.321269 };
-const DEFAULT_ROUTE_DESTINATION: Coordinate = { lat: -22.005956, lng: 35.285656 };
+const CLUSTER_PALETTE = [
+  "#E11D48", "#2563EB", "#16A34A", "#D97706", "#7C3AED",
+  "#0891B2", "#DC2626", "#4F46E5", "#059669", "#EA580C",
+  "#8B5CF6", "#0D9488",
+];
+
+const DEFAULT_CENTER: [number, number] = [29.213, -1.667]; // Goma, DR Congo
 const PROTECTED_SEED_STEPS = 30;
 
 function coordFromText(text: string): Coordinate | null {
@@ -277,43 +284,6 @@ function collapseNearbyDisplayNodes(areas: CityStateArea[], stepIndex: number, m
   return [...protectedSeeds, ...collapsed];
 }
 
-const CAR_MARKER_CSS_ID = "crisisnet-car-marker-css";
-function ensureCarMarkerCSS() {
-  if (document.getElementById(CAR_MARKER_CSS_ID)) return;
-  const style = document.createElement("style");
-  style.id = CAR_MARKER_CSS_ID;
-  style.textContent = `
-    .crisisnet-car-marker {
-      width: 36px;
-      height: 36px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
-    }
-    .crisisnet-car-marker svg {
-      width: 100%;
-      height: 100%;
-    }
-  `;
-  document.head.appendChild(style);
-}
-
-function createCarMarkerElement(): HTMLDivElement {
-  const el = document.createElement("div");
-  el.className = "crisisnet-car-marker";
-  // Rotation is applied to the SVG child, not the outer element,
-  // because Mapbox uses transform on the marker element for positioning.
-  el.innerHTML = `
-    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"
-        >
-      <path d="M5 17h14v-5H5v5zm2.5-4a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5zm9 0a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5z" fill="#1e40af"/>
-      <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16a1.5 1.5 0 0 1 0-3 1.5 1.5 0 0 1 0 3zm11 0a1.5 1.5 0 0 1 0-3 1.5 1.5 0 0 1 0 3zM5 11l1.5-4h11l1.5 4H5z" fill="#3b82f6"/>
-    </svg>
-  `;
-  return el;
-}
-
 export function MapScreen({ theme }: MapScreenProps) {
   const isDark = theme === "dark";
   const { currentStep, currentStepIndex, totalSteps, stepHistory, stepDisaster, isStepping, isFinalStep } = useDisasterDemo();
@@ -321,7 +291,6 @@ export function MapScreen({ theme }: MapScreenProps) {
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const originMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const destMarkerRef = useRef<mapboxgl.Marker | null>(null);
-  const positionMarkerRef = useRef<mapboxgl.Marker | null>(null);
 
   const [originText, setOriginText] = useState("");
   const [destText, setDestText] = useState("");
@@ -419,18 +388,6 @@ export function MapScreen({ theme }: MapScreenProps) {
       setCurrentPosition(simPosition);
     }
   }, [simPosition, tripActive, setCurrentPosition]);
-  useEffect(() => {
-    if (origin || destination) {
-      return;
-    }
-    const defaultOrigin = DEFAULT_ROUTE_ORIGIN;
-    const defaultDestination = DEFAULT_ROUTE_DESTINATION;
-    setOrigin(defaultOrigin);
-    setDestination(defaultDestination);
-    setOriginText(formatCoord(defaultOrigin));
-    setDestText(formatCoord(defaultDestination));
-  }, [origin, destination]);
-
   const fetchHazards = useCallback(async () => {
     try {
       const zones = await getActiveHazards();
@@ -443,6 +400,16 @@ export function MapScreen({ theme }: MapScreenProps) {
     const interval = setInterval(fetchHazards, 10_000);
     return () => clearInterval(interval);
   }, [fetchHazards]);
+
+  // ── Cluster color mapping ────────────────────────────────────────────────
+  const clusterColorMap = useMemo(() => {
+    const clusters = simMetrics?.clusters ?? [];
+    const map = new Map<string, string>();
+    clusters.forEach((c, i) => {
+      map.set(c.cluster_id, CLUSTER_PALETTE[i % CLUSTER_PALETTE.length]);
+    });
+    return map;
+  }, [simMetrics]);
 
   // ── Simulation agent layer update ─────────────────────────────────────────
   useEffect(() => {
@@ -461,10 +428,33 @@ export function MapScreen({ theme }: MapScreenProps) {
         vehicles: agent.vehicles,
         last_action: agent.last_decision?.action ?? null,
         label: agent.agent_id.replace("agent-", "#"),
+        is_leader: agent.is_leader ?? false,
+        cluster_id: agent.cluster_id ?? "",
+        cluster_color: (agent.cluster_id && clusterColorMap.get(agent.cluster_id)) || "#94A3B8",
       },
     }));
     source.setData({ type: "FeatureCollection", features });
-  }, [simAgents, simState, mapReadyVersion]);
+  }, [simAgents, simState, mapReadyVersion, clusterColorMap]);
+
+  // ── Simulation cluster layer update ───────────────────────────────────────
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const source = map.getSource(SIM_CLUSTERS_SOURCE) as mapboxgl.GeoJSONSource | undefined;
+    if (!source) return;
+    const clusterList = simMetrics?.clusters ?? [];
+    const features = clusterList.map((c) => ({
+      type: "Feature" as const,
+      geometry: { type: "Point" as const, coordinates: [c.centroid_lng, c.centroid_lat] },
+      properties: {
+        cluster_id: c.cluster_id,
+        member_count: c.member_count,
+        leader_id: c.leader_id,
+        cluster_color: clusterColorMap.get(c.cluster_id) || "#6366F1",
+      },
+    }));
+    source.setData({ type: "FeatureCollection", features });
+  }, [simMetrics, simState, mapReadyVersion, clusterColorMap]);
 
   // ── Simulation agent route polylines update ─────────────────────────────
   useEffect(() => {
@@ -473,16 +463,18 @@ export function MapScreen({ theme }: MapScreenProps) {
     const source = map.getSource(SIM_ROUTES_SOURCE) as mapboxgl.GeoJSONSource | undefined;
     if (!source) return;
     const withRoutes = simAgents.filter((a) => a.route_geometry && a.route_geometry.length >= 2);
-    if (withRoutes.length > 0) {
-      console.warn(`[SimRoutes] ${withRoutes.length} agents with routes, sample: ${withRoutes[0].agent_id} coords=${withRoutes[0].route_geometry!.length}`);
-    }
     const features = withRoutes.map((agent) => ({
       type: "Feature" as const,
       geometry: { type: "LineString" as const, coordinates: agent.route_geometry! },
-      properties: { agent_id: agent.agent_id, state: agent.state },
+      properties: {
+        agent_id: agent.agent_id,
+        state: agent.state,
+        cluster_id: agent.cluster_id ?? "",
+        cluster_color: (agent.cluster_id && clusterColorMap.get(agent.cluster_id)) || "#94A3B8",
+      },
     }));
     source.setData({ type: "FeatureCollection", features });
-  }, [simAgents, simState, mapReadyVersion]);
+  }, [simAgents, simState, mapReadyVersion, clusterColorMap]);
 
   // Fly to simulation area when simulation starts
   useEffect(() => {
@@ -790,18 +782,48 @@ export function MapScreen({ theme }: MapScreenProps) {
           type: "line",
           source: SIM_ROUTES_SOURCE,
           paint: {
-            "line-color": [
-              "match", ["get", "state"],
-              "evacuating", "#3B82F6",
-              "planning",   "#F59E0B",
-              "arrived",    "#10B981",
-              "sheltering", "#F97316",
-              "#94A3B8",
-            ],
+            "line-color": ["get", "cluster_color"],
             "line-width": 4,
             "line-opacity": 0.9,
           },
           layout: { "line-cap": "round", "line-join": "round" },
+        });
+
+        // ── Simulation cluster rings (drawn below agent dots) ─────
+        map.addSource(SIM_CLUSTERS_SOURCE, {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+        map.addLayer({
+          id: SIM_CLUSTERS_LAYER,
+          type: "circle",
+          source: SIM_CLUSTERS_SOURCE,
+          paint: {
+            "circle-radius": [
+              "interpolate", ["linear"], ["get", "member_count"],
+              1, 10,
+              20, 28,
+            ],
+            "circle-color": ["get", "cluster_color"],
+            "circle-opacity": 0.2,
+            "circle-stroke-color": ["get", "cluster_color"],
+            "circle-stroke-width": 2.5,
+          },
+        });
+        map.addLayer({
+          id: SIM_CLUSTERS_LABEL_LAYER,
+          type: "symbol",
+          source: SIM_CLUSTERS_SOURCE,
+          layout: {
+            "text-field": ["concat", "×", ["to-string", ["get", "member_count"]]],
+            "text-size": 11,
+            "text-allow-overlap": true,
+          },
+          paint: {
+            "text-color": ["get", "cluster_color"],
+            "text-halo-color": "#ffffff",
+            "text-halo-width": 1,
+          },
         });
 
         // ── Simulation agents layer ────────────────────────────
@@ -814,11 +836,7 @@ export function MapScreen({ theme }: MapScreenProps) {
           type: "circle",
           source: SIM_AGENTS_SOURCE,
           paint: {
-            "circle-radius": [
-              "interpolate", ["linear"], ["zoom"],
-              8, 5,
-              14, 10,
-            ],
+            "circle-radius": ["case", ["==", ["get", "is_leader"], true], 10, 6],
             "circle-color": [
               "match", ["get", "state"],
               "idle",       "#94A3B8",
@@ -828,9 +846,9 @@ export function MapScreen({ theme }: MapScreenProps) {
               "sheltering", "#FB923C",
               "#94A3B8",
             ],
-            "circle-stroke-color": "#0f172a",
-            "circle-stroke-width": 1.5,
-            "circle-opacity": 0.95,
+            "circle-stroke-color": ["get", "cluster_color"],
+            "circle-stroke-width": ["case", ["==", ["get", "is_leader"], true], 3, 2],
+            "circle-opacity": ["case", ["==", ["get", "is_leader"], true], 1.0, 0.7],
           },
         });
         map.addLayer({
@@ -853,13 +871,17 @@ export function MapScreen({ theme }: MapScreenProps) {
         map.on("click", SIM_AGENTS_LAYER, (e) => {
           if (!e.features?.length) return;
           const p = e.features[0].properties ?? {};
+          const cColor = p.cluster_color || "#94A3B8";
           const html = [
             '<div style="font-family:system-ui;font-size:12px;line-height:1.5;">',
-            `<strong>${p.agent_id ?? "Agent"}</strong><br/>`,
+            `<strong>${p.agent_id ?? "Agent"}</strong>`,
+            p.is_leader === true || p.is_leader === "true" ? ' <span style="font-size:10px;color:#D97706;">(leader)</span>' : "",
+            "<br/>",
             `State: <span style="text-transform:capitalize;">${p.state ?? "?"}</span><br/>`,
             `Progress: ${Math.round((p.progress ?? 0) * 100)}%<br/>`,
+            p.cluster_id ? `Cluster: <span style="color:${cColor};font-weight:600;">${p.cluster_id}</span><br/>` : "",
             `Family: ${p.family_size ?? 1} · Vehicles: ${p.vehicles ?? 1}`,
-            p.last_decision ? `<br/>Decision: <em>${p.last_action ?? ""}</em>` : "",
+            p.last_action ? `<br/>Decision: <em>${p.last_action}</em>` : "",
             "</div>",
           ].join("");
           new mapboxgl.Popup({ offset: 10, maxWidth: "220px" })
@@ -1046,28 +1068,6 @@ export function MapScreen({ theme }: MapScreenProps) {
         .addTo(map);
     }
   }, [origin, destination, currentPosition]);
-
-  // â”€â”€ Update current position marker (car icon) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    if (currentPosition) {
-      ensureCarMarkerCSS();
-      if (!positionMarkerRef.current) {
-        const el = createCarMarkerElement();
-        positionMarkerRef.current = new mapboxgl.Marker({ element: el, anchor: "center" })
-          .setLngLat([currentPosition.lng, currentPosition.lat])
-          .addTo(map);
-      } else {
-        positionMarkerRef.current.setLngLat([currentPosition.lng, currentPosition.lat]);
-        // No rotation â€” car keeps its default orientation
-      }
-    } else {
-      positionMarkerRef.current?.remove();
-      positionMarkerRef.current = null;
-    }
-  }, [currentPosition, simBearing]);
 
   // â”€â”€ Follow-camera: nav-mode tracking during active trip â”€â”€â”€â”€
   const prevTripActiveRef = useRef(false);
@@ -1768,6 +1768,10 @@ export function MapScreen({ theme }: MapScreenProps) {
                 onStart={simCreateAndStart}
                 onStop={simStop}
                 disasterBbox={disasterBbox}
+                clusters={simMetrics?.clusters}
+                clusterColors={clusterColorMap}
+                disasterStepIndex={currentStepIndex}
+                disasterTotalSteps={totalSteps}
               />
             </View>
           )}

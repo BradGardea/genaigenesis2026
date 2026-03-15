@@ -54,6 +54,11 @@ class EvacueeAgent:
         self._situation_hash: str = ""
         self._last_decision_tick: int = -999
 
+        # Cluster fields
+        self.cluster_id: str | None = None
+        self.is_leader: bool = False
+        self._leader_offset: tuple[float, float] = (0.0, 0.0)
+
     @property
     def origin(self) -> Coordinate:
         return Coordinate(lng=self.lng, lat=self.lat)
@@ -74,6 +79,8 @@ class EvacueeAgent:
             route_geometry=[[c[0], c[1]] for c in self.route_geometry.coords] if self.route_geometry else None,
             last_decision=self.last_decision,
             progress=round(self.progress, 3),
+            cluster_id=self.cluster_id,
+            is_leader=self.is_leader,
         )
 
     def build_situation(
@@ -197,6 +204,62 @@ class EvacueeAgent:
             logger.exception("Route planning failed for agent %s", self.agent_id)
             self.state = AgentState.idle
             self._situation_hash = ""  # allow retry next tick
+
+    async def _plan_route_from(
+        self,
+        lat: float,
+        lng: float,
+        compute_route_fn,
+        hazard_polygons: list[dict],
+        crisis_traffic_factor: float,
+    ) -> None:
+        """Compute a route from an explicit origin instead of self.lat/lng."""
+        origin = Coordinate(lng=lng, lat=lat)
+        destination = self.destination
+        try:
+            route = await compute_route_fn(origin, destination, hazard_polygons, crisis_traffic_factor)
+            self.route_id = f"sim-route-{uuid.uuid4().hex[:8]}"
+            self.route_geometry = LineString(route["geometry"]["coordinates"])
+            self.route_distance_m = route.get("distance", 0)
+            self.route_duration_s = route.get("duration", 0)
+            self.progress = 0.0
+            self.state = AgentState.evacuating
+        except Exception:
+            logger.exception("Route planning failed for follower agent %s", self.agent_id)
+            self.state = AgentState.idle
+            self._situation_hash = ""
+
+    async def apply_leader_decision(
+        self,
+        decision: AgentDecision,
+        compute_route_fn,
+        hazard_polygons: list[dict],
+        crisis_traffic_factor: float,
+        origin_offset: tuple[float, float],
+    ) -> None:
+        """Mirror a cluster leader's decision without calling the LLM."""
+        self.last_decision = decision
+        self.rerouted_this_tick = False
+
+        if decision.action == "depart" and self.state == AgentState.idle:
+            self.state = AgentState.planning
+            offset_lat = self.lat + origin_offset[0]
+            offset_lng = self.lng + origin_offset[1]
+            await self._plan_route_from(offset_lat, offset_lng, compute_route_fn, hazard_polygons, crisis_traffic_factor)
+
+        elif decision.action == "reroute" and self.state == AgentState.evacuating:
+            self.rerouted_this_tick = True
+            self.state = AgentState.planning
+            await self._plan_route_from(
+                self.lat + origin_offset[0],
+                self.lng + origin_offset[1],
+                compute_route_fn,
+                hazard_polygons,
+                crisis_traffic_factor,
+            )
+
+        elif decision.action == "shelter_in_place":
+            self.state = AgentState.sheltering
 
     def advance_position(self, tick_interval_seconds: float) -> None:
         """Move agent along route geometry based on elapsed time."""

@@ -30,7 +30,7 @@ export function useSimulation(): SimulationControls {
   const [agents, setAgents] = useState<AgentSnapshot[]>([]);
   const [metrics, setMetrics] = useState<TickMetrics | null>(null);
   const [currentTick, setCurrentTick] = useState(0);
-  const [maxTicks, setMaxTicks] = useState(20);
+  const [maxTicks, setMaxTicks] = useState(72);
   const [error, setError] = useState<string | null>(null);
 
   const unsubRef = useRef<(() => void) | null>(null);

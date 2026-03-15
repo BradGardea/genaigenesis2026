@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
-import type { AgentSnapshot, SimulationConfig, TickMetrics } from "../services/simulationApi";
+import type { AgentSnapshot, ClusterSummary, SimulationConfig, TickMetrics } from "../services/simulationApi";
 import type { AppTheme } from "../types/theme";
 
 export type SimPanelState = "idle" | "created" | "running" | "completed" | "stopped";
@@ -23,6 +23,10 @@ interface Props {
   onStart: (config: SimulationConfig) => void;
   onStop: () => void;
   disasterBbox?: DisasterBbox | null;
+  clusters?: ClusterSummary[];
+  clusterColors?: Map<string, string>;
+  disasterStepIndex?: number;
+  disasterTotalSteps?: number;
 }
 
 const STATE_COLORS: Record<string, string> = {
@@ -52,7 +56,7 @@ const DEFAULT_CONFIG: SimulationConfig = {
   destination_lng: 29.330,
   tick_interval_seconds: 2.0,
   virtual_seconds_per_tick: 600.0,
-  max_ticks: 20,
+  max_ticks: 72,
 };
 
 export function SimulationPanel({
@@ -66,6 +70,10 @@ export function SimulationPanel({
   onStart,
   onStop,
   disasterBbox,
+  clusters,
+  clusterColors,
+  disasterStepIndex,
+  disasterTotalSteps,
 }: Props) {
   const isDark = theme === "dark";
   const [collapsed, setCollapsed] = useState(false);
@@ -73,6 +81,7 @@ export function SimulationPanel({
   const [maxTicksInput, setMaxTicksInput] = useState(String(DEFAULT_CONFIG.max_ticks));
   const [destLat, setDestLat] = useState(String(DEFAULT_CONFIG.destination_lat));
   const [destLng, setDestLng] = useState(String(DEFAULT_CONFIG.destination_lng));
+  const [clusterRadiusM, setClusterRadiusM] = useState("500");
 
   // When disaster bbox changes, place the destination just outside the bbox
   // so agents evacuate away from the disaster area rather than cross-continent.
@@ -104,6 +113,7 @@ export function SimulationPanel({
       max_ticks: parseInt(maxTicksInput) || 20,
       destination_lat: parseFloat(destLat) || DEFAULT_CONFIG.destination_lat,
       destination_lng: parseFloat(destLng) || DEFAULT_CONFIG.destination_lng,
+      cluster_radius_m: parseFloat(clusterRadiusM) || 500,
     };
 
     // Override bbox from disaster step data when available
@@ -183,6 +193,30 @@ export function SimulationPanel({
                 </View>
               </View>
 
+              {/* Disaster step indicator */}
+              {disasterTotalSteps != null && disasterTotalSteps > 0 && (
+                <View>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 3 }}>
+                    <Text style={{ fontSize: 10, color: textMuted }}>
+                      Disaster Step {(disasterStepIndex ?? 0) + 1} / {disasterTotalSteps}
+                    </Text>
+                    <Text style={{ fontSize: 10, color: "#f87171" }}>
+                      {Math.round(((disasterStepIndex ?? 0) + 1) / disasterTotalSteps * 100)}%
+                    </Text>
+                  </View>
+                  <View style={{ height: 4, backgroundColor: isDark ? "#1e293b" : "#e2e8f0", borderRadius: 2 }}>
+                    <View
+                      style={{
+                        height: 4,
+                        width: `${Math.round(((disasterStepIndex ?? 0) + 1) / disasterTotalSteps * 100)}%`,
+                        backgroundColor: "#f87171",
+                        borderRadius: 2,
+                      }}
+                    />
+                  </View>
+                </View>
+              )}
+
               {/* Agent state grid */}
               <View style={{ gap: 4 }}>
                 {(["evacuating", "arrived", "idle", "sheltering", "planning"] as const).map((state) => {
@@ -198,6 +232,55 @@ export function SimulationPanel({
                   );
                 })}
               </View>
+
+              {/* Cluster legend */}
+              {clusters && clusters.length > 0 && (
+                <View style={{ paddingTop: 4, gap: 3 }}>
+                  <Text style={{ fontSize: 10, fontWeight: "600", color: textMuted }}>
+                    CLUSTERS ({clusters.length})
+                  </Text>
+                  {clusters.map((c) => {
+                    const color = clusterColors?.get(c.cluster_id) ?? "#6366F1";
+                    const leaderAgent = agents.find((a) => a.agent_id === c.leader_id);
+                    const leaderState = leaderAgent?.state ?? "?";
+                    return (
+                      <View
+                        key={c.cluster_id}
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 5,
+                          paddingVertical: 1,
+                        }}
+                      >
+                        <View
+                          style={{
+                            width: 10,
+                            height: 10,
+                            borderRadius: 5,
+                            backgroundColor: color,
+                          }}
+                        />
+                        <Text style={{ fontSize: 10, color: textPrimary, flex: 1 }}>
+                          {c.cluster_id.replace("cluster-", "C")}
+                        </Text>
+                        <Text style={{ fontSize: 10, color: textMuted }}>
+                          ×{c.member_count}
+                        </Text>
+                        <Text
+                          style={{
+                            fontSize: 9,
+                            color: STATE_COLORS[leaderState] ?? textMuted,
+                            textTransform: "capitalize",
+                          }}
+                        >
+                          {leaderState}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
 
               {/* Stats row */}
               <View
@@ -267,22 +350,23 @@ export function SimulationPanel({
                 <Text style={{ fontSize: 10, fontWeight: "600", color: textMuted, marginBottom: 3 }}>
                   AGENTS: {numAgents}
                 </Text>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <Pressable
-                    onPress={() => setNumAgents((v) => Math.max(1, v - 1))}
-                    style={{ width: 24, height: 24, borderRadius: 4, backgroundColor: isDark ? "#1e293b" : "#f1f5f9", alignItems: "center", justifyContent: "center" }}
-                  >
-                    <Text style={{ color: textPrimary, fontSize: 14 }}>−</Text>
-                  </Pressable>
-                  <View style={{ flex: 1, height: 4, backgroundColor: isDark ? "#1e293b" : "#e2e8f0", borderRadius: 2 }}>
-                    <View style={{ height: 4, width: `${(numAgents / 20) * 100}%`, backgroundColor: "#60A5FA", borderRadius: 2 }} />
-                  </View>
-                  <Pressable
-                    onPress={() => setNumAgents((v) => Math.min(20, v + 1))}
-                    style={{ width: 24, height: 24, borderRadius: 4, backgroundColor: isDark ? "#1e293b" : "#f1f5f9", alignItems: "center", justifyContent: "center" }}
-                  >
-                    <Text style={{ color: textPrimary, fontSize: 14 }}>+</Text>
-                  </Pressable>
+                <input
+                  type="range"
+                  min={1}
+                  max={500}
+                  step={1}
+                  value={numAgents}
+                  onChange={(e) => setNumAgents(Number(e.target.value))}
+                  style={{
+                    width: "100%",
+                    height: 4,
+                    accentColor: "#60A5FA",
+                    cursor: "pointer",
+                  }}
+                />
+                <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 2 }}>
+                  <Text style={{ fontSize: 9, color: textMuted }}>1</Text>
+                  <Text style={{ fontSize: 9, color: textMuted }}>500</Text>
                 </View>
               </View>
 
@@ -292,6 +376,26 @@ export function SimulationPanel({
                 <TextInput
                   value={maxTicksInput}
                   onChangeText={setMaxTicksInput}
+                  keyboardType="numeric"
+                  style={{
+                    fontSize: 12,
+                    color: textPrimary,
+                    backgroundColor: isDark ? "#1e293b" : "#f8fafc",
+                    borderRadius: 6,
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    borderWidth: 1,
+                    borderColor: border,
+                  }}
+                />
+              </View>
+
+              {/* Cluster radius */}
+              <View>
+                <Text style={{ fontSize: 10, fontWeight: "600", color: textMuted, marginBottom: 3 }}>CLUSTER RADIUS (m)</Text>
+                <TextInput
+                  value={clusterRadiusM}
+                  onChangeText={setClusterRadiusM}
                   keyboardType="numeric"
                   style={{
                     fontSize: 12,

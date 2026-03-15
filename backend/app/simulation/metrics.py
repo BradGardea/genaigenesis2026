@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from app.simulation.models import AgentState, TickMetrics
+from app.simulation.models import AgentState, ClusterSummary, TickMetrics
 
 if TYPE_CHECKING:
     from app.simulation.evacuee import EvacueeAgent
@@ -23,6 +23,7 @@ class MetricsCollector:
         agents: list[EvacueeAgent],
         active_hazard_count: int,
         reroutes_this_tick: int,
+        clusters: list[ClusterSummary] | None = None,
     ) -> TickMetrics:
         self.total_reroutes += reroutes_this_tick
 
@@ -48,6 +49,7 @@ class MetricsCollector:
             reroutes_this_tick=reroutes_this_tick,
             active_hazards=active_hazard_count,
             avg_congestion=round(avg_congestion, 3),
+            clusters=clusters or [],
         )
         self.history.append(metrics)
         return metrics

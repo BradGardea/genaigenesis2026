@@ -4,16 +4,20 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import random
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from shapely.geometry import Point, Polygon
+
 from app.models.routing import Coordinate, EvacuationProfileInput, HazardReport
 from app.simulation.models import (
     AgentSnapshot,
     AgentState,
+    ClusterSummary,
     SimulationConfig,
     SimulationState,
     SimulationStatus,
@@ -34,6 +38,32 @@ logger = logging.getLogger(__name__)
 _AGENT_SEMAPHORE = asyncio.Semaphore(10)
 
 CITY_STATE_TIMELINE_FILENAME = "goma_severe_storm_12h_72_timesteps.json"
+
+# Lake Kivu shoreline approximation within the default Goma bounding box.
+# Points traced clockwise; anything inside this polygon is water.
+_LAKE_KIVU_SHORELINE = Polygon([
+    (29.171, -1.696),
+    (29.185, -1.688),
+    (29.197, -1.694),
+    (29.210, -1.695),
+    (29.218, -1.700),
+    (29.227, -1.704),
+    (29.238, -1.706),
+    (29.249, -1.710),
+    (29.256, -1.710),
+    (29.256, -1.750),
+    (29.171, -1.750),
+    (29.171, -1.696),
+])
+
+_SPAWN_EXCLUSION_ZONES: list[Polygon] = [_LAKE_KIVU_SHORELINE]
+_MAX_SPAWN_RETRIES = 50
+
+
+def _is_valid_spawn(lat: float, lng: float) -> bool:
+    """Return True if the coordinate is not inside a known water/exclusion zone."""
+    pt = Point(lng, lat)
+    return all(not zone.contains(pt) for zone in _SPAWN_EXCLUSION_ZONES)
 
 
 def _load_timeline_total_steps() -> int:
@@ -78,6 +108,16 @@ class SimulationOrchestrator:
         for i in range(cfg.num_evacuees):
             lat = random.uniform(cfg.bbox_min_lat, cfg.bbox_max_lat)
             lng = random.uniform(cfg.bbox_min_lng, cfg.bbox_max_lng)
+            for _ in range(_MAX_SPAWN_RETRIES):
+                if _is_valid_spawn(lat, lng):
+                    break
+                lat = random.uniform(cfg.bbox_min_lat, cfg.bbox_max_lat)
+                lng = random.uniform(cfg.bbox_min_lng, cfg.bbox_max_lng)
+            else:
+                logger.warning(
+                    "Agent %d: could not find valid spawn after %d retries, using last attempt",
+                    i, _MAX_SPAWN_RETRIES,
+                )
             profile = EvacuationProfileInput(
                 family_size=random.randint(1, 5),
                 vehicles=random.randint(0, 2),
@@ -95,6 +135,34 @@ class SimulationOrchestrator:
                 watsonx_model_id=cfg.watsonx_model_id,
             )
             self.agents.append(agent)
+        self._form_clusters()
+
+    def _form_clusters(self) -> None:
+        """Greedy one-pass proximity clustering at spawn time."""
+        radius = self.config.cluster_radius_m / 111_320  # metres → degrees
+        unassigned = list(self.agents)
+        idx = 0
+        while unassigned:
+            leader = unassigned[0]
+            leader.is_leader = True
+            cid = f"cluster-{idx:03d}"
+            leader.cluster_id = cid
+            remaining = []
+            for agent in unassigned[1:]:
+                dlat = agent.lat - leader.lat
+                dlng = (agent.lng - leader.lng) * math.cos(math.radians(leader.lat))
+                if math.hypot(dlat, dlng) <= radius:
+                    agent.cluster_id = cid
+                    # Small offset so followers don't stack exactly on the leader's route
+                    agent._leader_offset = (dlat * 0.1, dlng * 0.1)
+                else:
+                    remaining.append(agent)
+            unassigned = remaining
+            idx += 1
+        logger.info(
+            "Simulation %s: %d agents → %d clusters (radius=%.0fm)",
+            self.sim_id, len(self.agents), idx, self.config.cluster_radius_m,
+        )
 
     # ── Lifecycle ──────────────────────────────────────────────
 
@@ -175,15 +243,17 @@ class SimulationOrchestrator:
         # 4. Compute congestion from co-located agents
         self._compute_congestion()
 
-        # 5. Process agents concurrently
+        # 5. Process agents concurrently — leaders get LLM decisions, followers mirror
         reroutes = 0
+        traffic_factor = self._weather_traffic_factor(weather_summary)
+
+        leaders = [a for a in self.agents if a.is_leader or a.cluster_id is None]
+        followers = [a for a in self.agents if not a.is_leader and a.cluster_id is not None]
 
         async def process_agent(agent: EvacueeAgent) -> int:
             async with _AGENT_SEMAPHORE:
                 # Stagger Mapbox calls to avoid rate-limit bursts
                 await asyncio.sleep(random.uniform(0, 0.5))
-
-                traffic_factor = self._weather_traffic_factor(weather_summary)
 
                 decision = await agent.decide(tick, nearby_hazards, weather_summary)
                 if decision:
@@ -195,18 +265,54 @@ class SimulationOrchestrator:
                 return 1 if agent.rerouted_this_tick else 0
 
         results = await asyncio.gather(
-            *(process_agent(a) for a in self.agents), return_exceptions=True
+            *(process_agent(a) for a in leaders), return_exceptions=True
         )
         for r in results:
             if isinstance(r, int):
                 reroutes += r
 
-        # 6. Collect metrics
+        # Process followers synchronously — no LLM call
+        leader_by_cluster = {a.cluster_id: a for a in leaders if a.cluster_id}
+        for follower in followers:
+            leader = leader_by_cluster.get(follower.cluster_id)
+            if leader and leader.last_decision:
+                await follower.apply_leader_decision(
+                    leader.last_decision,
+                    compute_route,
+                    hazard_polygons,
+                    traffic_factor,
+                    follower._leader_offset,
+                )
+                if follower.rerouted_this_tick:
+                    reroutes += 1
+            follower.advance_position(self.config.virtual_seconds_per_tick)
+
+        # 6. Compute cluster summaries
+        cluster_map: dict[str, list] = {}
+        for a in self.agents:
+            key = a.cluster_id if a.cluster_id else a.agent_id
+            cluster_map.setdefault(key, []).append(a)
+
+        summaries: list[ClusterSummary] = []
+        for cid, members in cluster_map.items():
+            leader_agents = [a for a in members if a.is_leader]
+            if not leader_agents:
+                continue
+            summaries.append(ClusterSummary(
+                cluster_id=cid,
+                leader_id=leader_agents[0].agent_id,
+                member_count=len(members),
+                centroid_lat=sum(a.lat for a in members) / len(members),
+                centroid_lng=sum(a.lng for a in members) / len(members),
+            ))
+
+        # 7. Collect metrics
         tick_metrics = self.metrics.collect(
             tick=tick,
             agents=self.agents,
             active_hazard_count=len(active_zones),
             reroutes_this_tick=reroutes,
+            clusters=summaries,
         )
 
         # 7. Log and broadcast

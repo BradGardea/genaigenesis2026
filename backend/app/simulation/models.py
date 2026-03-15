@@ -38,7 +38,8 @@ class ScheduledHazard(BaseModel):
 class SimulationConfig(BaseModel):
     """Configuration for a simulation run."""
 
-    num_evacuees: int = Field(ge=1, le=100, default=5)
+    num_evacuees: int = Field(ge=1, le=500, default=5)
+    cluster_radius_m: float = Field(default=500.0, description="Proximity radius for cluster formation (metres)")
     # Bounding box: agents start within this region (default: Goma, DR Congo)
     bbox_min_lat: float = Field(default=-1.710)
     bbox_max_lat: float = Field(default=-1.624)
@@ -50,7 +51,7 @@ class SimulationConfig(BaseModel):
     # Tick configuration
     tick_interval_seconds: float = Field(ge=0.1, default=2.0, description="Real-world sleep between ticks (seconds)")
     virtual_seconds_per_tick: float = Field(ge=1.0, default=600.0, description="Simulated travel time per tick (seconds)")
-    max_ticks: int = Field(ge=1, le=1000, default=30)
+    max_ticks: int = Field(ge=1, le=1000, default=72)
     # Scheduled hazards
     hazard_schedule: list[ScheduledHazard] = Field(default_factory=list)
     # watsonx model override
@@ -100,6 +101,18 @@ class AgentSnapshot(BaseModel):
     progress: float = Field(
         default=0.0, ge=0.0, le=1.0, description="0=start, 1=arrived"
     )
+    cluster_id: str | None = None
+    is_leader: bool = False
+
+
+class ClusterSummary(BaseModel):
+    """Aggregated view of a proximity cluster."""
+
+    cluster_id: str
+    leader_id: str
+    member_count: int
+    centroid_lat: float
+    centroid_lng: float
 
 
 class TickMetrics(BaseModel):
@@ -114,6 +127,7 @@ class TickMetrics(BaseModel):
     reroutes_this_tick: int = 0
     active_hazards: int = 0
     avg_congestion: float = 0.0
+    clusters: list[ClusterSummary] = []
 
 
 class SimulationStatus(BaseModel):

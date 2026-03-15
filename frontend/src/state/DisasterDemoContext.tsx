@@ -193,7 +193,7 @@ function applyCityStatePayloadToStep(
 
 export function DisasterDemoProvider({ children }: { children: ReactNode }) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [totalSteps, setTotalSteps] = useState(disasterStepsMock.length);
+  const [totalSteps, setTotalSteps] = useState(72);
   const [stepHistory, setStepHistory] = useState<
     { stepIndex: number; step: (typeof disasterStepsMock)[number] }[]
   >([{ stepIndex: 0, step: disasterStepsMock[0] }]);
