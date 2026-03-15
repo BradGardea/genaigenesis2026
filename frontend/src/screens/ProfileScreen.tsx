@@ -246,33 +246,6 @@ export function ProfileScreen({
           <Text className={`mt-3 text-xs ${isDark ? "text-slate-300" : "text-slate-700"}`}>{infoMessage}</Text>
         ) : null}
       </View>
-
-      <View
-        className={`mt-3 rounded-2xl p-4 ${
-          isDark ? "border border-slate-700 bg-slate-900" : "border border-slate-300 bg-white"
-        }`}
-      >
-        <Text className={`mb-2 text-sm font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
-          My connections
-        </Text>
-
-        {connections.length === 0 ? (
-          <Text className={`text-sm ${isDark ? "text-slate-300" : "text-slate-700"}`}>
-            No connections yet.
-          </Text>
-        ) : (
-          connections.map((connection) => (
-            <View key={connection.id} className={`mb-2 rounded-xl p-3 ${isDark ? "bg-slate-800" : "bg-slate-100"}`}>
-              <Text className={`text-sm font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
-                {connection.contactPhone}
-              </Text>
-              <Text className={`mt-1 text-xs capitalize ${isDark ? "text-slate-300" : "text-slate-700"}`}>
-                {connection.relationship} | trust level {connection.trustLevel}
-              </Text>
-            </View>
-          ))
-        )}
-      </View>
     </View>
   );
 }

@@ -1,9 +1,12 @@
 import {
+  CityStateStepResponse,
   ConnectionCreatePayload,
   EvacuationPlan,
   InfoBubble,
+  PersonConnectionsResponse,
   SavedInformation,
   UserConnection,
+  WeatherStepResponse,
   WeatherUpdate
 } from "./types";
 
@@ -50,4 +53,44 @@ export async function fetchSavedInformation(): Promise<SavedInformation[]> {
 
 export async function fetchWeatherUpdates(): Promise<WeatherUpdate[]> {
   return fetchJson<WeatherUpdate[]>("/information/weather");
+}
+
+export async function fetchWeatherCurrentStep(
+  step: number,
+  beautify = true
+): Promise<WeatherStepResponse> {
+  return fetchJson<WeatherStepResponse>(
+    `/information/weather/current-step?step=${step}&beautify=${beautify}`
+  );
+}
+
+export async function fetchWeatherNextStep(
+  currStep: number,
+  beautify = true
+): Promise<WeatherStepResponse> {
+  return fetchJson<WeatherStepResponse>(
+    `/information/weather/next-step?curr_step=${currStep}&beautify=${beautify}`
+  );
+}
+
+export async function fetchCityStateCurrentStep(
+  step: number,
+  beautify = true
+): Promise<CityStateStepResponse> {
+  return fetchJson<CityStateStepResponse>(
+    `/information/city-state/current-step?step=${step}&beautify=${beautify}`
+  );
+}
+
+export async function fetchCityStateNextStep(
+  currStep: number,
+  beautify = true
+): Promise<CityStateStepResponse> {
+  return fetchJson<CityStateStepResponse>(
+    `/information/city-state/next-step?curr_step=${currStep}&beautify=${beautify}`
+  );
+}
+
+export async function fetchFirstPersonConnections(): Promise<PersonConnectionsResponse> {
+  return fetchJson<PersonConnectionsResponse>("/connections/first");
 }

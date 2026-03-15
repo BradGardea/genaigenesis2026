@@ -4,6 +4,8 @@ Thumbs.db
 .idea/
 .vscode/
 
+.claude/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -22,3 +24,4 @@ pnpm-debug.log*
 .env.*
 !.env.example
 
+CLAUDE.md

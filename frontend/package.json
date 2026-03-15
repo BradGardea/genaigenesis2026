@@ -6,6 +6,7 @@
   "scripts": {
     "start": "expo start",
     "web": "expo start --web",
+    "web:preview": "expo start --web --port 8082",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "lint": "eslint . --ext .ts,.tsx"
@@ -15,6 +16,7 @@
     "@rnmapbox/maps": "^10.2.10",
     "expo": "^53.0.0",
     "expo-status-bar": "~2.2.3",
+    "lightningcss-darwin-arm64": "^1.27.0",
     "mapbox-gl": "^2.15.0",
     "nativewind": "^4.1.23",
     "react": "19.0.0",
@@ -24,6 +26,8 @@
     "react-native-web": "^0.20.0"
   },
   "devDependencies": {
+    "@types/geojson": "^7946.0.16",
+    "@types/mapbox-gl": "^3.4.1",
     "@types/react": "~19.0.10",
     "@types/react-native": "^0.73.0",
     "eslint": "^9.22.0",
