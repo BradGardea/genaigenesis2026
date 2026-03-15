@@ -15,7 +15,7 @@ type TabIconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
 const TAB_OPTIONS: { key: TabKey; label: string; icon: TabIconName }[] = [
   { key: "info", label: "Info", icon: "information-outline" },
   { key: "map", label: "Map", icon: "map-marker-radius-outline" },
-  { key: "profile", label: "Profile", icon: "account-circle-outline" }
+  { key: "profile", label: "Profile", icon: "account-circle-outline" },
 ];
 
 export function AppTabs() {
@@ -24,7 +24,15 @@ export function AppTabs() {
   const [fullName, setFullName] = useState(userProfileMock.fullName);
   const [phoneNumber, setPhoneNumber] = useState(userProfileMock.phoneNumber);
   const [homeArea, setHomeArea] = useState(userProfileMock.homeArea);
-  const { currentStepIndex, totalSteps, isFinalStep, isStepping, stepDisaster, latestHighRiskAlert } = useDisasterDemo();
+  const {
+    currentStepIndex,
+    totalSteps,
+    isFinalStep,
+    isStepping,
+    stepDisaster,
+    latestHighRiskAlert,
+  } = useDisasterDemo();
+  const [isPlaying, setIsPlaying] = useState(false);
   const [visibleAlertBanner, setVisibleAlertBanner] = useState<{
     id: string;
     title: string;
@@ -36,6 +44,26 @@ export function AppTabs() {
   const isDark = theme === "dark";
 
   useEffect(() => {
+    if (!isPlaying) return;
+    if (isFinalStep) {
+      setIsPlaying(false);
+      return;
+    }
+    if (isStepping) return;
+    const timer = setTimeout(() => {
+      void stepDisaster({ beautify: activeTab !== "map" });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [
+    isPlaying,
+    isFinalStep,
+    isStepping,
+    currentStepIndex,
+    activeTab,
+    stepDisaster,
+  ]);
+
+  useEffect(() => {
     if (!latestHighRiskAlert) {
       return;
     }
@@ -44,7 +72,7 @@ export function AppTabs() {
       id: `${latestHighRiskAlert.stepIndex}-${latestHighRiskAlert.title}`,
       title: latestHighRiskAlert.title,
       urgency: latestHighRiskAlert.urgency,
-      stepLabel: `Step ${latestHighRiskAlert.stepIndex + 1}`
+      stepLabel: `Step ${latestHighRiskAlert.stepIndex + 1}`,
     });
 
     const timeout = setTimeout(() => {
@@ -64,23 +92,37 @@ export function AppTabs() {
             isDark ? "border-red-400 bg-red-900" : "border-red-300 bg-red-50"
           }`}
         >
-          <Text className={`text-[11px] font-semibold uppercase ${isDark ? "text-red-100" : "text-red-700"}`}>
-            High risk update | {visibleAlertBanner.urgency} | {visibleAlertBanner.stepLabel}
+          <Text
+            className={`text-[11px] font-semibold uppercase ${isDark ? "text-red-100" : "text-red-700"}`}
+          >
+            High risk update | {visibleAlertBanner.urgency} |{" "}
+            {visibleAlertBanner.stepLabel}
           </Text>
-          <Text className={`mt-1 text-xs font-medium ${isDark ? "text-red-100" : "text-red-800"}`}>
+          <Text
+            className={`mt-1 text-xs font-medium ${isDark ? "text-red-100" : "text-red-800"}`}
+          >
             {visibleAlertBanner.title}
           </Text>
         </View>
       ) : null}
 
       <View className="flex-1">
-        <View style={{ display: activeTab === "info" ? "flex" : "none", flex: 1 }}>
+        <View
+          style={{ display: activeTab === "info" ? "flex" : "none", flex: 1 }}
+        >
           <InfoScreen theme={theme} />
         </View>
-        <View style={{ display: activeTab === "map" ? "flex" : "none", flex: 1 }}>
+        <View
+          style={{ display: activeTab === "map" ? "flex" : "none", flex: 1 }}
+        >
           <MapScreen theme={theme} />
         </View>
-        <View style={{ display: activeTab === "profile" ? "flex" : "none", flex: 1 }}>
+        <View
+          style={{
+            display: activeTab === "profile" ? "flex" : "none",
+            flex: 1,
+          }}
+        >
           <ProfileScreen
             theme={theme}
             onThemeChange={setTheme}
@@ -93,40 +135,69 @@ export function AppTabs() {
           />
         </View>
       </View>
-      <Pressable
-        className={`absolute left-4 rounded-xl border px-4 py-2 ${
-          isFinalStep || isStepping
-            ? isDark
-              ? "border-slate-700 bg-slate-800"
-              : "border-slate-300 bg-slate-200"
-            : isDark
-              ? "border-rose-700 bg-rose-900"
-              : "border-rose-300 bg-rose-50"
-        }`}
+      <View
+        className="absolute left-4 flex-row gap-2"
         style={{ bottom: Math.max(insets.bottom, 6) + 64 }}
-        disabled={isFinalStep || isStepping}
-        onPress={() => {
-          void stepDisaster({ beautify: activeTab !== "map" });
-        }}
       >
-        <Text
-          className={`text-xs font-semibold select-none ${
-            isFinalStep || isStepping
+        <Pressable
+          className={`rounded-xl border px-4 py-2 ${
+            isFinalStep
               ? isDark
-                ? "text-slate-300"
-                : "text-slate-600"
+                ? "border-slate-700 bg-slate-800"
+                : "border-slate-300 bg-slate-200"
               : isDark
-                ? "text-rose-100"
-                : "text-rose-700"
+                ? "border-rose-700 bg-rose-900"
+                : "border-rose-300 bg-rose-50"
           }`}
+          disabled={isFinalStep}
+          onPress={() => setIsPlaying((p) => !p)}
         >
-          {isStepping
-            ? "Stepping..."
-            : isFinalStep
-            ? `Final Step (${totalSteps}/${totalSteps})`
-            : `Step Disaster (${currentStepIndex + 1}/${totalSteps})`}
-        </Text>
-      </Pressable>
+          <Text
+            className={`text-xs font-semibold select-none ${
+              isFinalStep
+                ? isDark
+                  ? "text-slate-300"
+                  : "text-slate-600"
+                : isDark
+                  ? "text-rose-100"
+                  : "text-rose-700"
+            }`}
+          >
+            {isFinalStep ? "Done" : isPlaying ? "⏸ Pause" : "▶ Play"}
+          </Text>
+        </Pressable>
+        <Pressable
+          className={`rounded-xl border px-4 py-2 ${
+            isFinalStep || isStepping || isPlaying
+              ? isDark
+                ? "border-slate-700 bg-slate-800"
+                : "border-slate-300 bg-slate-200"
+              : isDark
+                ? "border-rose-700 bg-rose-900"
+                : "border-rose-300 bg-rose-50"
+          }`}
+          disabled={isFinalStep || isStepping || isPlaying}
+          onPress={() => {
+            void stepDisaster({ beautify: activeTab !== "map" });
+          }}
+        >
+          <Text
+            className={`text-xs font-semibold select-none ${
+              isFinalStep || isStepping || isPlaying
+                ? isDark
+                  ? "text-slate-300"
+                  : "text-slate-600"
+                : isDark
+                  ? "text-rose-100"
+                  : "text-rose-700"
+            }`}
+          >
+            {isStepping
+              ? "..."
+              : `→ Step (${Math.min(currentStepIndex + 1, totalSteps)}/${totalSteps})`}
+          </Text>
+        </Pressable>
+      </View>
 
       <View
         className={`border-t px-3 ${
@@ -159,7 +230,11 @@ export function AppTabs() {
                 }`}
                 onPress={() => setActiveTab(tab.key)}
               >
-                <MaterialCommunityIcons name={tab.icon} size={18} color={iconColor} />
+                <MaterialCommunityIcons
+                  name={tab.icon}
+                  size={18}
+                  color={iconColor}
+                />
                 <Text
                   className={`mt-0.5 text-[10px] font-semibold ${
                     isActive
