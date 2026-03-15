@@ -442,12 +442,14 @@ export function MapScreen({ theme }: MapScreenProps) {
       geometry: { type: "Point" as const, coordinates: [agent.lng, agent.lat] },
       properties: {
         agent_id: agent.agent_id,
+        name: agent.name ?? "",
+        scenario: agent.scenario ?? "",
         state: agent.state,
         progress: agent.progress,
         family_size: agent.family_size,
         vehicles: agent.vehicles,
         last_action: agent.last_decision?.action ?? null,
-        label: agent.agent_id.replace("agent-", "#"),
+        label: agent.name || agent.agent_id.replace("agent-", "#"),
         is_leader: agent.is_leader ?? false,
         cluster_id: agent.cluster_id ?? "",
         cluster_color: (agent.cluster_id && clusterColorMap.get(agent.cluster_id)) || "#94A3B8",
@@ -457,8 +459,8 @@ export function MapScreen({ theme }: MapScreenProps) {
     source.setData({ type: "FeatureCollection", features });
 
     // Scale down circle radius as agent count grows (supports up to 1500)
+    const n = simAgents.length;
     if (map.getLayer(SIM_AGENTS_LAYER)) {
-      const n = simAgents.length;
       const scale = n <= 20 ? 1 : n <= 80 ? 0.85 : n <= 200 ? 0.7 : n <= 500 ? 0.55 : n <= 1000 ? 0.4 : 0.3;
       const baseR = 5 * scale;
       const leaderR = 8 * scale;
@@ -468,6 +470,9 @@ export function MapScreen({ theme }: MapScreenProps) {
       map.setPaintProperty(SIM_AGENTS_LAYER, "circle-stroke-width",
         ["case", ["==", ["get", "is_leader"], true], Math.max(2 * scale, 0.5), Math.max(1 * scale, 0.5)]
       );
+    }
+    if (map.getLayer(SIM_AGENTS_LABEL_LAYER)) {
+      map.setLayoutProperty(SIM_AGENTS_LABEL_LAYER, "visibility", n <= 10 ? "visible" : "none");
     }
   }, [simAgents, simState, mapReadyVersion, clusterColorMap]);
 
@@ -894,21 +899,40 @@ export function MapScreen({ theme }: MapScreenProps) {
             "circle-opacity": 1.0,
           },
         });
-        // Agent label layer removed (numbers on dots were visual noise)
+        map.addLayer({
+          id: SIM_AGENTS_LABEL_LAYER,
+          type: "symbol",
+          source: SIM_AGENTS_SOURCE,
+          layout: {
+            "text-field": ["get", "label"],
+            "text-font": ["DIN Pro Medium", "Arial Unicode MS Regular"],
+            "text-size": 11,
+            "text-offset": [0, -1.4],
+            "text-anchor": "bottom",
+          },
+          paint: {
+            "text-color": "#f1f5f9",
+            "text-halo-color": "#0f172a",
+            "text-halo-width": 1,
+          },
+        });
         map.on("click", SIM_AGENTS_LAYER, (e) => {
           if (!e.features?.length) return;
           const p = e.features[0].properties ?? {};
           const cColor = p.cluster_color || "#94A3B8";
+          const displayName = p.name || p.agent_id || "Agent";
           const html = [
             '<div style="font-family:system-ui;font-size:12px;line-height:1.5;">',
-            `<strong>${p.agent_id ?? "Agent"}</strong>`,
+            `<strong>${displayName}</strong>`,
             p.is_leader === true || p.is_leader === "true" ? ' <span style="font-size:10px;color:#D97706;">(leader)</span>' : "",
+            p.name ? `<br/><span style="font-size:10px;color:#94a3b8;">${p.agent_id}</span>` : "",
             "<br/>",
+            p.scenario ? `<em style="font-size:10px;color:#94a3b8;">"${p.scenario}"</em><br/>` : "",
             `State: <span style="text-transform:capitalize;">${p.state ?? "?"}</span><br/>`,
             `Progress: ${Math.round((p.progress ?? 0) * 100)}%<br/>`,
             p.cluster_id ? `Cluster: <span style="color:${cColor};font-weight:600;">${p.cluster_id}</span><br/>` : "",
             `Family: ${p.family_size ?? 1} · Vehicles: ${p.vehicles ?? 1}`,
-            p.dest_name ? `<br/>Dest: <span style="font-weight:600;">${p.dest_name}</span>` : "",
+            p.dest_name ? `<br/>→ <span style="font-weight:600;">${p.dest_name}</span>` : "",
             p.last_action ? `<br/>Decision: <em>${p.last_action}</em>` : "",
             "</div>",
           ].join("");

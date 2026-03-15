@@ -60,15 +60,22 @@ def _build_user_prompt(situation: AgentSituation) -> str:
     return " ".join(parts)
 
 
+_reroute_count: dict[str, int] = {}
+_MAX_REROUTES = 1
+
+
 def _rule_based_decision(situation: AgentSituation) -> AgentDecision | None:
     """Deterministic fallback when watsonx is unavailable."""
-    # If already evacuating and hazard nearby → reroute
+    # If already evacuating and hazard nearby → reroute (max once per agent)
     if situation.state.value == "evacuating" and situation.nearby_hazards:
-        return AgentDecision(
-            action="reroute",
-            reasoning="Hazard detected near current route",
-            urgency=8,
-        )
+        count = _reroute_count.get(situation.agent_id, 0)
+        if count < _MAX_REROUTES:
+            _reroute_count[situation.agent_id] = count + 1
+            return AgentDecision(
+                action="reroute",
+                reasoning="Hazard detected near current route",
+                urgency=8,
+            )
 
     # If idle and hazard is close → depart immediately
     if situation.state.value == "idle" and situation.nearby_hazards:

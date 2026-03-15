@@ -122,12 +122,17 @@ class SimulationOrchestrator:
     def _init_agents(self) -> None:
         """Create agents from community data, falling back to random generation.
 
-        Uses the community relationships dataset for real names, positions,
-        scenarios, and social connections. If the dataset isn't available or
-        more agents are requested than people in the dataset, fills remaining
-        slots with random agents.
+        Single-agent mode uses a hardcoded spawn in the city center with a
+        guaranteed forced reroute. Otherwise uses the community relationships
+        dataset for real names, positions, scenarios, and social connections.
         """
         cfg = self.config
+
+        # ── Single-agent hardcoded demo ──
+        if cfg.num_evacuees == 1:
+            self._init_single_agent_demo()
+            return
+
         community = _load_community_data()
 
         # Build agents from community data (up to num_evacuees)
@@ -263,6 +268,50 @@ class SimulationOrchestrator:
             community.extend(generated_persons[:remaining_count])
 
         self._form_clusters(community, person_to_agent)
+
+    def _init_single_agent_demo(self) -> None:
+        """Hardcoded single-agent scenario: starts mid-city, guaranteed reroute.
+
+        Agent spawns near Vilankulo city center heading to the furthest
+        evacuation point. A roadblock is scheduled at tick 4 on their route
+        to force a visible reroute.
+        """
+        from app.simulation.evacuation_points import sorted_evacuation_points
+
+        # City center spawn
+        lat, lng = -22.000, 35.315
+
+        # Pick the furthest evacuation point for a longer route
+        points = sorted_evacuation_points(lat, lng)
+        dest = points[-1][0]  # furthest point
+
+        profile = EvacuationProfileInput(
+            family_size=3,
+            vehicles=1,
+            has_children=True,
+            has_elderly=False,
+            has_mobility_needs=False,
+        )
+        agent = EvacueeAgent(
+            agent_id="p-demo",
+            lat=lat,
+            lng=lng,
+            dest_lat=dest.lat,
+            dest_lng=dest.lng,
+            dest_name=dest.name,
+            name="Maria Santos",
+            scenario="Has a car and can offer rides to others in need",
+            profile=profile,
+            watsonx_model_id=self.config.watsonx_model_id,
+        )
+        agent.is_leader = True
+        agent.cluster_id = "cluster-000"
+        self.agents.append(agent)
+
+        logger.info(
+            "Single-agent demo: %s at (%.4f, %.4f) → %s (%.4f, %.4f)",
+            agent.name, lat, lng, dest.name, dest.lat, dest.lng,
+        )
 
     def _form_clusters(
         self,
@@ -400,27 +449,32 @@ class SimulationOrchestrator:
         city_state_step = await self._advance_city_state(tick)
 
         # 1c. Inject city_state hazards directly into hazard_store
-        if city_state_step:
+        # For single-agent demo, skip mass hazard injection to keep the route clean —
+        # only the deliberate forced reroute roadblock matters.
+        if city_state_step and len(self.agents) > 1:
             self._inject_city_state_hazards(city_state_step, tick)
 
         # 1d. For small sims, inject a hazard on an agent's route to force a reroute
         if (
             not self._forced_reroute_injected
             and len(self.agents) < 10
-            and tick >= 4
+            and tick >= 3
         ):
             for a in self.agents:
                 if (
                     a.state == AgentState.evacuating
                     and a.route_geometry
-                    and 0.2 <= a.progress <= 0.6
+                    and 0.1 <= a.progress <= 0.7
                 ):
-                    pt = a.route_geometry.interpolate(0.7, normalized=True)
+                    # Place hazard ahead at ~60% along the route
+                    inject_at = min(0.6, a.progress + 0.2)
+                    pt = a.route_geometry.interpolate(inject_at, normalized=True)
+                    radius = 150 if len(self.agents) == 1 else 300
                     report = HazardReport(
                         hazard_type="roadblock",
                         location=Coordinate(lng=pt.x, lat=pt.y),
-                        radius_meters=300,
-                        description=f"Road closure ahead of {a.agent_id}",
+                        radius_meters=radius,
+                        description=f"Road closure ahead of {a.name or a.agent_id}",
                     )
                     hazard_store.add_hazard(report)
                     self._forced_reroute_injected = True
@@ -454,7 +508,7 @@ class SimulationOrchestrator:
         ]
 
         # Merge city state flood/closure impacts as additional nearby hazard context
-        if city_state_step:
+        if city_state_step and len(self.agents) > 1:
             city_hazards = self._extract_city_state_hazards(city_state_step)
             nearby_hazards.extend(city_hazards)
 
@@ -607,11 +661,12 @@ class SimulationOrchestrator:
                 step_index=step_index,
                 total_steps=self._city_state_total_steps,
             )
-            await maybe_inject_route_hazard(
-                augmented,
-                step_index=step_index,
-                total_steps=self._city_state_total_steps,
-            )
+            if len(self.agents) > 1:
+                await maybe_inject_route_hazard(
+                    augmented,
+                    step_index=step_index,
+                    total_steps=self._city_state_total_steps,
+                )
             self._city_state_cache[step_index] = augmented
             logger.info(
                 "City state step %d generated for tick %d: severity=%s",

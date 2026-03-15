@@ -47,14 +47,14 @@ const AGENT_STATE_ICONS: Record<string, string> = {
 
 // Default Vilankulo, Mozambique bounding box (matches disaster dataset)
 const DEFAULT_CONFIG: SimulationConfig = {
-  num_evacuees: 8,
+  num_evacuees: 1,
   bbox_min_lat: -22.050,
   bbox_max_lat: -21.960,
   bbox_min_lng: 35.270,
   bbox_max_lng: 35.330,
   destination_lat: -22.000,
   destination_lng: 35.200,
-  tick_interval_seconds: 1.5,
+  tick_interval_seconds: 2.0,
   virtual_seconds_per_tick: 120.0,
   max_ticks: 72,
 };
@@ -218,8 +218,48 @@ export function SimulationPanel({
                 })}
               </View>
 
-              {/* Cluster legend */}
-              {clusters && clusters.length > 0 && (
+              {/* Single-agent focus card */}
+              {agents.length === 1 && agents[0] && (
+                <View style={{ backgroundColor: isDark ? "#1e293b" : "#f0f9ff", borderRadius: 8, padding: 8, gap: 4, borderWidth: 1, borderColor: isDark ? "#334155" : "#bfdbfe" }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "#3b82f6", alignItems: "center", justifyContent: "center" }}>
+                      <Text style={{ fontSize: 12, color: "#fff", fontWeight: "700" }}>
+                        {(agents[0].name ?? "?")[0]}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 12, fontWeight: "700", color: textPrimary }}>
+                        {agents[0].name || agents[0].agent_id}
+                      </Text>
+                      <Text style={{ fontSize: 9, color: STATE_COLORS[agents[0].state] ?? textMuted, textTransform: "capitalize", fontWeight: "600" }}>
+                        {AGENT_STATE_ICONS[agents[0].state] ?? "?"} {agents[0].state}
+                      </Text>
+                    </View>
+                  </View>
+                  {agents[0].scenario ? (
+                    <Text style={{ fontSize: 9, color: textMuted, fontStyle: "italic" }}>
+                      "{agents[0].scenario}"
+                    </Text>
+                  ) : null}
+                  {agents[0].dest_name ? (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
+                      <Text style={{ fontSize: 9, color: textMuted }}>→</Text>
+                      <Text style={{ fontSize: 10, fontWeight: "600", color: accentText }}>{agents[0].dest_name}</Text>
+                    </View>
+                  ) : null}
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 2 }}>
+                    <Text style={{ fontSize: 9, color: textMuted }}>
+                      Progress: {Math.round((agents[0].progress ?? 0) * 100)}%
+                    </Text>
+                    <Text style={{ fontSize: 9, color: textMuted }}>
+                      Family: {agents[0].family_size} · Cars: {agents[0].vehicles}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Cluster legend (multi-agent) */}
+              {agents.length > 1 && clusters && clusters.length > 0 && (
                 <View style={{ paddingTop: 4, gap: 3 }}>
                   <Text style={{ fontSize: 10, fontWeight: "600", color: textMuted }}>
                     CLUSTERS ({clusters.length})
