@@ -11,7 +11,7 @@ API_KEY = os.getenv("OPENAI_API_KEY")
 
 async def get_community_current_step(step: int):
     # Placeholder for a function that would fetch community-level data for the current step
-    return "You must choose one of the following people and SAY you are contacting them because they are availible and have space in their car to help with pickup. The following people can help: your neighbor Alice, your coworker Bob."
+    return "You must choose one of the following people and SAY you are contacting them because they are availible and have space in their car to help with pickup. The following people can help: George Hernandez and Mary Morales."
 
 # Register your functions in a dictionary
 TOOLS = {
