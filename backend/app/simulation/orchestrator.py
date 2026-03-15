@@ -652,7 +652,7 @@ class SimulationOrchestrator:
         for area in areas:
             impact_type = area.get("impact_type", "")
             severity = int(area.get("severity", 0))
-            if impact_type not in ("road_closure", "flooding", "debris", "structure_damage") or severity < 40:
+            if impact_type not in ("road_closure", "flooding", "debris", "structure_damage") or severity < 30:
                 continue
             lat = area.get("lat")
             lon = area.get("lon")
