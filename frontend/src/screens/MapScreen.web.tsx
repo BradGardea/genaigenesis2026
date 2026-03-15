@@ -57,7 +57,7 @@ const CLUSTER_PALETTE = [
   "#8B5CF6", "#0D9488",
 ];
 
-const DEFAULT_CENTER: [number, number] = [29.213, -1.667]; // Goma, DR Congo
+const DEFAULT_CENTER: [number, number] = [35.320, -22.000]; // Vilankulo, Mozambique
 const PROTECTED_SEED_STEPS = 30;
 
 function coordFromText(text: string): Coordinate | null {
@@ -483,7 +483,7 @@ export function MapScreen({ theme }: MapScreenProps) {
     if (!map) return;
     const center: [number, number] = disasterBbox
       ? [(disasterBbox.minLng + disasterBbox.maxLng) / 2, (disasterBbox.minLat + disasterBbox.maxLat) / 2]
-      : [29.213, -1.667];
+      : [35.320, -22.000];
     map.flyTo({ center, zoom: 11, duration: 1500 });
   }, [simState, disasterBbox]);
 

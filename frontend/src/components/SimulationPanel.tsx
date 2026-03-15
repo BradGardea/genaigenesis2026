@@ -45,15 +45,15 @@ const AGENT_STATE_ICONS: Record<string, string> = {
   sheltering: "⌂",
 };
 
-// Default Goma / DR Congo bounding box (matches disaster dataset)
+// Default Vilankulo, Mozambique bounding box (matches disaster dataset)
 const DEFAULT_CONFIG: SimulationConfig = {
   num_evacuees: 8,
-  bbox_min_lat: -1.710,
-  bbox_max_lat: -1.624,
-  bbox_min_lng: 29.171,
-  bbox_max_lng: 29.256,
-  destination_lat: -1.670,
-  destination_lng: 29.330,
+  bbox_min_lat: -22.050,
+  bbox_max_lat: -21.960,
+  bbox_min_lng: 35.270,
+  bbox_max_lng: 35.330,
+  destination_lat: -22.000,
+  destination_lng: 35.200,
   tick_interval_seconds: 2.0,
   virtual_seconds_per_tick: 600.0,
   max_ticks: 72,

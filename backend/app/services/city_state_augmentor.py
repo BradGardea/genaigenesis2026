@@ -10,7 +10,7 @@ from app.models.routing import HazardReport
 from app.services.hazard_store import hazard_store
 
 BASE_SEED = 20260314
-DEFAULT_CITY_CENTER = (-1.679, 29.222)
+DEFAULT_CITY_CENTER = (-22.000, 35.320)
 DEFAULT_ROUTE_SPAN_M = 4_000.0
 NOISE_RADIUS_MULTIPLIER = 1.3
 NOISE_GROWTH_EVERY_STEPS = 3

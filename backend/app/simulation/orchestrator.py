@@ -39,31 +39,30 @@ _AGENT_SEMAPHORE = asyncio.Semaphore(10)
 
 CITY_STATE_TIMELINE_FILENAME = "goma_severe_storm_12h_72_timesteps.json"
 
-# Lake Kivu shoreline approximation within the default Goma bounding box.
-# Points traced clockwise; anything inside this polygon is water.
-_LAKE_KIVU_SHORELINE = Polygon([
-    (29.171, -1.696),
-    (29.185, -1.688),
-    (29.197, -1.694),
-    (29.210, -1.695),
-    (29.218, -1.700),
-    (29.227, -1.704),
-    (29.238, -1.706),
-    (29.249, -1.710),
-    (29.256, -1.710),
-    (29.256, -1.750),
-    (29.171, -1.750),
-    (29.171, -1.696),
+# Vilankulo, Mozambique habitable land polygon.
+# The town sits on the Indian Ocean coast; ocean is to the east / southeast.
+# This polygon traces the land area west of the coastline where agents may spawn.
+# Coordinates are (lng, lat) to match Shapely's x/y convention.
+_VILANKULO_LAND_POLYGON = Polygon([
+    (35.270, -21.960),   # NW corner — inland
+    (35.325, -21.960),   # NE — coast north of town
+    (35.330, -21.975),   # coast curving south
+    (35.328, -21.990),   # coast at town center
+    (35.322, -22.005),   # coast curving SW
+    (35.315, -22.020),   # coast south of center
+    (35.305, -22.035),   # coast continues SW
+    (35.290, -22.050),   # SE corner — coast
+    (35.270, -22.050),   # SW corner — inland
+    (35.270, -21.960),   # close polygon
 ])
 
-_SPAWN_EXCLUSION_ZONES: list[Polygon] = [_LAKE_KIVU_SHORELINE]
 _MAX_SPAWN_RETRIES = 50
 
 
 def _is_valid_spawn(lat: float, lng: float) -> bool:
-    """Return True if the coordinate is not inside a known water/exclusion zone."""
+    """Return True if the coordinate falls on land (inside the habitable polygon)."""
     pt = Point(lng, lat)
-    return all(not zone.contains(pt) for zone in _SPAWN_EXCLUSION_ZONES)
+    return _VILANKULO_LAND_POLYGON.contains(pt)
 
 
 def _load_timeline_total_steps() -> int:

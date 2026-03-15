@@ -170,11 +170,11 @@ async def evaluate_risk(request: EvaluateRiskRequest) -> PersonRiskProfile:
     if person.destination is None:
         # Suggest a point away from the heaviest zones
         suggested.append(SuggestedDestination(
-            name="Goma North Assembly Point",
-            lat=-1.640,
-            lng=29.240,
+            name="Vilankulo Inland Assembly Point",
+            lat=-22.000,
+            lng=35.200,
             type="evacuation_center",
-            distance_from_origin_km=_distance_km(person.origin.lat, person.origin.lng, -1.640, 29.240),
+            distance_from_origin_km=_distance_km(person.origin.lat, person.origin.lng, -22.000, 35.200),
             clears_all_avoid_polygons=True,
         ))
 
