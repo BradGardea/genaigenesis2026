@@ -40,8 +40,8 @@ RELATIONSHIP_TYPES: tuple[RelationshipType, ...] = (
     "acquaintance",
 )
 
-BASE_LON = 29.222
-BASE_LAT = -1.679
+BASE_LON = -21.994847
+BASE_LAT = 35.324774
 PERSON_SCENARIO = "Severe storm evacuation support network"
 PERSON_SCENARIOS = [
     "Severe storm evacuation support network",
@@ -67,8 +67,8 @@ def random_seats_available() -> int:
 
 
 def random_position() -> tuple[float, float]:
-    # Small jitter around the Goma coordinate to keep people clustered.
-    lon = BASE_LON + random.uniform(-0.025, 0.025)
+    # Small jitter around the Goma coordinate: allow north/south and west only (clamp to <= BASE_LON).
+    lon = BASE_LON - abs(random.uniform(0.0, 0.025))
     lat = BASE_LAT + random.uniform(-0.025, 0.025)
     return (round(lon, 6), round(lat, 6))
 
@@ -109,7 +109,14 @@ def connect_people(people: list[dict[str, Any]], min_degree: int, max_degree: in
             if target_id in seen_targets:
                 continue
             seen_targets.add(target_id)
-            relation = random.choice(RELATIONSHIP_TYPES)
+            # Enforce rule: a person cannot have both dependents and guardians.
+            existing_rels = {c["relationship"] for c in person["connections"]}
+            allowed_relationships: list[RelationshipType] = list(RELATIONSHIP_TYPES)
+            if "dependent" in existing_rels:
+                allowed_relationships = [r for r in allowed_relationships if r != "guardian"]
+            if "guardian" in existing_rels:
+                allowed_relationships = [r for r in allowed_relationships if r != "dependent"]
+            relation = random.choice(allowed_relationships)
             person["connections"].append(
                 {"target_person_id": target_id, "relationship": relation}
             )
@@ -125,6 +132,19 @@ def connect_people(people: list[dict[str, Any]], min_degree: int, max_degree: in
                     )
 
 
+def _zero_seats_for_dependents(people: list[dict[str, Any]]) -> None:
+    """If a person is marked as a dependent (someone else is their guardian), they have no seats available."""
+    dependents: set[str] = set()
+    for person in people:
+        for connection in person["connections"]:
+            if connection["relationship"] == "guardian":
+                dependents.add(connection["target_person_id"])
+
+    for person in people:
+        if person["person_id"] in dependents:
+            person["seats_available"] = 0
+
+
 def build_payload(
     count: int,
     min_degree: int,
@@ -134,6 +154,7 @@ def build_payload(
     random.seed(seed)
     people = build_people(count)
     connect_people(people, min_degree=min_degree, max_degree=max_degree)
+    _zero_seats_for_dependents(people)
 
     generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     return {

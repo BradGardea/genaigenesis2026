@@ -95,7 +95,8 @@ function uniqueName(seen) {
 }
 
 function randomPosition() {
-  const lon = BASE_LON + (rand() * 0.05 - 0.025);
+  // North/south and west only: hard clamp to <= BASE_LON.
+  const lon = BASE_LON - Math.abs(rand() * 0.025);
   const lat = BASE_LAT + (rand() * 0.05 - 0.025);
   return [Number(lon.toFixed(6)), Number(lat.toFixed(6))];
 }
@@ -126,9 +127,19 @@ function connectPeople(people, minDegree, maxDegree) {
       picked.add(pick(targets));
     }
     for (const target of picked) {
+      // Enforce rule: if you have a dependent, you do not have a guardian (and vice versa).
+      const existing = new Set(person.connections.map((c) => c.relationship));
+      let choices = [...REL];
+      if (existing.has("dependent")) {
+        choices = choices.filter((r) => r !== "guardian");
+      }
+      if (existing.has("guardian")) {
+        choices = choices.filter((r) => r !== "dependent");
+      }
+
       person.connections.push({
         target_person_id: target.person_id,
-        relationship: pick(REL),
+        relationship: pick(choices),
       });
       if (rand() < 0.55 && !byId[target.person_id].connections.some((c) => c.target_person_id === person.person_id)) {
         byId[target.person_id].connections.push({
@@ -140,9 +151,26 @@ function connectPeople(people, minDegree, maxDegree) {
   }
 }
 
+function zeroSeatsForDependents(people) {
+  const dependents = new Set();
+  for (const person of people) {
+    for (const connection of person.connections) {
+      if (connection.relationship === "guardian") {
+        dependents.add(connection.target_person_id);
+      }
+    }
+  }
+  for (const person of people) {
+    if (dependents.has(person.person_id)) {
+      person.seats_available = 0;
+    }
+  }
+}
+
 function buildPayload() {
   const people = buildPeople(args.count);
   connectPeople(people, args.minDegree, args.maxDegree);
+  zeroSeatsForDependents(people);
   return {
     dataset_name: "goma_community_relationships_mock",
     version: "2.0",

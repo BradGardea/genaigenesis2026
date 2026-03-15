@@ -102,3 +102,18 @@ async def get_person_connections(person_ref: str) -> PersonConnectionsResponse:
         focal_person=focal_person,
         connections=_connection_nodes(focal_person),
     )
+
+
+async def get_first_person_connections() -> PersonConnectionsResponse:
+    """Convenience helper: return the first person in the dataset and their connections."""
+
+    payload = _graph_payload()
+    persons = payload.get("persons", [])
+    if not persons:
+        raise ValueError("No persons available in the dataset.")
+
+    first_person_id = persons[0].get("person_id")
+    if not first_person_id:
+        raise ValueError("First person entry is missing 'person_id'.")
+
+    return await get_person_connections(first_person_id)

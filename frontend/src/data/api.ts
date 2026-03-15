@@ -3,6 +3,7 @@ import {
   ConnectionCreatePayload,
   EvacuationPlan,
   InfoBubble,
+  PersonConnectionsResponse,
   SavedInformation,
   UserConnection,
   WeatherStepResponse,
@@ -72,4 +73,8 @@ export async function fetchCityStateNextStep(currStep: number): Promise<CityStat
   return fetchJson<CityStateStepResponse>(
     `/information/city-state/next-step?curr_step=${currStep}`
   );
+}
+
+export async function fetchFirstPersonConnections(): Promise<PersonConnectionsResponse> {
+  return fetchJson<PersonConnectionsResponse>("/connections/first");
 }

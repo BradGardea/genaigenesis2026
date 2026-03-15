@@ -1,13 +1,19 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FlatList, Image, Modal, Pressable, Text, View } from "react-native";
 import {
   DISASTER_STEP_INTERVAL_MINUTES,
   EvacuationPlan,
   InfoBubble,
   disasterStepsMock,
+  fetchFirstPersonConnections,
   URGENCY_CARD_COLORS,
   URGENCY_WEIGHT,
 } from "../data";
+import {
+  PersonConnectionsResponse,
+  PersonConnectionNode,
+  PersonSummary
+} from "../data/types";
 import { useDisasterDemo } from "../state/DisasterDemoContext";
 import { AppTheme } from "../types/theme";
 import VoiceWidget from "@/components/Audio";
@@ -94,6 +100,9 @@ export function InfoScreen({ theme }: InfoScreenProps) {
   } = useDisasterDemo();
   const [menuOpen, setMenuOpen] = useState(false);
   const [section, setSection] = useState<InfoSection>("alerts");
+  const [connectionsPayload, setConnectionsPayload] = useState<PersonConnectionsResponse | null>(null);
+  const [connectionsError, setConnectionsError] = useState<string | null>(null);
+  const [connectionsLoading, setConnectionsLoading] = useState(false);
   const stepHistoryNewestFirst = useMemo(() => [...stepHistory].reverse(), [stepHistory]);
   const latestStep = stepHistory[stepHistory.length - 1]?.step ?? disasterStepsMock[0];
   const referenceNowMs = new Date(latestStep.simulatedAt).getTime();
@@ -271,46 +280,93 @@ export function InfoScreen({ theme }: InfoScreenProps) {
     </View>
   );
 
-  const renderConnections = () => (
-    <View>
-      {stepHistoryNewestFirst.map(({ step, stepIndex }) => (
-        <View key={`connections-step-${stepIndex}`} className={`${commonCardClass} relative overflow-hidden`}>
-          <Text
-            className={`text-xs font-semibold uppercase ${getFreshnessColor(step.sectionUpdatedAt.connections)}`}
-          >
-            Step {stepIndex + 1} | fetched {formatTime(step.sectionUpdatedAt.connections)}
-          </Text>
-          {step.connections.length === 0 ? (
-            <Text className={`mt-3 ${isDark ? "text-slate-300" : "text-slate-700"}`}>No connections yet. Add one from Profile.</Text>
-          ) : (
-            step.connections.map((item) => (
-              <View key={`connections-step-${stepIndex}-${item.id}`} className={`mt-3 rounded-xl p-3 ${isDark ? "bg-slate-800" : "bg-slate-100"}`}>
-                <Text className={`text-base font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
-                  {item.contactPhone}
-                </Text>
-                <Text className={`mt-1 text-sm capitalize ${isDark ? "text-slate-300" : "text-slate-700"}`}>
-                  Relationship: {item.relationship}
-                </Text>
-                <Text className={`mt-1 text-sm ${isDark ? "text-slate-300" : "text-slate-700"}`}>
-                  Trust level: {item.trustLevel}
-                </Text>
-                <Text className={`mt-1 text-xs ${getFreshnessColor(item.updatedAt)}`}>
-                  Updated: {formatTime(item.updatedAt)}
-                </Text>
-              </View>
-            ))
-          )}
-          {stepIndex !== currentStepIndex ? (
-            <View
-              pointerEvents="none"
-              className="absolute inset-0 rounded-2xl"
-              style={{ backgroundColor: isDark ? "rgba(100,116,139,0.34)" : "rgba(148,163,184,0.28)" }}
-            />
-          ) : null}
-        </View>
-      ))}
+  useEffect(() => {
+    if (connectionsPayload || connectionsLoading) return;
+    setConnectionsLoading(true);
+    fetchFirstPersonConnections()
+      .then(setConnectionsPayload)
+      .catch((error: unknown) => {
+        setConnectionsError(error instanceof Error ? error.message : "Failed to load connections");
+      })
+      .finally(() => setConnectionsLoading(false));
+  }, [connectionsPayload, connectionsLoading]);
+
+  const renderPersonCard = (title: string, person: PersonSummary, accent?: string) => (
+    <View className={`mt-3 rounded-xl p-4 ${isDark ? "bg-slate-800" : "bg-slate-100"}`}>
+      <Text className={`text-xs font-semibold uppercase ${accent ?? (isDark ? "text-slate-300" : "text-slate-600")}`}>
+        {title}
+      </Text>
+      <Text className={`mt-1 text-lg font-semibold ${isDark ? "text-slate-50" : "text-slate-900"}`}>
+        {person.name}
+      </Text>
+      <Text className={`mt-1 text-sm ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+        Scenario: {person.scenario}
+      </Text>
+      <Text className={`mt-1 text-sm ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+        Seats available: {person.seats_available}
+      </Text>
+      <Text className={`mt-1 text-xs ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+        Position: {person.current_position[1].toFixed(3)}, {person.current_position[0].toFixed(3)}
+      </Text>
     </View>
   );
+
+  const renderConnections = () => {
+    const updatedAt = connectionsPayload?.metadata.generated_at ?? latestStep.sectionUpdatedAt.connections;
+
+    return (
+      <View>
+        <View className={`${commonCardClass} relative overflow-hidden`}>
+          <Text className={`text-xs font-semibold uppercase ${getFreshnessColor(updatedAt)}`}>
+            Updated {formatTime(updatedAt)}
+          </Text>
+
+          {connectionsLoading ? (
+            <Text className={`mt-3 ${isDark ? "text-slate-300" : "text-slate-700"}`}>Loading connections…</Text>
+          ) : connectionsError ? (
+            <Text className="mt-3 text-status-danger">Error: {connectionsError}</Text>
+          ) : connectionsPayload ? (
+            <>
+              {renderPersonCard("You", connectionsPayload.focal_person, isDark ? "text-emerald-200" : "text-emerald-700")}
+              <Text className={`mt-4 text-sm font-semibold uppercase ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+                Connections ({connectionsPayload.connections.length})
+              </Text>
+              {connectionsPayload.connections.length === 0 ? (
+                <Text className={`mt-2 ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                  No connections found in the graph.
+                </Text>
+              ) : (
+                connectionsPayload.connections.map((node: PersonConnectionNode, index: number) => (
+                  <View
+                    key={`connection-${node.person.person_id}-${index}`}
+                    className={`mt-3 rounded-xl p-3 ${isDark ? "bg-slate-900" : "bg-white"}`}
+                  >
+                    <Text className={`text-base font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
+                      {node.person.name}
+                    </Text>
+                    <Text className={`mt-1 text-sm capitalize ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+                      Relationship: {node.relationship}
+                    </Text>
+                    <Text className={`mt-1 text-sm ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+                      Seats available: {node.person.seats_available}
+                    </Text>
+                    <Text className={`mt-1 text-sm ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+                      Scenario: {node.person.scenario}
+                    </Text>
+                    <Text className={`mt-1 text-xs ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                      Position: {node.person.current_position[1].toFixed(3)}, {node.person.current_position[0].toFixed(3)}
+                    </Text>
+                  </View>
+                ))
+              )}
+            </>
+          ) : (
+            <Text className={`mt-3 ${isDark ? "text-slate-300" : "text-slate-700"}`}>No data available.</Text>
+          )}
+        </View>
+      </View>
+    );
+  };
 
   const renderSavedInformation = () => (
     <View>
