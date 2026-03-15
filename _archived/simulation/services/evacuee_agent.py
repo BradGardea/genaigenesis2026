@@ -103,7 +103,7 @@ class EvacueeAgent:
             tick=tick,
         )
 
-    _RE_EVAL_INTERVAL = 3  # force re-evaluation every N ticks for non-moving agents
+    _RE_EVAL_INTERVAL = 1  # force re-evaluation every N ticks for non-moving agents
 
     def _situation_changed(self, situation: AgentSituation) -> bool:
         """Check if the situation materially changed since last decision.

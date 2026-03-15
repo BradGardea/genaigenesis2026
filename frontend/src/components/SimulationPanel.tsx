@@ -55,7 +55,7 @@ const DEFAULT_CONFIG: SimulationConfig = {
   destination_lat: -22.000,
   destination_lng: 35.200,
   tick_interval_seconds: 1.5,
-  virtual_seconds_per_tick: 2400.0,
+  virtual_seconds_per_tick: 120.0,
   max_ticks: 72,
 };
 

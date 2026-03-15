@@ -78,6 +78,14 @@ export interface SimulationConfig {
   watsonx_model_id?: string;
 }
 
+export interface AgentEvent {
+  type: "depart" | "reroute" | "shelter_in_place" | "arrived";
+  agent_id: string;
+  reasoning?: string;
+  urgency?: number;
+  dest_name?: string;
+}
+
 export function createSimulation(config: SimulationConfig): Promise<{ sim_id: string; state: string; num_agents: number }> {
   return request("/simulation/create", { method: "POST", body: JSON.stringify(config) });
 }
@@ -99,6 +107,7 @@ export function subscribeToSimulation(
   onTick: (metrics: TickMetrics) => void,
   onHazard: (data: { hazard_id: string; tick: number; type: string }) => void,
   onEnd: () => void,
+  onAgentEvents?: (data: { tick: number; events: AgentEvent[] }) => void,
 ): () => void {
   const es = new EventSource(`${API_BASE}/simulation/${simId}/stream`);
 
@@ -107,6 +116,9 @@ export function subscribeToSimulation(
   });
   es.addEventListener("hazard_injected", (e: MessageEvent) => {
     try { onHazard(JSON.parse(e.data)); } catch { /* ignore */ }
+  });
+  es.addEventListener("agent_events", (e: MessageEvent) => {
+    try { onAgentEvents?.(JSON.parse(e.data)); } catch { /* ignore */ }
   });
   es.addEventListener("simulation_end", () => {
     es.close();

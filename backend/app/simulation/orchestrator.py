@@ -99,6 +99,7 @@ class SimulationOrchestrator:
         self._weather_cache: dict[tuple[float, float, int], str] = {}
         self._city_state_total_steps: int = _load_timeline_total_steps()
         self._city_state_cache: dict[int, dict] = {}
+        self._forced_reroute_injected: bool = False
 
         self._init_agents()
 
@@ -127,7 +128,7 @@ class SimulationOrchestrator:
 
             profile = EvacuationProfileInput(
                 family_size=random.randint(1, 5),
-                vehicles=random.randint(0, 2),
+                vehicles=random.randint(1, 2),
                 has_children=random.random() < 0.3,
                 has_elderly=random.random() < 0.2,
                 has_mobility_needs=random.random() < 0.1,
@@ -242,6 +243,46 @@ class SimulationOrchestrator:
         if city_state_step:
             self._inject_city_state_hazards(city_state_step, tick)
 
+        # 1d. For small sims, inject a hazard on an agent's route to force a reroute
+        if (
+            not self._forced_reroute_injected
+            and len(self.agents) < 10
+            and tick >= 4
+        ):
+            for a in self.agents:
+                if (
+                    a.state == AgentState.evacuating
+                    and a.route_geometry
+                    and 0.2 <= a.progress <= 0.6
+                ):
+                    pt = a.route_geometry.interpolate(0.7, normalized=True)
+                    report = HazardReport(
+                        hazard_type="roadblock",
+                        location=Coordinate(lng=pt.x, lat=pt.y),
+                        radius_meters=300,
+                        description=f"Road closure ahead of {a.agent_id}",
+                    )
+                    hazard_store.add_hazard(report)
+                    self._forced_reroute_injected = True
+                    a._situation_hash = ""
+                    logger.info(
+                        "Forced reroute hazard injected on %s route at tick %d (%.4f, %.4f)",
+                        a.agent_id, tick, pt.y, pt.x,
+                    )
+                    event = {
+                        "event": "hazard_injected",
+                        "data": {"hazard_id": report.id, "tick": tick, "type": "roadblock"},
+                    }
+                    self.event_log.append(event)
+                    for q in self._sse_queues:
+                        await q.put(event)
+                    break
+
+        # 1e. Clear per-tick flags and event buffers on all agents
+        for a in self.agents:
+            a.events_this_tick = []
+
+
         # 2. Fetch weather (cached per tick + rounded coords)
         weather_summary = await self._get_weather_for_tick(tick)
 
@@ -269,7 +310,7 @@ class SimulationOrchestrator:
 
         async def process_agent(agent: EvacueeAgent) -> int:
             async with _AGENT_SEMAPHORE:
-                decision = await agent.decide(tick, nearby_hazards, weather_summary)
+                decision = await agent.decide(tick, nearby_hazards, weather_summary, active_zones)
                 if decision:
                     await agent.apply_decision(
                         decision, compute_route, hazard_polygons, traffic_factor
@@ -285,11 +326,16 @@ class SimulationOrchestrator:
             if isinstance(r, int):
                 reroutes += r
 
-        # Process followers synchronously — no LLM call
+        # Process followers synchronously — only mirror fresh leader decisions
         leader_by_cluster = {a.cluster_id: a for a in leaders if a.cluster_id}
+        leader_decided_this_tick = {
+            a.cluster_id for a in leaders
+            if a.cluster_id and (a.rerouted_this_tick or a._last_decision_tick == tick)
+        }
         for follower in followers:
             leader = leader_by_cluster.get(follower.cluster_id)
-            if leader and leader.last_decision:
+            # Only apply leader decision on the tick the leader actually made one
+            if leader and leader.last_decision and follower.cluster_id in leader_decided_this_tick:
                 await follower.apply_leader_decision(
                     leader.last_decision,
                     compute_route,
@@ -319,6 +365,20 @@ class SimulationOrchestrator:
                 centroid_lat=sum(a.lat for a in members) / len(members),
                 centroid_lng=sum(a.lng for a in members) / len(members),
             ))
+
+        # 6b. Collect and broadcast agent activity events (capped at 50)
+        agent_events: list[dict] = []
+        for a in self.agents:
+            agent_events.extend(a.events_this_tick)
+        if agent_events:
+            if len(agent_events) > 50:
+                agent_events = agent_events[:50]
+            ae_event = {
+                "event": "agent_events",
+                "data": {"tick": tick, "events": agent_events},
+            }
+            for q in self._sse_queues:
+                await q.put(ae_event)
 
         # 7. Collect metrics
         tick_metrics = self.metrics.collect(
@@ -414,7 +474,7 @@ class SimulationOrchestrator:
         hazards: list[dict] = []
         for area in areas:
             impact_type = area.get("impact_type", "")
-            if impact_type in ("flooding", "road_closure", "debris", "structure_damage") and int(area.get("severity", 0)) >= 25:
+            if impact_type in ("road_closure", "flooding", "debris", "structure_damage") and int(area.get("severity", 0)) >= 25:
                 hazards.append({
                     "id": area.get("node_id", "unknown"),
                     "type": impact_type,
@@ -434,7 +494,7 @@ class SimulationOrchestrator:
         for area in areas:
             impact_type = area.get("impact_type", "")
             severity = int(area.get("severity", 0))
-            if impact_type not in ("flooding", "road_closure", "debris", "structure_damage") or severity < 25:
+            if impact_type not in ("road_closure", "flooding", "debris", "structure_damage") or severity < 25:
                 continue
             lat = area.get("lat")
             lon = area.get("lon")
@@ -446,8 +506,8 @@ class SimulationOrchestrator:
             if cache_key in self._city_state_cache:
                 continue
             self._city_state_cache[cache_key] = True
-            type_map = {"flooding": "flood", "road_closure": "roadblock", "debris": "debris", "structure_damage": "collapse"}
-            radius = float(area.get("radius_m", 200)) if impact_type == "road_closure" else 300.0
+            type_map = {"road_closure": "roadblock", "flooding": "flood", "debris": "debris", "structure_damage": "collapse"}
+            radius = float(area.get("radius_m", 200))
             report = HazardReport(
                 hazard_type=type_map.get(impact_type, "hazard"),
                 location=Coordinate(lng=float(lon), lat=float(lat)),

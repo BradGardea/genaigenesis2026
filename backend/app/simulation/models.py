@@ -50,7 +50,7 @@ class SimulationConfig(BaseModel):
     destination_lng: float = Field(default=35.200)
     # Tick configuration
     tick_interval_seconds: float = Field(ge=0.1, default=2.0, description="Real-world sleep between ticks (seconds)")
-    virtual_seconds_per_tick: float = Field(ge=1.0, default=600.0, description="Simulated travel time per tick (seconds)")
+    virtual_seconds_per_tick: float = Field(ge=1.0, default=120.0, description="Simulated travel time per tick (seconds)")
     max_ticks: int = Field(ge=1, le=1000, default=72)
     # Scheduled hazards
     hazard_schedule: list[ScheduledHazard] = Field(default_factory=list)

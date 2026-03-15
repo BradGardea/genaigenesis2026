@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  AgentEvent,
   AgentSnapshot,
   SimState,
   SimulationConfig,
@@ -19,6 +20,7 @@ export interface SimulationControls {
   metrics: TickMetrics | null;
   currentTick: number;
   maxTicks: number;
+  agentEvents: AgentEvent[];
   createAndStart: (config: SimulationConfig) => Promise<void>;
   stop: () => Promise<void>;
   error: string | null;
@@ -31,6 +33,7 @@ export function useSimulation(): SimulationControls {
   const [metrics, setMetrics] = useState<TickMetrics | null>(null);
   const [currentTick, setCurrentTick] = useState(0);
   const [maxTicks, setMaxTicks] = useState(72);
+  const [agentEvents, setAgentEvents] = useState<AgentEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const unsubRef = useRef<(() => void) | null>(null);
@@ -78,6 +81,7 @@ export function useSimulation(): SimulationControls {
       setAgents([]);
       setMetrics(null);
       setCurrentTick(0);
+      setAgentEvents([]);
 
       const { sim_id } = await createSimulation(config);
       setSimId(sim_id);
@@ -98,6 +102,12 @@ export function useSimulation(): SimulationControls {
         () => {
           setSimState("completed");
           stopPolling();
+        },
+        (data) => {
+          setAgentEvents((prev) => {
+            const merged = [...data.events, ...prev];
+            return merged.length > 200 ? merged.slice(0, 200) : merged;
+          });
         },
       );
       unsubRef.current = unsub;
@@ -121,5 +131,5 @@ export function useSimulation(): SimulationControls {
     }
   }, [simId, stopPolling]);
 
-  return { simId, simState, agents, metrics, currentTick, maxTicks, createAndStart, stop, error };
+  return { simId, simState, agents, metrics, currentTick, maxTicks, agentEvents, createAndStart, stop, error };
 }

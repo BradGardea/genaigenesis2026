@@ -15,6 +15,7 @@ import {
 } from "../services/api";
 import { ReportHazardModal } from "../components/ReportHazardModal";
 import { SimulationPanel, type DisasterBbox } from "../components/SimulationPanel";
+import { AgentActivityFeed } from "../components/AgentActivityFeed";
 import { useSimulation } from "../hooks/useSimulation";
 import {
   WeatherLayerOverlay,
@@ -55,11 +56,11 @@ const EVAC_POINTS_LAYER = "evac-points-symbol";
 const EVAC_POINTS_RING_LAYER = "evac-points-ring";
 
 const EVACUATION_POINTS = [
-  { name: "EN1 Highway North Assembly", lat: -21.945, lng: 35.255, type: "field", capacity: 800 },
-  { name: "Mapinhane Junction (EN1)", lat: -22.040, lng: 35.260, type: "government", capacity: 400 },
-  { name: "Vilankulo West School", lat: -21.990, lng: 35.248, type: "school", capacity: 500 },
-  { name: "Pambarra Community Grounds", lat: -21.965, lng: 35.230, type: "field", capacity: 1200 },
-  { name: "EN1 South Crossroads Assembly", lat: -22.060, lng: 35.280, type: "field", capacity: 600 },
+  { name: "North Assembly", lat: -21.96057, lng: 35.29959, type: "field", capacity: 800 },
+  { name: "Northwest Junction", lat: -21.97286, lng: 35.28916, type: "government", capacity: 500 },
+  { name: "West Inland Assembly", lat: -21.99236, lng: 35.26070, type: "field", capacity: 400 },
+  { name: "Southwest Assembly", lat: -22.00801, lng: 35.27525, type: "field", capacity: 1200 },
+  { name: "South Coastal Assembly", lat: -22.03504, lng: 35.31516, type: "government", capacity: 600 },
 ];
 
 const CLUSTER_PALETTE = [
@@ -338,6 +339,7 @@ export function MapScreen({ theme }: MapScreenProps) {
     metrics: simMetrics,
     currentTick: simTick,
     maxTicks: simMaxTicks,
+    agentEvents: simAgentEvents,
     createAndStart: simCreateAndStart,
     stop: simStop,
     error: simError,
@@ -504,6 +506,7 @@ export function MapScreen({ theme }: MapScreenProps) {
         state: agent.state,
         cluster_id: agent.cluster_id ?? "",
         cluster_color: (agent.cluster_id && clusterColorMap.get(agent.cluster_id)) || "#94A3B8",
+        is_rerouted: agent.last_decision?.action === "reroute" ? 1 : 0,
       },
     }));
     source.setData({ type: "FeatureCollection", features });
@@ -671,17 +674,7 @@ export function MapScreen({ theme }: MapScreenProps) {
             "heatmap-opacity": 0.85,
           },
         });
-        map.addLayer({
-          id: CITY_STATE_LABEL_LAYER,
-          type: "symbol",
-          source: CITY_STATE_SOURCE,
-          layout: {
-            "text-field": ["get", "icon"],
-            "text-size": 12,
-            "text-offset": [0, 0],
-            "text-allow-overlap": true,
-          },
-        });
+        // City-state label layer removed (W/N letters were visual noise)
         map.on("click", CITY_STATE_LAYER, (e) => {
           if (!e.features?.length) return;
           const props = e.features[0].properties ?? {};
@@ -819,9 +812,21 @@ export function MapScreen({ theme }: MapScreenProps) {
           type: "line",
           source: SIM_ROUTES_SOURCE,
           paint: {
-            "line-color": ["get", "cluster_color"],
-            "line-width": 2.5,
-            "line-opacity": 0.45,
+            "line-color": [
+              "case",
+              ["==", ["get", "is_rerouted"], 1], "#FBBF24",
+              ["get", "cluster_color"],
+            ],
+            "line-width": [
+              "case",
+              ["==", ["get", "is_rerouted"], 1], 3.5,
+              2.5,
+            ],
+            "line-opacity": [
+              "case",
+              ["==", ["get", "is_rerouted"], 1], 0.8,
+              0.45,
+            ],
             "line-dasharray": [4, 2],
           },
           layout: { "line-cap": "round", "line-join": "round" },
@@ -889,23 +894,7 @@ export function MapScreen({ theme }: MapScreenProps) {
             "circle-opacity": 1.0,
           },
         });
-        map.addLayer({
-          id: SIM_AGENTS_LABEL_LAYER,
-          type: "symbol",
-          source: SIM_AGENTS_SOURCE,
-          layout: {
-            "text-field": ["get", "label"],
-            "text-size": 9,
-            "text-offset": [0, 1.4],
-            "text-allow-overlap": false,
-            "text-ignore-placement": false,
-          },
-          paint: {
-            "text-color": "#f8fafc",
-            "text-halo-color": "#0f172a",
-            "text-halo-width": 1,
-          },
-        });
+        // Agent label layer removed (numbers on dots were visual noise)
         map.on("click", SIM_AGENTS_LAYER, (e) => {
           if (!e.features?.length) return;
           const p = e.features[0].properties ?? {};
@@ -1913,9 +1902,15 @@ export function MapScreen({ theme }: MapScreenProps) {
             mapLoaded={mapIsLoaded}
           />
         </View>
+        {/* Agent activity sidebar — right */}
+        {(simState === "running" || simState === "completed") && (
+          <View style={{ width: 280 }}>
+            <AgentActivityFeed theme={theme} events={simAgentEvents} />
+          </View>
+        )}
       </View>
 
-      {/* â”€â”€ Report Hazard Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/*â”€â”€ Report Hazard Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <ReportHazardModal
         visible={hazardModalVisible}
         onClose={() => {

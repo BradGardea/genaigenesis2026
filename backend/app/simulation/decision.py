@@ -60,7 +60,7 @@ def _build_user_prompt(situation: AgentSituation) -> str:
     return " ".join(parts)
 
 
-def _rule_based_decision(situation: AgentSituation) -> AgentDecision:
+def _rule_based_decision(situation: AgentSituation) -> AgentDecision | None:
     """Deterministic fallback when watsonx is unavailable."""
     # If already evacuating and hazard nearby → reroute
     if situation.state.value == "evacuating" and situation.nearby_hazards:
@@ -97,15 +97,14 @@ def _rule_based_decision(situation: AgentSituation) -> AgentDecision:
             urgency=4,
         )
 
-    # Default: depart if idle, otherwise continue
+    # Default: depart if idle
     if situation.state.value == "idle":
         return AgentDecision(
             action="depart", reasoning="No immediate threats — departing", urgency=3
         )
 
-    return AgentDecision(
-        action="wait", reasoning="Continuing current plan", urgency=2
-    )
+    # Already evacuating with no issues — keep moving, no new decision needed
+    return None
 
 
 def _parse_decision(text: str) -> AgentDecision | None:

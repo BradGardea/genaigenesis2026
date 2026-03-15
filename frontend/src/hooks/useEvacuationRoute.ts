@@ -46,7 +46,7 @@ export function useEvacuationRoute(
   // SSE subscription helper stored in a ref so it can recursively re-subscribe
   // when a reroute produces a new route_id.
   // ---------------------------------------------------------------------------
-  const setupSSERef = useRef<(routeId: string) => void>();
+  const setupSSERef = useRef<(routeId: string) => void>(undefined);
 
   setupSSERef.current = (routeId: string) => {
     esRef.current?.close();
