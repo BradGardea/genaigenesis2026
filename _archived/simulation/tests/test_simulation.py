@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.models.routing import Coordinate, EvacuationProfileInput
-from app.simulation.models import (
+from app.schemas.simulation_models import (
     AgentDecision,
     AgentSituation,
     AgentState,
@@ -17,9 +17,9 @@ from app.simulation.models import (
     SimulationState,
     TickMetrics,
 )
-from app.simulation.evacuee import EvacueeAgent
-from app.simulation.metrics import MetricsCollector
-from app.simulation.clock import SimulationClock
+from app.services.evacuee_agent import EvacueeAgent
+from app.services.metrics_collector import MetricsCollector
+from app.services.simulation_clock import SimulationClock
 
 
 # ── SimulationClock tests ──────────────────────────────────
@@ -90,7 +90,7 @@ class TestEvacueeAgent:
     async def test_decide_idle_no_hazards(self):
         """Idle agent with no hazards should decide to depart (rule-based)."""
         agent = self._make_agent()
-        with patch("app.simulation.decision.settings") as mock_settings:
+        with patch("app.providers.watsonx_client.settings") as mock_settings:
             mock_settings.watsonx_api_key = ""  # Force rule-based
             decision = await agent.decide(tick=1, nearby_hazards=[], weather_summary="")
         assert decision is not None
@@ -100,7 +100,7 @@ class TestEvacueeAgent:
     async def test_decide_idle_with_hazard(self):
         """Idle agent near hazard should depart urgently."""
         agent = self._make_agent()
-        with patch("app.simulation.decision.settings") as mock_settings:
+        with patch("app.providers.watsonx_client.settings") as mock_settings:
             mock_settings.watsonx_api_key = ""
             decision = await agent.decide(
                 tick=1,
@@ -213,12 +213,12 @@ class TestMetricsCollector:
         return agent
 
 
-# ── Decision function tests ──────────────────────────────────
+# ── watsonx client tests ──────────────────────────────────
 
 
-class TestDecisionFunctions:
+class TestWatsonxClient:
     def test_parse_decision_valid(self):
-        from app.simulation.decision import _parse_decision
+        from app.providers.watsonx_client import _parse_decision
 
         text = '{"action": "depart", "reasoning": "hazard nearby", "urgency": 8}'
         decision = _parse_decision(text)
@@ -227,7 +227,7 @@ class TestDecisionFunctions:
         assert decision.urgency == 8
 
     def test_parse_decision_with_markdown(self):
-        from app.simulation.decision import _parse_decision
+        from app.providers.watsonx_client import _parse_decision
 
         text = '```json\n{"action": "reroute", "reasoning": "blocked", "urgency": 7}\n```'
         decision = _parse_decision(text)
@@ -235,13 +235,13 @@ class TestDecisionFunctions:
         assert decision.action == "reroute"
 
     def test_parse_decision_invalid(self):
-        from app.simulation.decision import _parse_decision
+        from app.providers.watsonx_client import _parse_decision
 
         assert _parse_decision("not json at all") is None
         assert _parse_decision('{"wrong_key": "value"}') is None
 
     def test_rule_based_idle_no_hazards(self):
-        from app.simulation.decision import _rule_based_decision
+        from app.providers.watsonx_client import _rule_based_decision
 
         situation = AgentSituation(
             agent_id="a", state=AgentState.idle, lat=0, lng=0
@@ -250,7 +250,7 @@ class TestDecisionFunctions:
         assert decision.action == "depart"
 
     def test_rule_based_evacuating_with_hazard(self):
-        from app.simulation.decision import _rule_based_decision
+        from app.providers.watsonx_client import _rule_based_decision
 
         situation = AgentSituation(
             agent_id="a",
@@ -262,7 +262,7 @@ class TestDecisionFunctions:
         assert decision.action == "reroute"
 
     def test_rule_based_severe_weather(self):
-        from app.simulation.decision import _rule_based_decision
+        from app.providers.watsonx_client import _rule_based_decision
 
         situation = AgentSituation(
             agent_id="a",
@@ -274,7 +274,7 @@ class TestDecisionFunctions:
         assert decision.action == "shelter_in_place"
 
     def test_prompt_construction(self):
-        from app.simulation.decision import _build_user_prompt
+        from app.providers.watsonx_client import _build_user_prompt
 
         situation = AgentSituation(
             agent_id="a",
@@ -322,15 +322,15 @@ class TestSimulationIntegration:
             ],
         )
 
-        with patch("app.simulation.orchestrator.compute_route", new_callable=AsyncMock) as mock_compute, \
-             patch("app.simulation.orchestrator.SimulationOrchestrator._get_weather_for_tick", new_callable=AsyncMock) as mock_weather, \
-             patch("app.simulation.decision.settings") as mock_settings:
+        with patch("app.services.simulation_orchestrator.compute_route", new_callable=AsyncMock) as mock_compute, \
+             patch("app.services.simulation_orchestrator.SimulationOrchestrator._get_weather_for_tick", new_callable=AsyncMock) as mock_weather, \
+             patch("app.providers.watsonx_client.settings") as mock_settings:
 
             mock_compute.return_value = mock_route
             mock_weather.return_value = "Clear skies"
             mock_settings.watsonx_api_key = ""
 
-            from app.simulation.orchestrator import SimulationOrchestrator
+            from app.services.simulation_orchestrator import SimulationOrchestrator
 
             orch = SimulationOrchestrator("test-sim", config)
             assert len(orch.agents) == 2
