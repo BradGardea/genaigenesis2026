@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -8,6 +8,16 @@ import { MapScreen } from "../screens/MapScreen";
 import { ProfileScreen } from "../screens/ProfileScreen";
 import { useDisasterDemo } from "../state/DisasterDemoContext";
 import { AppTheme } from "../types/theme";
+
+// Metro bundles mp3 as { uri: string } on web; resolve to a usable URL.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const alarmAsset = require("../assets/alarm.mp3");
+const alarmSrc: string =
+  typeof alarmAsset === "string"
+    ? alarmAsset
+    : typeof alarmAsset === "number"
+      ? String(alarmAsset)
+      : (alarmAsset as any)?.uri ?? (alarmAsset as any)?.default ?? "";
 
 type TabKey = "info" | "map" | "profile";
 type TabIconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
@@ -31,6 +41,8 @@ export function AppTabs() {
     isStepping,
     stepDisaster,
     latestHighRiskAlert,
+    disasterStarted,
+    startDisaster,
   } = useDisasterDemo();
   const [isPlaying, setIsPlaying] = useState(false);
   const [visibleAlertBanner, setVisibleAlertBanner] = useState<{
@@ -39,9 +51,45 @@ export function AppTabs() {
     urgency: string;
     stepLabel: string;
   } | null>(null);
+  const [countdown, setCountdown] = useState<number | null>(null);
 
   const insets = useSafeAreaInsets();
   const isDark = theme === "dark";
+
+  const handleStartDisaster = useCallback(() => {
+    if (disasterStarted || countdown !== null) return;
+    setCountdown(10);
+  }, [disasterStarted, countdown]);
+
+  // Countdown timer tick
+  useEffect(() => {
+    if (countdown === null) return;
+    if (countdown <= 0) {
+      // Timer done — play alarm, show notification, start disaster
+      try {
+        const audio = new Audio(alarmSrc);
+        audio.play().catch(() => {});
+        // Stop alarm after 5 seconds
+        setTimeout(() => { audio.pause(); audio.currentTime = 0; }, 5000);
+      } catch { /* ignore audio errors */ }
+
+      setVisibleAlertBanner({
+        id: "disaster-start-warning",
+        title:
+          "Severe typhoon warning. Extreme flooding warning. Please follow your evacuation instructions to get to safety as soon as possible, we are coordinating with your connections.",
+        urgency: "extreme urgency alert",
+        stepLabel: "EMERGENCY",
+      });
+      setTimeout(() => setVisibleAlertBanner(null), 8000);
+
+      startDisaster();
+      setCountdown(null);
+      return;
+    }
+
+    const tick = setTimeout(() => setCountdown((c) => (c !== null ? c - 1 : null)), 1000);
+    return () => clearTimeout(tick);
+  }, [countdown, startDisaster]);
 
   useEffect(() => {
     if (!isPlaying) return;
@@ -139,64 +187,98 @@ export function AppTabs() {
         className="absolute left-4 flex-row gap-2"
         style={{ bottom: Math.max(insets.bottom, 6) + 64 }}
       >
-        <Pressable
-          className={`rounded-xl border px-4 py-2 ${
-            isFinalStep
-              ? isDark
-                ? "border-slate-700 bg-slate-800"
-                : "border-slate-300 bg-slate-200"
-              : isDark
-                ? "border-rose-700 bg-rose-900"
-                : "border-rose-300 bg-rose-50"
-          }`}
-          disabled={isFinalStep}
-          onPress={() => setIsPlaying((p) => !p)}
-        >
-          <Text
-            className={`text-xs font-semibold select-none ${
-              isFinalStep
+        {!disasterStarted ? (
+          <Pressable
+            className={`rounded-xl border px-4 py-2 ${
+              countdown !== null
                 ? isDark
-                  ? "text-slate-300"
-                  : "text-slate-600"
+                  ? "border-amber-700 bg-amber-900"
+                  : "border-amber-400 bg-amber-50"
                 : isDark
-                  ? "text-rose-100"
-                  : "text-rose-700"
+                  ? "border-red-700 bg-red-900"
+                  : "border-red-300 bg-red-50"
             }`}
+            disabled={countdown !== null}
+            onPress={handleStartDisaster}
           >
-            {isFinalStep ? "Done" : isPlaying ? "⏸ Pause" : "▶ Play"}
-          </Text>
-        </Pressable>
-        <Pressable
-          className={`rounded-xl border px-4 py-2 ${
-            isFinalStep || isStepping || isPlaying
-              ? isDark
-                ? "border-slate-700 bg-slate-800"
-                : "border-slate-300 bg-slate-200"
-              : isDark
-                ? "border-rose-700 bg-rose-900"
-                : "border-rose-300 bg-rose-50"
-          }`}
-          disabled={isFinalStep || isStepping || isPlaying}
-          onPress={() => {
-            void stepDisaster({ beautify: activeTab !== "map" });
-          }}
-        >
-          <Text
-            className={`text-xs font-semibold select-none ${
-              isFinalStep || isStepping || isPlaying
-                ? isDark
-                  ? "text-slate-300"
-                  : "text-slate-600"
-                : isDark
-                  ? "text-rose-100"
-                  : "text-rose-700"
-            }`}
-          >
-            {isStepping
-              ? "..."
-              : `→ Step (${Math.min(currentStepIndex + 1, totalSteps)}/${totalSteps})`}
-          </Text>
-        </Pressable>
+            <Text
+              className={`text-xs font-bold select-none ${
+                countdown !== null
+                  ? isDark
+                    ? "text-amber-100"
+                    : "text-amber-800"
+                  : isDark
+                    ? "text-red-100"
+                    : "text-red-700"
+              }`}
+            >
+              {countdown !== null
+                ? `⚠ Alert in ${countdown}s...`
+                : "⚠ Start Disaster"}
+            </Text>
+          </Pressable>
+        ) : (
+          <>
+            <Pressable
+              className={`rounded-xl border px-4 py-2 ${
+                isFinalStep
+                  ? isDark
+                    ? "border-slate-700 bg-slate-800"
+                    : "border-slate-300 bg-slate-200"
+                  : isDark
+                    ? "border-rose-700 bg-rose-900"
+                    : "border-rose-300 bg-rose-50"
+              }`}
+              disabled={isFinalStep}
+              onPress={() => setIsPlaying((p) => !p)}
+            >
+              <Text
+                className={`text-xs font-semibold select-none ${
+                  isFinalStep
+                    ? isDark
+                      ? "text-slate-300"
+                      : "text-slate-600"
+                    : isDark
+                      ? "text-rose-100"
+                      : "text-rose-700"
+                }`}
+              >
+                {isFinalStep ? "Done" : isPlaying ? "⏸ Pause" : "▶ Play"}
+              </Text>
+            </Pressable>
+            <Pressable
+              className={`rounded-xl border px-4 py-2 ${
+                isFinalStep || isStepping || isPlaying
+                  ? isDark
+                    ? "border-slate-700 bg-slate-800"
+                    : "border-slate-300 bg-slate-200"
+                  : isDark
+                    ? "border-rose-700 bg-rose-900"
+                    : "border-rose-300 bg-rose-50"
+              }`}
+              disabled={isFinalStep || isStepping || isPlaying}
+              onPress={() => {
+                void stepDisaster({ beautify: activeTab !== "map" });
+              }}
+            >
+              <Text
+                className={`text-xs font-semibold select-none ${
+                  isFinalStep || isStepping || isPlaying
+                    ? isDark
+                      ? "text-slate-300"
+                      : "text-slate-600"
+                    : isDark
+                      ? "text-rose-100"
+                      : "text-rose-700"
+                }`}
+              >
+                {isStepping
+                  ? "..."
+                  : `Step Disaster (${Math.min(currentStepIndex + 1, totalSteps)}/${totalSteps})`}
+              </Text>
+            </Pressable>
+          </>
+        )}
       </View>
 
       <View

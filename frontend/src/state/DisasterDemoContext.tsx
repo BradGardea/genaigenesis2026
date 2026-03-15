@@ -12,7 +12,7 @@ import {
   fetchWeatherCurrentStep,
   fetchWeatherNextStep,
 } from "../data/api";
-import { disasterStepsMock } from "../data/mock/disasterSteps";
+import { DisasterStepData, disasterStepsMock } from "../data/mock/disasterSteps";
 import {
   CityStateStepResponse,
   URGENCY_WEIGHT,
@@ -74,6 +74,8 @@ interface DisasterDemoContextValue {
     title: string;
     urgency: string;
   } | null;
+  disasterStarted: boolean;
+  startDisaster: () => void;
   stepDisaster: (options?: { beautify?: boolean }) => Promise<void>;
   markSectionSeen: (
     section: keyof (typeof disasterStepsMock)[number]["updateSummary"],
@@ -191,12 +193,37 @@ function applyCityStatePayloadToStep(
   };
 }
 
+const EMPTY_STEP: DisasterStepData = {
+  id: "step-idle",
+  simulatedAt: new Date().toISOString(),
+  alerts: [],
+  evacuationPlans: [],
+  connections: [],
+  savedInformation: [],
+  weather: [],
+  sectionUpdatedAt: {
+    alerts: "",
+    evacuationPlans: "",
+    connections: "",
+    savedInformation: "",
+    weather: "",
+  },
+  updateSummary: {
+    alerts: 0,
+    evacuationPlans: 0,
+    connections: 0,
+    savedInformation: 0,
+    weather: 0,
+  },
+};
+
 export function DisasterDemoProvider({ children }: { children: ReactNode }) {
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [disasterStarted, setDisasterStarted] = useState(false);
+  const [currentStepIndex, setCurrentStepIndex] = useState(-1);
   const [totalSteps, setTotalSteps] = useState(disasterStepsMock.length);
   const [stepHistory, setStepHistory] = useState<
     { stepIndex: number; step: (typeof disasterStepsMock)[number] }[]
-  >([{ stepIndex: 0, step: disasterStepsMock[0] }]);
+  >([{ stepIndex: -1, step: EMPTY_STEP }]);
   const [unreadBySection, setUnreadBySection] = useState<
     (typeof disasterStepsMock)[number]["updateSummary"]
   >({
@@ -223,7 +250,7 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
     unknown
   > | null>(null);
   const currentStep =
-    stepHistory[stepHistory.length - 1]?.step ?? disasterStepsMock[0];
+    stepHistory[stepHistory.length - 1]?.step ?? EMPTY_STEP;
   const isFinalStep = currentStepIndex >= totalSteps - 1;
   const unreadUpdates = Object.values(unreadBySection).reduce(
     (sum, count) => sum + count,
@@ -231,6 +258,8 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
+    if (!disasterStarted) return;
+
     let cancelled = false;
 
     async function loadInitialWeatherStep() {
@@ -254,6 +283,7 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
             cityPayload.step.total_steps,
           );
         }
+        setCurrentStepIndex(0);
         setStepHistory((previous) => {
           if (previous.length === 0) {
             return previous;
@@ -267,8 +297,30 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
             weatherPatched,
             cityPayload,
           );
+          // Inject the emergency warning alert at the top of step 0
+          const now = new Date().toISOString();
+          const emergencyAlert = {
+            id: "emergency-warning-0",
+            title: "Severe typhoon warning. Extreme flooding warning.",
+            details:
+              "Please follow your evacuation instructions to get to safety as soon as possible, we are coordinating with your connections.",
+            urgency: "extreme urgency alert" as const,
+            category: "evacuation" as const,
+            occurredAt: now,
+            updatedAt: now,
+            area: "Vilankulo, Mozambique",
+            source: "CrisisNet Emergency System",
+          };
+          const stepWithAlert = {
+            ...updatedInitialStep,
+            alerts: [emergencyAlert, ...updatedInitialStep.alerts],
+            updateSummary: {
+              ...updatedInitialStep.updateSummary,
+              alerts: updatedInitialStep.updateSummary.alerts + 1,
+            },
+          };
           return [
-            { stepIndex: 0, step: updatedInitialStep },
+            { stepIndex: 0, step: stepWithAlert },
             ...previous.slice(1),
           ];
         });
@@ -285,7 +337,7 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [disasterStarted]);
 
   const weatherZones = useMemo(
     () => (currentStepRaw ? buildStormZones(currentStepRaw) : null),
@@ -326,6 +378,8 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
       unreadUpdates,
       isFinalStep,
       isStepping,
+      disasterStarted,
+      startDisaster: () => setDisasterStarted(true),
       weatherDatasetMetadata,
       weatherZones,
       stormState,
@@ -420,6 +474,7 @@ export function DisasterDemoProvider({ children }: { children: ReactNode }) {
       currentStepIndex,
       totalSteps,
       isStepping,
+      disasterStarted,
       isFinalStep,
       latestHighRiskAlert,
       stepHistory,

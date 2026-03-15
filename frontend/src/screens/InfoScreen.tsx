@@ -95,7 +95,10 @@ export function InfoScreen({ theme }: InfoScreenProps) {
   } = useDisasterDemo();
   const [menuOpen, setMenuOpen] = useState(false);
   const [section, setSection] = useState<InfoSection>("alerts");
-  const stepHistoryNewestFirst = useMemo(() => [...stepHistory].reverse(), [stepHistory]);
+  const stepHistoryNewestFirst = useMemo(
+    () => [...stepHistory].filter(({ stepIndex }) => stepIndex >= 0).reverse(),
+    [stepHistory],
+  );
   const latestStep = stepHistory[stepHistory.length - 1]?.step ?? disasterStepsMock[0];
   const referenceNowMs = new Date(latestStep.simulatedAt).getTime();
 
