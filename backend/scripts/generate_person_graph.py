@@ -68,8 +68,8 @@ def random_seats_available() -> int:
 
 def random_position() -> tuple[float, float]:
     # Small jitter around the Goma coordinate: allow north/south and west only (clamp to <= BASE_LON).
-    lon = BASE_LON - abs(random.uniform(0.0, 0.025))
-    lat = BASE_LAT + random.uniform(-0.025, 0.025)
+    lon = BASE_LON + random.uniform(-0.025, 0.025)
+    lat = BASE_LAT - abs(random.uniform(0.0, 0.025))
     return (round(lon, 6), round(lat, 6))
 
 

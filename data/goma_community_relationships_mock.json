@@ -1,7 +1,7 @@
 {
   "dataset_name": "goma_community_relationships_mock",
   "version": "2.0",
-  "generated_at": "2026-03-15T01:38:21+00:00",
+  "generated_at": "2026-03-15T02:09:29+00:00",
   "scenario_note": "Algorithmically generated many-to-many social connections for evacuation and carpool planning near Goma, DR Congo, using American-style names.",
   "scenario": "Severe storm evacuation support network",
   "location": {
@@ -27,8 +27,8 @@
       "seats_available": 0,
       "scenario": "Volcanic ash avoidance and mutual aid",
       "current_position": [
-        -22.000427,
-        35.336598
+        -22.008686,
+        35.306362
       ],
       "connections": [
         {
@@ -59,8 +59,8 @@
       "seats_available": 2,
       "scenario": "Severe storm evacuation support network",
       "current_position": [
-        -21.997189,
-        35.311407
+        -22.015162,
+        35.318957
       ],
       "connections": [
         {
@@ -103,8 +103,8 @@
       "seats_available": 0,
       "scenario": "Wildfire smoke relocation carpool",
       "current_position": [
-        -22.005335,
-        35.322234
+        -21.998871,
+        35.313544
       ],
       "connections": [
         {
@@ -139,8 +139,8 @@
       "seats_available": 0,
       "scenario": "Volcanic ash avoidance and mutual aid",
       "current_position": [
-        -22.0123,
-        35.316787
+        -21.98494,
+        35.316268
       ],
       "connections": [
         {
@@ -179,8 +179,8 @@
       "seats_available": 0,
       "scenario": "Flooded roads rideshare coordination",
       "current_position": [
-        -21.997402,
-        35.31877
+        -22.014736,
+        35.315276
       ],
       "connections": [
         {
@@ -227,8 +227,8 @@
       "seats_available": 0,
       "scenario": "Flooded roads rideshare coordination",
       "current_position": [
-        -22.015025,
-        35.336261
+        -21.979491,
+        35.306531
       ],
       "connections": [
         {
@@ -267,8 +267,8 @@
       "seats_available": 0,
       "scenario": "Severe storm evacuation support network",
       "current_position": [
-        -22.008648,
-        35.341244
+        -21.992245,
+        35.304039
       ],
       "connections": [
         {
@@ -307,8 +307,8 @@
       "seats_available": 0,
       "scenario": "Severe storm evacuation support network",
       "current_position": [
-        -21.995993,
-        35.311169
+        -22.017556,
+        35.319077
       ],
       "connections": [
         {
@@ -371,8 +371,8 @@
       "seats_available": 0,
       "scenario": "Severe storm evacuation support network",
       "current_position": [
-        -22.00435,
-        35.322445
+        -22.000841,
+        35.313439
       ],
       "connections": [
         {
@@ -415,8 +415,8 @@
       "seats_available": 2,
       "scenario": "Volcanic ash avoidance and mutual aid",
       "current_position": [
-        -22.011601,
-        35.334865
+        -21.986338,
+        35.307228
       ],
       "connections": [
         {
@@ -463,8 +463,8 @@
       "seats_available": 3,
       "scenario": "Wildfire smoke relocation carpool",
       "current_position": [
-        -22.013075,
-        35.307944
+        -21.983391,
+        35.320689
       ],
       "connections": [
         {
@@ -515,8 +515,8 @@
       "seats_available": 0,
       "scenario": "Wildfire smoke relocation carpool",
       "current_position": [
-        -22.000337,
-        35.315988
+        -22.008866,
+        35.316667
       ],
       "connections": [
         {
@@ -555,8 +555,8 @@
       "seats_available": 0,
       "scenario": "Flooded roads rideshare coordination",
       "current_position": [
-        -22.004876,
-        35.303083
+        -21.999789,
+        35.323119
       ],
       "connections": [
         {
@@ -603,8 +603,8 @@
       "seats_available": 3,
       "scenario": "Power outage welfare checks and pooling",
       "current_position": [
-        -22.016964,
-        35.331917
+        -21.975613,
+        35.308703
       ],
       "connections": [
         {
@@ -647,8 +647,8 @@
       "seats_available": 0,
       "scenario": "Wildfire smoke relocation carpool",
       "current_position": [
-        -22.008321,
-        35.337125
+        -21.992898,
+        35.306099
       ],
       "connections": [
         {
@@ -711,8 +711,8 @@
       "seats_available": 0,
       "scenario": "Flooded roads rideshare coordination",
       "current_position": [
-        -22.00033,
-        35.349651
+        -22.008881,
+        35.299836
       ],
       "connections": [
         {
@@ -747,8 +747,8 @@
       "seats_available": 0,
       "scenario": "Severe storm evacuation support network",
       "current_position": [
-        -21.998668,
-        35.307773
+        -22.012205,
+        35.320774
       ],
       "connections": [
         {
@@ -795,8 +795,8 @@
       "seats_available": 0,
       "scenario": "Power outage welfare checks and pooling",
       "current_position": [
-        -22.009744,
-        35.323176
+        -21.990053,
+        35.313073
       ],
       "connections": [
         {
@@ -835,8 +835,8 @@
       "seats_available": 0,
       "scenario": "Severe storm evacuation support network",
       "current_position": [
-        -22.011854,
-        35.305502
+        -21.985833,
+        35.32191
       ],
       "connections": [
         {
@@ -887,8 +887,8 @@
       "seats_available": 3,
       "scenario": "Severe storm evacuation support network",
       "current_position": [
-        -22.002185,
-        35.307682
+        -22.005172,
+        35.32082
       ],
       "connections": [
         {
@@ -935,8 +935,8 @@
       "seats_available": 0,
       "scenario": "Flooded roads rideshare coordination",
       "current_position": [
-        -22.019144,
-        35.337872
+        -21.971253,
+        35.305725
       ],
       "connections": [
         {
@@ -999,8 +999,8 @@
       "seats_available": 0,
       "scenario": "Wildfire smoke relocation carpool",
       "current_position": [
-        -22.010071,
-        35.307416
+        -21.989398,
+        35.320953
       ],
       "connections": [
         {
@@ -1043,8 +1043,8 @@
       "seats_available": 0,
       "scenario": "Wildfire smoke relocation carpool",
       "current_position": [
-        -22.017809,
-        35.329721
+        -21.973922,
+        35.3098
       ],
       "connections": [
         {
@@ -1087,8 +1087,8 @@
       "seats_available": 0,
       "scenario": "Flooded roads rideshare coordination",
       "current_position": [
-        -22.016815,
-        35.341357
+        -21.975911,
+        35.303982
       ],
       "connections": [
         {
@@ -1143,8 +1143,8 @@
       "seats_available": 0,
       "scenario": "Wildfire smoke relocation carpool",
       "current_position": [
-        -22.018521,
-        35.304057
+        -21.9725,
+        35.322633
       ],
       "connections": [
         {
@@ -1179,8 +1179,8 @@
       "seats_available": 0,
       "scenario": "Wildfire smoke relocation carpool",
       "current_position": [
-        -22.013993,
-        35.306194
+        -21.981555,
+        35.321564
       ],
       "connections": [
         {
@@ -1219,8 +1219,8 @@
       "seats_available": 0,
       "scenario": "Flooded roads rideshare coordination",
       "current_position": [
-        -22.008039,
-        35.330104
+        -21.993463,
+        35.309609
       ],
       "connections": [
         {
@@ -1271,8 +1271,8 @@
       "seats_available": 0,
       "scenario": "Volcanic ash avoidance and mutual aid",
       "current_position": [
-        -22.012671,
-        35.319724
+        -21.9842,
+        35.314799
       ],
       "connections": [
         {
@@ -1331,8 +1331,8 @@
       "seats_available": 0,
       "scenario": "Power outage welfare checks and pooling",
       "current_position": [
-        -21.997872,
-        35.311009
+        -22.013797,
+        35.319157
       ],
       "connections": [
         {
@@ -1379,8 +1379,8 @@
       "seats_available": 3,
       "scenario": "Volcanic ash avoidance and mutual aid",
       "current_position": [
-        -22.009558,
-        35.300134
+        -21.990425,
+        35.324594
       ],
       "connections": [
         {
@@ -1423,8 +1423,8 @@
       "seats_available": 0,
       "scenario": "Flooded roads rideshare coordination",
       "current_position": [
-        -21.996618,
-        35.311674
+        -22.016304,
+        35.318824
       ],
       "connections": [
         {
@@ -1463,8 +1463,8 @@
       "seats_available": 0,
       "scenario": "Wildfire smoke relocation carpool",
       "current_position": [
-        -22.009252,
-        35.311924
+        -21.991036,
+        35.318699
       ],
       "connections": [
         {
@@ -1503,8 +1503,8 @@
       "seats_available": 2,
       "scenario": "Severe storm evacuation support network",
       "current_position": [
-        -21.99727,
-        35.321327
+        -22.015,
+        35.313998
       ],
       "connections": [
         {
@@ -1535,8 +1535,8 @@
       "seats_available": 2,
       "scenario": "Severe storm evacuation support network",
       "current_position": [
-        -22.011681,
-        35.348982
+        -21.986179,
+        35.30017
       ],
       "connections": [
         {
@@ -1563,8 +1563,8 @@
       "seats_available": 2,
       "scenario": "Flooded roads rideshare coordination",
       "current_position": [
-        -22.014862,
-        35.305237
+        -21.979817,
+        35.322042
       ],
       "connections": [
         {
@@ -1599,8 +1599,8 @@
       "seats_available": 0,
       "scenario": "Volcanic ash avoidance and mutual aid",
       "current_position": [
-        -22.005394,
-        35.313701
+        -21.998753,
+        35.31781
       ],
       "connections": [
         {
@@ -1643,8 +1643,8 @@
       "seats_available": 0,
       "scenario": "Power outage welfare checks and pooling",
       "current_position": [
-        -22.015048,
-        35.342572
+        -21.979446,
+        35.303375
       ],
       "connections": [
         {
@@ -1675,8 +1675,8 @@
       "seats_available": 1,
       "scenario": "Volcanic ash avoidance and mutual aid",
       "current_position": [
-        -21.999005,
-        35.324056
+        -22.011531,
+        35.312633
       ],
       "connections": [
         {
@@ -1735,8 +1735,8 @@
       "seats_available": 0,
       "scenario": "Severe storm evacuation support network",
       "current_position": [
-        -21.998963,
-        35.299882
+        -22.011615,
+        35.32472
       ],
       "connections": [
         {
@@ -1771,8 +1771,8 @@
       "seats_available": 0,
       "scenario": "Power outage welfare checks and pooling",
       "current_position": [
-        -22.001978,
-        35.334604
+        -22.005585,
+        35.307359
       ],
       "connections": [
         {
@@ -1811,8 +1811,8 @@
       "seats_available": 0,
       "scenario": "Volcanic ash avoidance and mutual aid",
       "current_position": [
-        -22.019065,
-        35.328733
+        -21.971412,
+        35.310294
       ],
       "connections": [
         {
@@ -1855,8 +1855,8 @@
       "seats_available": 0,
       "scenario": "Severe storm evacuation support network",
       "current_position": [
-        -22.009451,
-        35.324917
+        -21.990638,
+        35.312203
       ],
       "connections": [
         {
@@ -1899,8 +1899,8 @@
       "seats_available": 0,
       "scenario": "Severe storm evacuation support network",
       "current_position": [
-        -22.016131,
-        35.3032
+        -21.97728,
+        35.323061
       ],
       "connections": [
         {
@@ -1959,8 +1959,8 @@
       "seats_available": 5,
       "scenario": "Power outage welfare checks and pooling",
       "current_position": [
-        -21.997844,
-        35.344288
+        -22.013853,
+        35.302517
       ],
       "connections": [
         {
@@ -2011,8 +2011,8 @@
       "seats_available": 3,
       "scenario": "Wildfire smoke relocation carpool",
       "current_position": [
-        -21.996897,
-        35.332643
+        -22.015748,
+        35.30834
       ],
       "connections": [
         {
@@ -2059,8 +2059,8 @@
       "seats_available": 0,
       "scenario": "Flooded roads rideshare coordination",
       "current_position": [
-        -22.000814,
-        35.319563
+        -22.007913,
+        35.314879
       ],
       "connections": [
         {
@@ -2099,8 +2099,8 @@
       "seats_available": 0,
       "scenario": "Severe storm evacuation support network",
       "current_position": [
-        -21.99508,
-        35.330832
+        -22.019381,
+        35.309245
       ],
       "connections": [
         {
@@ -2147,8 +2147,8 @@
       "seats_available": 0,
       "scenario": "Wildfire smoke relocation carpool",
       "current_position": [
-        -22.001477,
-        35.346437
+        -22.006587,
+        35.301443
       ],
       "connections": [
         {
@@ -2203,8 +2203,8 @@
       "seats_available": 0,
       "scenario": "Flooded roads rideshare coordination",
       "current_position": [
-        -21.998791,
-        35.341461
+        -22.01196,
+        35.30393
       ],
       "connections": [
         {
@@ -2267,8 +2267,8 @@
       "seats_available": 0,
       "scenario": "Wildfire smoke relocation carpool",
       "current_position": [
-        -21.995043,
-        35.340629
+        -22.019456,
+        35.304346
       ],
       "connections": [
         {
@@ -2307,8 +2307,8 @@
       "seats_available": 0,
       "scenario": "Volcanic ash avoidance and mutual aid",
       "current_position": [
-        -22.001459,
-        35.34426
+        -22.006624,
+        35.302531
       ],
       "connections": [
         {
@@ -2359,8 +2359,8 @@
       "seats_available": 0,
       "scenario": "Volcanic ash avoidance and mutual aid",
       "current_position": [
-        -22.012787,
-        35.309954
+        -21.983966,
+        35.319684
       ],
       "connections": [
         {
@@ -2415,8 +2415,8 @@
       "seats_available": 3,
       "scenario": "Severe storm evacuation support network",
       "current_position": [
-        -21.997154,
-        35.320953
+        -22.015232,
+        35.314185
       ],
       "connections": [
         {
@@ -2459,8 +2459,8 @@
       "seats_available": 0,
       "scenario": "Volcanic ash avoidance and mutual aid",
       "current_position": [
-        -22.010775,
-        35.312872
+        -21.987991,
+        35.318225
       ],
       "connections": [
         {
@@ -2507,8 +2507,8 @@
       "seats_available": 4,
       "scenario": "Wildfire smoke relocation carpool",
       "current_position": [
-        -21.995089,
-        35.303536
+        -22.019364,
+        35.322893
       ],
       "connections": [
         {
@@ -2543,8 +2543,8 @@
       "seats_available": 0,
       "scenario": "Flooded roads rideshare coordination",
       "current_position": [
-        -22.00941,
-        35.307179
+        -21.990722,
+        35.321072
       ],
       "connections": [
         {
@@ -2583,8 +2583,8 @@
       "seats_available": 2,
       "scenario": "Severe storm evacuation support network",
       "current_position": [
-        -22.01732,
-        35.310278
+        -21.974901,
+        35.319522
       ],
       "connections": [
         {
@@ -2615,8 +2615,8 @@
       "seats_available": 0,
       "scenario": "Wildfire smoke relocation carpool",
       "current_position": [
-        -22.01695,
-        35.320093
+        -21.97564,
+        35.314615
       ],
       "connections": [
         {
@@ -2655,8 +2655,8 @@
       "seats_available": 0,
       "scenario": "Volcanic ash avoidance and mutual aid",
       "current_position": [
-        -22.019252,
-        35.340313
+        -21.971037,
+        35.304505
       ],
       "connections": [
         {
@@ -2695,8 +2695,8 @@
       "seats_available": 0,
       "scenario": "Flooded roads rideshare coordination",
       "current_position": [
-        -22.014407,
-        35.32036
+        -21.980728,
+        35.314481
       ],
       "connections": [
         {
