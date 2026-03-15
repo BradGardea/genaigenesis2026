@@ -10,7 +10,7 @@ def test_get_weather_current_step_returns_metadata_and_cards() -> None:
     assert response.status_code == 200
     payload = response.json()
 
-    assert payload["metadata"]["dataset_name"] == "goma_severe_storm_12h_10min_mock"
+    assert payload["metadata"]["dataset_name"] == "vilankulo_tropical_cyclone_12h_72_timesteps"
     assert payload["step"]["step_index"] == 0
     assert payload["step"]["has_next"] is True
     assert isinstance(payload["beautified"], list)

@@ -15,7 +15,7 @@ MAPBOX_DIRECTIONS_URL = "https://api.mapbox.com/directions/v5/mapbox/driving-tra
 MAX_RETRIES = 2
 MIN_OFFSET_DEG = 0.008  # ~900 m — reaches major arterials, skips residential dead-ends
 CRISIS_TRAFFIC_FACTOR = 1.5  # multiplier for durations to reflect evacuation congestion
-WAYPOINT_SNAP_RADIUS_M = 25  # max metres Mapbox may move an avoidance waypoint when snapping
+WAYPOINT_SNAP_RADIUS_M = 500  # max metres Mapbox may move an avoidance waypoint when snapping
 ENTRY_EXIT_MARGIN_DEG = 0.002  # ~220 m buffer before entry / after exit of hazard
 MAX_AVOIDANCE_WAYPOINTS = 20
 
@@ -236,7 +236,6 @@ async def fetch_route(
         "overview": "full",
         "steps": "true",
         "annotations": "duration",
-        "exclude": "unpaved",
         "alternatives": "true",
         "continue_straight": "true",
     }

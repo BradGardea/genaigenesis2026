@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
+    agents,
     alerts,
     city_state_steps,
     connections,
@@ -14,6 +15,7 @@ from app.api.v1.endpoints import (
     storms,
     weather_steps,
 )
+from app.simulation.router import router as simulation_router
 
 api_router = APIRouter()
 api_router.include_router(health.router)
@@ -27,4 +29,6 @@ api_router.include_router(realtime.router)
 api_router.include_router(storms.router)
 api_router.include_router(weather_steps.router)
 api_router.include_router(city_state_steps.router)
+api_router.include_router(agents.router)
+api_router.include_router(simulation_router)
 api_router.include_router(connections.router)

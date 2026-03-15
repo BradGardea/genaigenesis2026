@@ -1,0 +1,316 @@
+ Agent 1 — POST /agents/assess → DisasterAssessmentOutput
+
+  Consumes: GET /information/weather/current-step + GET /information/city-state/current-step
+
+  {
+    "assessment_id": "assess-a1b2c3d4",
+    "generated_at": "2026-06-10T12:00:00Z",
+
+    // From CityStateStepResponse.step + city_state block
+    "scenario": {
+      "step_index": 14,
+      "step_time": "2026-06-10T11:50:00Z",
+      "overall_severity": 57,
+      "operational_status": "constrained_operations",
+      "dominant_impacts": ["high_wind", "rain"]
+    },
+
+    // The core output: coordinate zones that are unsafe to drive through
+    // Built from 3 sources:
+    //   "city_state"     → city_state.affected_areas[]: already have lat/lon/radius_m/severity
+    //   "storm_focus"    → storm_state.focus_points[]: convective_core, heaviest_rain_band, etc
+    //   "storm_forecast" → storm_state.forecast_next.30min/60min centers (future positions)
+    "unsafe_zones": [
+      {
+        "zone_id": "zone-city-0",
+        "source": "city_state",
+        "impact_type": "high_wind",
+        "danger_to_remain": "moderate",   // straight from affected_areas[].danger_to_remain
+        "severity": 48,                    // straight from affected_areas[].severity
+        "valid_from": "2026-06-10T11:50:00Z",
+        "valid_until": "2026-06-10T12:10:00Z",
+        "center": { "lat": -1.6619, "lon": 29.1748 },
+        "radius_m": 204,                   // straight from affected_areas[].radius_m
+        "polygon": {
+          "type": "Polygon",
+          "coordinates": [[[29.1730, -1.6637], [29.1766, -1.6637], [29.1766, -1.6601], [29.1730, -1.6601], [29.1730,   
+  -1.6637]]]
+        }
+      },
+      {
+        "zone_id": "zone-city-3",
+        "source": "city_state",
+        "impact_type": "rain",
+        "danger_to_remain": "moderate",
+        "severity": 51,
+        "valid_from": "2026-06-10T11:50:00Z",
+        "valid_until": "2026-06-10T12:10:00Z",
+        "center": { "lat": -1.6534, "lon": 29.1790 },
+        "radius_m": 230,
+        "polygon": { "type": "Polygon", "coordinates": [[[...]]] }
+      },
+      {
+        "zone_id": "zone-focus-convective_core",
+        "source": "storm_focus",           // from storm_state.focus_points[]
+        "impact_type": "convective_core",
+        "danger_to_remain": "high",
+        "severity": 85,
+        "valid_from": "2026-06-10T11:50:00Z",
+        "valid_until": "2026-06-10T12:50:00Z",
+        "center": { "lat": -21.800, "lon": 38.357 },
+        "radius_m": 5000,
+        "polygon": { "type": "Polygon", "coordinates": [[[...]]] }
+      },
+      {
+        "zone_id": "zone-forecast-30min",
+        "source": "storm_forecast",        // from storm_state.forecast_next.30min.storm_center
+        "impact_type": "storm_track",
+        "danger_to_remain": "high",
+        "severity": 70,
+        "valid_from": "2026-06-10T12:20:00Z",   // current_time + 30min
+        "valid_until": "2026-06-10T12:50:00Z",
+        "center": { "lat": -21.910, "lon": 38.412 },
+        "radius_m": 22400,                 // from wind_radii_km.r34 * 1000
+        "polygon": { "type": "Polygon", "coordinates": [[[...]]] }
+      }
+    ],
+
+    // Storm movement — needed by Risk Agent to project zone drift
+    "storm_movement": {
+      "direction_deg": 220,
+      "speed_kmh": 18.1,
+      "current_center": { "lat": -21.910, "lon": 38.412 },
+      "forecast_30min": { "lat": -21.930, "lon": 38.400 },
+      "forecast_60min": { "lat": -21.950, "lon": 38.390 },
+      "wind_speed_kmh": 33.2,
+      "rainfall_mm_10min": 0.3
+    },
+
+    // Verbatim CityStateAlert[] from CityStateStepResponse.alerts
+    "active_alerts": [
+      {
+        "id": "city-alert-14-1",
+        "title": "High Wind Warning — Goma North",
+        "urgency": "urgent warning",
+        "category": "wind",
+        "area": "Goma city center",
+        "source": "city_state_dataset"
+      }
+    ],
+
+    "total_unsafe_zones": 12,
+    "summary": "12 unsafe zones identified at step 14. Dominant hazards: high_wind, rain. Overall severity: 57/100."   
+  }
+
+  ---
+  Agent 2 — POST /agents/evaluate-risk → PersonRiskProfile
+
+  Consumes: DisasterAssessmentOutput + PersonContext
+
+  // Input person context
+  {
+    "assessment": { "...DisasterAssessmentOutput..." },
+    "person": {
+      "user_id": "user-abc123",
+      "origin": { "lat": -1.679, "lng": 29.222 },
+      "destination": { "lat": -1.650, "lng": 29.300 },
+      "vehicle": "car",          // car | motorcycle | foot | truck
+      "has_mobility_needs": false,
+      "has_medical_equipment": false,
+      "party_size": 2,
+      "risk_tolerance": "low"    // low | medium | high
+    }
+  }
+
+  // Output
+  {
+    "profile_id": "risk-b2c3d4e5",
+    "generated_at": "2026-06-10T12:00:02Z",
+    "user_id": "user-abc123",
+
+    // Overall verdict for this specific person
+    "personal_risk_level": "high",    // low | medium | high | critical
+    "confidence": "medium",
+    "should_evacuate_now": true,
+
+    // Which of the assessment's unsafe_zones actually fall on/near this person's path
+    // Filtered by: distance from origin, intersection with straight-line origin→destination
+    "relevant_zones": [
+      {
+        "zone_id": "zone-city-0",
+        "impact_type": "high_wind",
+        "danger_to_remain": "moderate",
+        "severity": 48,
+        "distance_from_origin_km": 1.2,
+        "on_direct_path": true,        // does it intersect origin→destination straight line?
+        "polygon": { "type": "Polygon", "coordinates": [[[...]]] }
+      },
+      {
+        "zone_id": "zone-city-3",
+        "impact_type": "rain",
+        "danger_to_remain": "moderate",
+        "severity": 51,
+        "distance_from_origin_km": 2.8,
+        "on_direct_path": true,
+        "polygon": { "type": "Polygon", "coordinates": [[[...]]] }
+      }
+    ],
+
+    // The polygons to hand directly to Routing Agent for Mapbox avoidance
+    // Subset of relevant_zones where danger_to_remain >= threshold for this person
+    "avoid_polygons": [
+      { "type": "Polygon", "coordinates": [[[...]]] },
+      { "type": "Polygon", "coordinates": [[[...]]] }
+    ],
+
+    // Human-readable reasons tuned to this person's profile
+    "risk_factors": [
+      "2 active zones (high_wind, rain) directly on your path to destination.",
+      "Storm moving toward your area at 18.1 km/h — zones will intensify.",
+      "Overall city severity: 57/100 (constrained operations)."
+    ],
+
+    // Routing urgency tells Routing Agent how aggressively to avoid (affects repulsion factor)
+    "routing_urgency": "high",    // low | medium | high
+
+    // Suggested safe destinations if person has no fixed destination
+    // (only populated when destination is null in PersonContext)
+    "suggested_destinations": [
+      {
+        "name": "Goma North Assembly Point",
+        "lat": -1.640,
+        "lng": 29.240,
+        "type": "evacuation_center",
+        "distance_from_origin_km": 4.5,
+        "clears_all_avoid_polygons": true
+      }
+    ]
+  }
+
+  ---
+  Agent 3 — POST /agents/route → RoutingOutput
+
+  Consumes: PersonRiskProfile + Mapbox Directions (+ Matrix if multiple destinations, + Isochrone if requested)        
+
+  {
+    "routing_id": "route-run-c3d4e5f6",
+    "generated_at": "2026-06-10T12:00:05Z",
+    "user_id": "user-abc123",
+    "origin": { "lat": -1.679, "lng": 29.222 },
+    "destination_used": { "lat": -1.650, "lng": 29.300 },
+
+    // Routes ordered best → worst (safest, then fastest)
+    // best_route from mapbox_routing.compute_route() with avoid_polygons injected
+    "ranked_routes": [
+      {
+        "rank": 1,
+        "route_id": "route-ab12cd34",
+        "label": "Safest route",
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[29.222, -1.679], [29.245, -1.665], [29.300, -1.650]]
+        },
+        "distance_meters": 8200.0,
+        "duration_seconds": 720.0,
+        "eta_minutes": 12.0,
+        "risk_score": 0.10,              // 0-1, lower is safer
+        "zones_crossed": [],             // zone_ids from assessment this route enters
+        "zones_avoided": ["zone-city-0", "zone-city-3"],
+        "avoidance_waypoints_used": [
+          { "lat": -1.665, "lng": 29.245 }
+        ],
+        "instructions": [
+          "Head east on Avenue du Port",
+          "Turn left onto Route de Sake",
+          "Arrive at destination"
+        ],
+        "note": "Clears all active hazard zones. Adds 3 min vs fastest."
+      },
+      {
+        "rank": 2,
+        "route_id": "route-ef56gh78",
+        "label": "Faster route — 1 moderate zone",
+        "geometry": { "type": "LineString", "coordinates": [[...]] },
+        "distance_meters": 6100.0,
+        "duration_seconds": 540.0,
+        "eta_minutes": 9.0,
+        "risk_score": 0.35,
+        "zones_crossed": ["zone-city-3"],
+        "zones_avoided": ["zone-city-0"],
+        "avoidance_waypoints_used": [],
+        "instructions": ["..."],
+        "note": "Passes through 1 moderate rain zone near city center."
+      },
+      {
+        "rank": 3,
+        "route_id": "route-ij90kl12",
+        "label": "Fastest route — not recommended",
+        "geometry": { "type": "LineString", "coordinates": [[...]] },
+        "distance_meters": 5200.0,
+        "duration_seconds": 480.0,
+        "eta_minutes": 8.0,
+        "risk_score": 0.75,
+        "zones_crossed": ["zone-city-0", "zone-city-3"],
+        "zones_avoided": [],
+        "avoidance_waypoints_used": [],
+        "instructions": ["..."],
+        "note": "Not recommended. Passes through both high_wind and rain zones."
+      }
+    ],
+
+    // From Mapbox Matrix API — durations to each suggested destination
+    // (populated when PersonRiskProfile.suggested_destinations was used)
+    "matrix_scores": [
+      {
+        "destination_index": 0,
+        "duration_seconds": 720.0,
+        "destination": { "lat": -1.640, "lng": 29.240 }
+      }
+    ],
+
+    // From Mapbox Isochrone API — what the person can reach within N min
+    // null if check_isochrone was false
+    "isochrone_30min": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "geometry": { "type": "Polygon", "coordinates": [[[...]]] },
+          "properties": { "contour": 30, "metric": "time" }
+        }
+      ]
+    },
+
+    "recommendation": "Take Route 1 (safest). Adds 3 minutes but avoids all active hazard zones.",
+    "zones_on_best_route": 0,
+    "total_zones_in_area": 12
+  }
+
+  ---
+  Agent 4 — POST /agents/orchestrate → OrchestratorOutput
+
+  // Request
+  {
+    "weather_step_index": 14,
+    "city_state_step_index": 14,
+    "person": {
+      "user_id": "user-abc123",
+      "origin": { "lat": -1.679, "lng": 29.222 },
+      "destination": { "lat": -1.650, "lng": 29.300 },
+      "vehicle": "car",
+      "has_mobility_needs": false,
+      "party_size": 2,
+      "risk_tolerance": "low"
+    },
+    "check_isochrone": false
+  }
+
+  // Response
+  {
+    "run_id": "orch-d4e5f6g7",
+    "generated_at": "2026-06-10T12:00:06Z",
+    "total_duration_ms": 2340.0,
+    "disaster_assessment": { "...DisasterAssessmentOutput..." },
+    "person_risk_profile": { "...PersonRiskProfile..." },
+    "routing_output": { "...RoutingOutput..." }
+  }

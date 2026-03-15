@@ -10,9 +10,11 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:8081,http://localhost:3000"
     openai_api_key: str = ""
     openai_weather_model: str = "gpt-4.1-mini"
+    watsonx_api_key: str = ""
+    watsonx_project_id: str = ""
+    watsonx_url: str = ""
     expo_public_mapbox_access_token: str = ""
     mapbox_downloads_token: str = ""
-
     @property
     def mapbox_access_token(self) -> str:
         """Mapbox public token used for Directions API calls."""

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { Pressable, Text, TextInput, View } from "react-native";
@@ -14,6 +14,9 @@ import {
   reportHazard,
 } from "../services/api";
 import { ReportHazardModal } from "../components/ReportHazardModal";
+import { SimulationPanel, type DisasterBbox } from "../components/SimulationPanel";
+import { AgentActivityFeed } from "../components/AgentActivityFeed";
+import { useSimulation } from "../hooks/useSimulation";
 import {
   WeatherLayerOverlay,
   WeatherLayerMode,
@@ -40,10 +43,33 @@ const WEATHER_ALERT_OUTLINE = "weather-alerts-outline";
 const CITY_STATE_SOURCE = "city-state-impacts";
 const CITY_STATE_LAYER = "city-state-impacts-heatmap";
 const CITY_STATE_LABEL_LAYER = "city-state-impacts-label";
+const SIM_ROUTES_SOURCE = "sim-routes";
+const SIM_ROUTES_LAYER = "sim-routes-line";
+const SIM_AGENTS_SOURCE = "sim-agents";
+const SIM_AGENTS_LAYER = "sim-agents-circle";
+const SIM_AGENTS_LABEL_LAYER = "sim-agents-label";
+const SIM_CLUSTERS_SOURCE = "sim-clusters";
+const SIM_CLUSTERS_LAYER = "sim-clusters-circle";
+const SIM_CLUSTERS_LABEL_LAYER = "sim-clusters-label";
+const EVAC_POINTS_SOURCE = "evac-points";
+const EVAC_POINTS_LAYER = "evac-points-symbol";
+const EVAC_POINTS_RING_LAYER = "evac-points-ring";
 
-const DEFAULT_CENTER: [number, number] = [35.321269, -21.992207];
-const DEFAULT_ROUTE_ORIGIN: Coordinate = { lat: -21.992207, lng: 35.321269 };
-const DEFAULT_ROUTE_DESTINATION: Coordinate = { lat: -22.005956, lng: 35.285656 };
+const EVACUATION_POINTS = [
+  { name: "North Assembly", lat: -21.96057, lng: 35.29959, type: "field", capacity: 800 },
+  { name: "Northwest Junction", lat: -21.97286, lng: 35.28916, type: "government", capacity: 500 },
+  { name: "West Inland Assembly", lat: -21.99236, lng: 35.26070, type: "field", capacity: 400 },
+  { name: "Southwest Assembly", lat: -22.00801, lng: 35.27525, type: "field", capacity: 1200 },
+  { name: "South Coastal Assembly", lat: -22.03504, lng: 35.31516, type: "government", capacity: 600 },
+];
+
+const CLUSTER_PALETTE = [
+  "#E11D48", "#2563EB", "#16A34A", "#D97706", "#7C3AED",
+  "#0891B2", "#DC2626", "#4F46E5", "#059669", "#EA580C",
+  "#8B5CF6", "#0D9488",
+];
+
+const DEFAULT_CENTER: [number, number] = [35.320, -22.000]; // Vilankulo, Mozambique
 const PROTECTED_SEED_STEPS = 30;
 
 function coordFromText(text: string): Coordinate | null {
@@ -270,51 +296,13 @@ function collapseNearbyDisplayNodes(areas: CityStateArea[], stepIndex: number, m
   return [...protectedSeeds, ...collapsed];
 }
 
-const CAR_MARKER_CSS_ID = "crisisnet-car-marker-css";
-function ensureCarMarkerCSS() {
-  if (document.getElementById(CAR_MARKER_CSS_ID)) return;
-  const style = document.createElement("style");
-  style.id = CAR_MARKER_CSS_ID;
-  style.textContent = `
-    .crisisnet-car-marker {
-      width: 36px;
-      height: 36px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
-    }
-    .crisisnet-car-marker svg {
-      width: 100%;
-      height: 100%;
-    }
-  `;
-  document.head.appendChild(style);
-}
-
-function createCarMarkerElement(): HTMLDivElement {
-  const el = document.createElement("div");
-  el.className = "crisisnet-car-marker";
-  // Rotation is applied to the SVG child, not the outer element,
-  // because Mapbox uses transform on the marker element for positioning.
-  el.innerHTML = `
-    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"
-        >
-      <path d="M5 17h14v-5H5v5zm2.5-4a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5zm9 0a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5z" fill="#1e40af"/>
-      <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16a1.5 1.5 0 0 1 0-3 1.5 1.5 0 0 1 0 3zm11 0a1.5 1.5 0 0 1 0-3 1.5 1.5 0 0 1 0 3zM5 11l1.5-4h11l1.5 4H5z" fill="#3b82f6"/>
-    </svg>
-  `;
-  return el;
-}
-
 export function MapScreen({ theme }: MapScreenProps) {
   const isDark = theme === "dark";
-  const { currentStep, currentStepIndex, totalSteps, stepHistory } = useDisasterDemo();
+  const { currentStep, currentStepIndex, totalSteps, stepHistory, stepDisaster, isFinalStep } = useDisasterDemo();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const originMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const destMarkerRef = useRef<mapboxgl.Marker | null>(null);
-  const positionMarkerRef = useRef<mapboxgl.Marker | null>(null);
 
   const [originText, setOriginText] = useState("");
   const [destText, setDestText] = useState("");
@@ -343,6 +331,61 @@ export function MapScreen({ theme }: MapScreenProps) {
 
   const [followCamera, setFollowCamera] = useState(true);
   const routeRef = useRef<RouteResponse | null>(null);
+
+  // ── Simulation ─────────────────────────────────────────────────────────────
+  const {
+    simState,
+    agents: simAgents,
+    metrics: simMetrics,
+    currentTick: simTick,
+    maxTicks: simMaxTicks,
+    agentEvents: simAgentEvents,
+    createAndStart: simCreateAndStart,
+    stop: simStop,
+    error: simError,
+  } = useSimulation();
+
+  // Derive bbox from current disaster step's city-state impact areas
+  const disasterBbox = useMemo(() => {
+    const areas = extractCityStateAreas(currentStep.cityStateRaw);
+    if (areas.length === 0) return null;
+    let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+    for (const a of areas) {
+      minLat = Math.min(minLat, a.lat);
+      maxLat = Math.max(maxLat, a.lat);
+      minLng = Math.min(minLng, a.lon);
+      maxLng = Math.max(maxLng, a.lon);
+    }
+    // Pad by ~500m so agents don't spawn exactly on the edge
+    const PAD = 0.005;
+    return {
+      minLat: minLat - PAD,
+      maxLat: maxLat + PAD,
+      minLng: minLng - PAD,
+      maxLng: maxLng + PAD,
+    };
+  }, [currentStep.cityStateRaw]);
+
+  // Disaster steps run on their own loop, decoupled from simulation ticks.
+  const stepDisasterRef = useRef(stepDisaster);
+  stepDisasterRef.current = stepDisaster;
+  const isFinalStepRef = useRef(isFinalStep);
+  isFinalStepRef.current = isFinalStep;
+
+  useEffect(() => {
+    if (simState !== "running") return;
+
+    let cancelled = false;
+    (async () => {
+      while (!cancelled && !isFinalStepRef.current) {
+        await stepDisasterRef.current({ beautify: false });
+        if (!cancelled) await new Promise((r) => setTimeout(r, 800));
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [simState]);
+
   useEffect(() => {
     routeRef.current = route;
   }, [route]);
@@ -365,18 +408,6 @@ export function MapScreen({ theme }: MapScreenProps) {
       setCurrentPosition(simPosition);
     }
   }, [simPosition, tripActive, setCurrentPosition]);
-  useEffect(() => {
-    if (origin || destination) {
-      return;
-    }
-    const defaultOrigin = DEFAULT_ROUTE_ORIGIN;
-    const defaultDestination = DEFAULT_ROUTE_DESTINATION;
-    setOrigin(defaultOrigin);
-    setDestination(defaultDestination);
-    setOriginText(formatCoord(defaultOrigin));
-    setDestText(formatCoord(defaultDestination));
-  }, [origin, destination]);
-
   const fetchHazards = useCallback(async () => {
     try {
       const zones = await getActiveHazards();
@@ -389,6 +420,112 @@ export function MapScreen({ theme }: MapScreenProps) {
     const interval = setInterval(fetchHazards, 10_000);
     return () => clearInterval(interval);
   }, [fetchHazards]);
+
+  // ── Cluster color mapping ────────────────────────────────────────────────
+  const clusterColorMap = useMemo(() => {
+    const clusters = simMetrics?.clusters ?? [];
+    const map = new Map<string, string>();
+    clusters.forEach((c, i) => {
+      map.set(c.cluster_id, CLUSTER_PALETTE[i % CLUSTER_PALETTE.length]);
+    });
+    return map;
+  }, [simMetrics]);
+
+  // ── Simulation agent layer update ─────────────────────────────────────────
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const source = map.getSource(SIM_AGENTS_SOURCE) as mapboxgl.GeoJSONSource | undefined;
+    if (!source) return;
+    const features = simAgents.map((agent) => ({
+      type: "Feature" as const,
+      geometry: { type: "Point" as const, coordinates: [agent.lng, agent.lat] },
+      properties: {
+        agent_id: agent.agent_id,
+        state: agent.state,
+        progress: agent.progress,
+        family_size: agent.family_size,
+        vehicles: agent.vehicles,
+        last_action: agent.last_decision?.action ?? null,
+        label: agent.agent_id.replace("agent-", "#"),
+        is_leader: agent.is_leader ?? false,
+        cluster_id: agent.cluster_id ?? "",
+        cluster_color: (agent.cluster_id && clusterColorMap.get(agent.cluster_id)) || "#94A3B8",
+        dest_name: agent.dest_name ?? "",
+      },
+    }));
+    source.setData({ type: "FeatureCollection", features });
+
+    // Scale down circle radius as agent count grows (supports up to 1500)
+    if (map.getLayer(SIM_AGENTS_LAYER)) {
+      const n = simAgents.length;
+      const scale = n <= 20 ? 1 : n <= 80 ? 0.85 : n <= 200 ? 0.7 : n <= 500 ? 0.55 : n <= 1000 ? 0.4 : 0.3;
+      const baseR = 5 * scale;
+      const leaderR = 8 * scale;
+      map.setPaintProperty(SIM_AGENTS_LAYER, "circle-radius",
+        ["case", ["==", ["get", "is_leader"], true], Math.max(leaderR, 2), Math.max(baseR, 1.5)]
+      );
+      map.setPaintProperty(SIM_AGENTS_LAYER, "circle-stroke-width",
+        ["case", ["==", ["get", "is_leader"], true], Math.max(2 * scale, 0.5), Math.max(1 * scale, 0.5)]
+      );
+    }
+  }, [simAgents, simState, mapReadyVersion, clusterColorMap]);
+
+  // ── Simulation cluster layer update ───────────────────────────────────────
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const source = map.getSource(SIM_CLUSTERS_SOURCE) as mapboxgl.GeoJSONSource | undefined;
+    if (!source) return;
+    const clusterList = simMetrics?.clusters ?? [];
+    const features = clusterList.map((c) => ({
+      type: "Feature" as const,
+      geometry: { type: "Point" as const, coordinates: [c.centroid_lng, c.centroid_lat] },
+      properties: {
+        cluster_id: c.cluster_id,
+        member_count: c.member_count,
+        leader_id: c.leader_id,
+        cluster_color: clusterColorMap.get(c.cluster_id) || "#6366F1",
+      },
+    }));
+    source.setData({ type: "FeatureCollection", features });
+  }, [simMetrics, simState, mapReadyVersion, clusterColorMap]);
+
+  // ── Simulation agent route polylines update ─────────────────────────────
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const source = map.getSource(SIM_ROUTES_SOURCE) as mapboxgl.GeoJSONSource | undefined;
+    if (!source) return;
+    const withRoutes = simAgents.filter((a) => a.route_geometry && a.route_geometry.length >= 2);
+    const features = withRoutes.map((agent) => ({
+      type: "Feature" as const,
+      geometry: { type: "LineString" as const, coordinates: agent.route_geometry! },
+      properties: {
+        agent_id: agent.agent_id,
+        state: agent.state,
+        cluster_id: agent.cluster_id ?? "",
+        cluster_color: (agent.cluster_id && clusterColorMap.get(agent.cluster_id)) || "#94A3B8",
+        is_rerouted: agent.last_decision?.action === "reroute" ? 1 : 0,
+      },
+    }));
+    source.setData({ type: "FeatureCollection", features });
+  }, [simAgents, simState, mapReadyVersion, clusterColorMap]);
+
+  // Fly to simulation area once when simulation starts (not on every disaster step)
+  const simFlewRef = useRef(false);
+  useEffect(() => {
+    if (simState === "idle") { simFlewRef.current = false; return; }
+    if (simState !== "running") return;
+    if (simFlewRef.current) return;
+    simFlewRef.current = true;
+    const map = mapRef.current;
+    if (!map) return;
+    const center: [number, number] = disasterBbox
+      ? [(disasterBbox.minLng + disasterBbox.maxLng) / 2, (disasterBbox.minLat + disasterBbox.maxLat) / 2]
+      : [35.320, -22.000];
+    map.flyTo({ center, zoom: 11, duration: 1500 });
+  }, [simState, disasterBbox]);
 
   // â”€â”€ Map init â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
@@ -537,17 +674,7 @@ export function MapScreen({ theme }: MapScreenProps) {
             "heatmap-opacity": 0.85,
           },
         });
-        map.addLayer({
-          id: CITY_STATE_LABEL_LAYER,
-          type: "symbol",
-          source: CITY_STATE_SOURCE,
-          layout: {
-            "text-field": ["get", "icon"],
-            "text-size": 12,
-            "text-offset": [0, 0],
-            "text-allow-overlap": true,
-          },
-        });
+        // City-state label layer removed (W/N letters were visual noise)
         map.on("click", CITY_STATE_LAYER, (e) => {
           if (!e.features?.length) return;
           const props = e.features[0].properties ?? {};
@@ -662,45 +789,191 @@ export function MapScreen({ theme }: MapScreenProps) {
         });
 
         // â”€â”€ Wind particle layer (Mapbox native GFS wind data) â”€â”€
-        map.addSource(WIND_SOURCE, {
-          type: "raster-array" as any,
-          url: "mapbox://rasterarrayexamples.gfs-winds",
-          tileSize: 512,
+        // Wind particle layer disabled — requires Mapbox GL JS v3+
+
+        // ── Simulation agent route polylines ─────────────────────
+        map.addSource(SIM_ROUTES_SOURCE, {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
         });
         map.addLayer({
-          id: WIND_LAYER,
-          type: "raster-particle" as any,
-          source: WIND_SOURCE,
-          "source-layer": "10winds",
+          id: SIM_ROUTES_LAYER + "-casing",
+          type: "line",
+          source: SIM_ROUTES_SOURCE,
           paint: {
-            "raster-particle-speed-factor": 0.4,
-            "raster-particle-fade-opacity-factor": 0.9,
-            "raster-particle-reset-rate-factor": 0.4,
-            "raster-particle-count": 4000,
-            "raster-particle-max-speed": 40,
-            "raster-particle-color": [
-              "interpolate",
-              ["linear"],
-              ["raster-particle-speed"],
-              1.5, "rgba(134,163,171,255)",
-              4.12, "rgba(110,143,208,255)",
-              6.17, "rgba(15,147,167,255)",
-              9.26, "rgba(57,163,57,255)",
-              11.83, "rgba(194,134,62,255)",
-              14.92, "rgba(200,66,13,255)",
-              18.0, "rgba(210,0,50,255)",
-              21.6, "rgba(175,80,136,255)",
-              25.21, "rgba(117,74,147,255)",
-              29.32, "rgba(68,105,141,255)",
-              33.44, "rgba(194,251,119,255)",
-              43.72, "rgba(241,255,109,255)",
-              50.41, "rgba(255,255,255,255)",
-              59.16, "rgba(0,255,255,255)",
-              69.44, "rgba(255,37,255,255)",
+            "line-color": "#0f172a",
+            "line-width": 5,
+            "line-opacity": 0.25,
+          },
+          layout: { "line-cap": "round", "line-join": "round" },
+        });
+        map.addLayer({
+          id: SIM_ROUTES_LAYER,
+          type: "line",
+          source: SIM_ROUTES_SOURCE,
+          paint: {
+            "line-color": [
+              "case",
+              ["==", ["get", "is_rerouted"], 1], "#FBBF24",
+              ["get", "cluster_color"],
             ],
-          } as any,
-          layout: { visibility: "none" },
-        } as any);
+            "line-width": [
+              "case",
+              ["==", ["get", "is_rerouted"], 1], 3.5,
+              2.5,
+            ],
+            "line-opacity": [
+              "case",
+              ["==", ["get", "is_rerouted"], 1], 0.8,
+              0.45,
+            ],
+            "line-dasharray": [4, 2],
+          },
+          layout: { "line-cap": "round", "line-join": "round" },
+        });
+
+        // ── Simulation cluster rings (drawn below agent dots) ─────
+        map.addSource(SIM_CLUSTERS_SOURCE, {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+        map.addLayer({
+          id: SIM_CLUSTERS_LAYER,
+          type: "circle",
+          source: SIM_CLUSTERS_SOURCE,
+          paint: {
+            "circle-radius": [
+              "interpolate", ["linear"], ["get", "member_count"],
+              1, 10,
+              20, 28,
+            ],
+            "circle-color": ["get", "cluster_color"],
+            "circle-opacity": 0.2,
+            "circle-stroke-color": ["get", "cluster_color"],
+            "circle-stroke-width": 2.5,
+          },
+        });
+        map.addLayer({
+          id: SIM_CLUSTERS_LABEL_LAYER,
+          type: "symbol",
+          source: SIM_CLUSTERS_SOURCE,
+          layout: {
+            "text-field": ["concat", "×", ["to-string", ["get", "member_count"]]],
+            "text-size": 11,
+            "text-allow-overlap": true,
+          },
+          paint: {
+            "text-color": ["get", "cluster_color"],
+            "text-halo-color": "#ffffff",
+            "text-halo-width": 1,
+          },
+        });
+
+        // ── Simulation agents layer ────────────────────────────
+        map.addSource(SIM_AGENTS_SOURCE, {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+        map.addLayer({
+          id: SIM_AGENTS_LAYER,
+          type: "circle",
+          source: SIM_AGENTS_SOURCE,
+          paint: {
+            "circle-radius": ["case", ["==", ["get", "is_leader"], true], 8, 5],
+            "circle-color": [
+              "match", ["get", "state"],
+              "idle",       "#94A3B8",
+              "planning",   "#FBBF24",
+              "evacuating", "#60A5FA",
+              "arrived",    "#34D399",
+              "sheltering", "#FB923C",
+              "#94A3B8",
+            ],
+            "circle-stroke-color": "#ffffff",
+            "circle-stroke-width": ["case", ["==", ["get", "is_leader"], true], 2, 1.5],
+            "circle-opacity": 1.0,
+          },
+        });
+        // Agent label layer removed (numbers on dots were visual noise)
+        map.on("click", SIM_AGENTS_LAYER, (e) => {
+          if (!e.features?.length) return;
+          const p = e.features[0].properties ?? {};
+          const cColor = p.cluster_color || "#94A3B8";
+          const html = [
+            '<div style="font-family:system-ui;font-size:12px;line-height:1.5;">',
+            `<strong>${p.agent_id ?? "Agent"}</strong>`,
+            p.is_leader === true || p.is_leader === "true" ? ' <span style="font-size:10px;color:#D97706;">(leader)</span>' : "",
+            "<br/>",
+            `State: <span style="text-transform:capitalize;">${p.state ?? "?"}</span><br/>`,
+            `Progress: ${Math.round((p.progress ?? 0) * 100)}%<br/>`,
+            p.cluster_id ? `Cluster: <span style="color:${cColor};font-weight:600;">${p.cluster_id}</span><br/>` : "",
+            `Family: ${p.family_size ?? 1} · Vehicles: ${p.vehicles ?? 1}`,
+            p.dest_name ? `<br/>Dest: <span style="font-weight:600;">${p.dest_name}</span>` : "",
+            p.last_action ? `<br/>Decision: <em>${p.last_action}</em>` : "",
+            "</div>",
+          ].join("");
+          new mapboxgl.Popup({ offset: 10, maxWidth: "220px" })
+            .setLngLat(e.lngLat)
+            .setHTML(html)
+            .addTo(map);
+        });
+        map.on("mouseenter", SIM_AGENTS_LAYER, () => { map.getCanvas().style.cursor = "pointer"; });
+        map.on("mouseleave", SIM_AGENTS_LAYER, () => { map.getCanvas().style.cursor = ""; });
+
+        // ── Evacuation point markers ──────────────────────────────
+        const evacFeatures = EVACUATION_POINTS.map((ep) => ({
+          type: "Feature" as const,
+          geometry: { type: "Point" as const, coordinates: [ep.lng, ep.lat] },
+          properties: { name: ep.name, type: ep.type, capacity: ep.capacity },
+        }));
+        map.addSource(EVAC_POINTS_SOURCE, {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: evacFeatures },
+        });
+        map.addLayer({
+          id: EVAC_POINTS_RING_LAYER,
+          type: "circle",
+          source: EVAC_POINTS_SOURCE,
+          paint: {
+            "circle-radius": 14,
+            "circle-color": "rgba(22, 163, 74, 0.15)",
+            "circle-stroke-color": "#16A34A",
+            "circle-stroke-width": 2,
+          },
+        });
+        map.addLayer({
+          id: EVAC_POINTS_LAYER,
+          type: "symbol",
+          source: EVAC_POINTS_SOURCE,
+          layout: {
+            "text-field": "E",
+            "text-size": 13,
+            "text-font": ["DIN Pro Bold", "Arial Unicode MS Bold"],
+            "text-allow-overlap": true,
+          },
+          paint: {
+            "text-color": "#16A34A",
+            "text-halo-color": "#ffffff",
+            "text-halo-width": 1.5,
+          },
+        });
+        map.on("click", EVAC_POINTS_RING_LAYER, (e) => {
+          if (!e.features?.length) return;
+          const p = e.features[0].properties ?? {};
+          const html = [
+            '<div style="font-family:system-ui;font-size:12px;line-height:1.5;">',
+            `<strong style="color:#16A34A;">${p.name ?? "Evacuation Point"}</strong><br/>`,
+            `Type: <span style="text-transform:capitalize;">${p.type ?? "unknown"}</span><br/>`,
+            `Capacity: ${p.capacity ?? "?"} people`,
+            "</div>",
+          ].join("");
+          new mapboxgl.Popup({ offset: 14, maxWidth: "220px" })
+            .setLngLat(e.lngLat)
+            .setHTML(html)
+            .addTo(map);
+        });
+        map.on("mouseenter", EVAC_POINTS_RING_LAYER, () => { map.getCanvas().style.cursor = "pointer"; });
+        map.on("mouseleave", EVAC_POINTS_RING_LAYER, () => { map.getCanvas().style.cursor = ""; });
 
         // Click handler for weather alert popups
         map.on("click", WEATHER_ALERT_FILL, (e) => {
@@ -890,28 +1163,6 @@ export function MapScreen({ theme }: MapScreenProps) {
         .addTo(map);
     }
   }, [origin, destination, currentPosition]);
-
-  // â”€â”€ Update current position marker (car icon) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    if (currentPosition) {
-      ensureCarMarkerCSS();
-      if (!positionMarkerRef.current) {
-        const el = createCarMarkerElement();
-        positionMarkerRef.current = new mapboxgl.Marker({ element: el, anchor: "center" })
-          .setLngLat([currentPosition.lng, currentPosition.lat])
-          .addTo(map);
-      } else {
-        positionMarkerRef.current.setLngLat([currentPosition.lng, currentPosition.lat]);
-        // No rotation â€” car keeps its default orientation
-      }
-    } else {
-      positionMarkerRef.current?.remove();
-      positionMarkerRef.current = null;
-    }
-  }, [currentPosition, simBearing]);
 
   // â”€â”€ Follow-camera: nav-mode tracking during active trip â”€â”€â”€â”€
   const prevTripActiveRef = useRef(false);
@@ -1565,7 +1816,7 @@ export function MapScreen({ theme }: MapScreenProps) {
         ) : null}
 
         {/* â”€â”€ Map container â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-        <View className="flex-1" style={{ minHeight: 400, position: "relative" as any }}>
+        <View className="flex-1" style={{ minHeight: 400, position: "relative" as any, display: "flex" as any, flexDirection: "column" as any }}>
           <View
             style={{
               position: "absolute" as any,
@@ -1591,6 +1842,34 @@ export function MapScreen({ theme }: MapScreenProps) {
               </Text>
             </View> */}
           </View>
+          {/* Simulation panel — bottom-left */}
+          {MAPBOX_PUBLIC_TOKEN && !mapError && (
+            <View
+              style={{
+                position: "absolute" as any,
+                bottom: 32,
+                left: 10,
+                zIndex: 11,
+              }}
+            >
+              <SimulationPanel
+                theme={theme}
+                simState={simState as any}
+                agents={simAgents}
+                metrics={simMetrics}
+                currentTick={simTick}
+                maxTicks={simMaxTicks}
+                error={simError}
+                onStart={simCreateAndStart}
+                onStop={simStop}
+                disasterBbox={disasterBbox}
+                clusters={simMetrics?.clusters}
+                clusterColors={clusterColorMap}
+                disasterStepIndex={currentStepIndex}
+                disasterTotalSteps={totalSteps}
+              />
+            </View>
+          )}
           {mapError ? (
             <View className={`flex-1 items-center justify-center px-4 ${isDark ? "bg-slate-800" : "bg-slate-50"}`}>
               <Text className={`mb-2 text-center text-sm font-medium ${isDark ? "text-red-400" : "text-red-600"}`}>
@@ -1604,8 +1883,11 @@ export function MapScreen({ theme }: MapScreenProps) {
             <div
               ref={containerRef}
               style={{
-                width: "100%",
-                height: "100%",
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
                 minHeight: 400,
                 cursor: mapClickMode ? "crosshair" : undefined,
               }}
@@ -1632,9 +1914,15 @@ export function MapScreen({ theme }: MapScreenProps) {
             mapLoaded={mapIsLoaded}
           />
         </View>
+        {/* Agent activity sidebar — right */}
+        {(simState === "running" || simState === "completed") && (
+          <View style={{ width: 280 }}>
+            <AgentActivityFeed theme={theme} events={simAgentEvents} />
+          </View>
+        )}
       </View>
 
-      {/* â”€â”€ Report Hazard Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/*â”€â”€ Report Hazard Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <ReportHazardModal
         visible={hazardModalVisible}
         onClose={() => {

@@ -223,7 +223,7 @@ const EMPTY_STEP: DisasterStepData = {
 export function DisasterDemoProvider({ children }: { children: ReactNode }) {
   const [disasterStarted, setDisasterStarted] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(-1);
-  const [totalSteps, setTotalSteps] = useState(disasterStepsMock.length);
+  const [totalSteps, setTotalSteps] = useState(72);
   const [stepHistory, setStepHistory] = useState<
     { stepIndex: number; step: (typeof disasterStepsMock)[number] }[]
   >([{ stepIndex: -1, step: EMPTY_STEP }]);
