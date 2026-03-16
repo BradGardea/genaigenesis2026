@@ -11,6 +11,12 @@
 A full-stack emergency evacuation planning platform that combines real-time hazard tracking, AI-driven multi-agent decision-making, and dynamic route planning to help people navigate disasters safely. Built with a FastAPI backend and an Expo React Native (TypeScript) frontend.
 
 ---
+## Demo ▶️
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=wtDG_nIhfQE">
+    <img src="https://img.youtube.com/vi/wtDG_nIhfQE/0.jpg" width="800">
+  </a>
+</p>
 
 ## Features
 
